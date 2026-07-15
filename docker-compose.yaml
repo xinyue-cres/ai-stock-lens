@@ -1,0 +1,19 @@
+services:
+  backend:
+    build: ./backend
+    container_name: ai-stock-lens-backend
+    volumes:
+      - ./backend/data:/app/data
+    env_file: ./backend/.env
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    container_name: ai-stock-lens-frontend
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
