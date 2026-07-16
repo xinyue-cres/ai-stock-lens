@@ -122,6 +122,7 @@ def compute_quant_features(df: pd.DataFrame) -> dict:
         "amihud_20d": _safe(_amihud(df, 20)),
         "turnover_mean_20d": None,
         "turnover_z_5d_vs_60d": None,
+        "turnover_percentile_120d": None,
     }
     if not turnover.dropna().empty and len(turnover.dropna()) >= 20:
         # 只取有效换手率
@@ -134,6 +135,11 @@ def compute_quant_features(df: pd.DataFrame) -> dict:
             ref_mean, ref_std = float(ref60.mean()), float(ref60.std(ddof=0))
             if ref_std > 0:
                 liquidity["turnover_z_5d_vs_60d"] = _safe((float(recent5) - ref_mean) / ref_std)
+        if len(valid) >= 120:
+            latest_turnover = float(valid.iloc[-1])
+            window120 = valid.tail(120)
+            percentile = float((window120 < latest_turnover).sum()) / 120.0
+            liquidity["turnover_percentile_120d"] = _safe(percentile)
 
     # ----- volume anomaly -----
     vol_anomaly: dict = {
@@ -159,6 +165,8 @@ def compute_quant_features(df: pd.DataFrame) -> dict:
         "pct_from_high_60d": None,
         "pct_from_low_60d": None,
         "close_over_ma60": None,
+        "distance_to_ma20_pct": None,
+        "boll_position": None,
     }
     if len(close) >= 60:
         latest = float(close.iloc[-1])
@@ -171,6 +179,32 @@ def compute_quant_features(df: pd.DataFrame) -> dict:
         ma60 = float(window.mean())
         if ma60 > 0:
             price_pos["close_over_ma60"] = _safe(latest / ma60 - 1)
+    if len(close) >= 20:
+        latest = float(close.iloc[-1])
+        ma20 = float(close.tail(20).mean())
+        if ma20 > 0:
+            price_pos["distance_to_ma20_pct"] = _safe((latest - ma20) / ma20)
+        # Bollinger band position: (close - lower) / (upper - lower)
+        std20 = float(close.tail(20).std(ddof=0))
+        boll_upper = ma20 + 2 * std20
+        boll_lower = ma20 - 2 * std20
+        boll_width = boll_upper - boll_lower
+        if boll_width > 0:
+            price_pos["boll_position"] = _safe((latest - boll_lower) / boll_width)
+
+    # ----- price-volume confirmation -----
+    pv_confirm: dict = {"up_volume_ratio": None}
+    if len(df) >= 21:
+        tail20 = df.tail(20).copy()
+        tail20["ret"] = tail20["close"].astype(float).pct_change()
+        tail20 = tail20.iloc[1:]  # drop first NaN
+        up_days = tail20[tail20["ret"] > 0]
+        down_days = tail20[tail20["ret"] < 0]
+        if not down_days.empty and not up_days.empty:
+            avg_up_vol = float(up_days["volume"].astype(float).mean())
+            avg_down_vol = float(down_days["volume"].astype(float).mean())
+            if avg_down_vol > 0:
+                pv_confirm["up_volume_ratio"] = _safe(avg_up_vol / avg_down_vol)
 
     # ----- return decomposition -----
     return_decomp: dict = {"overnight_return_5d": None, "intraday_return_5d": None}
@@ -204,6 +238,7 @@ def compute_quant_features(df: pd.DataFrame) -> dict:
         "liquidity": liquidity,
         "volume_anomaly": vol_anomaly,
         "price_position": price_pos,
+        "price_volume_confirmation": pv_confirm,
         "return_decomposition": return_decomp,
         "limit_events": limit_events,
     }

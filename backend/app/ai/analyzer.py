@@ -214,6 +214,7 @@ def analyze_anti_quant(
         "reflection": anti_output.get("reflection"),
         # 反量化专属：量化 agent 的完整输出，前端展开可看
         "quant_output": quant_output,
+        "trap_risk": _normalize_trap_risk(anti_output.get("trap_risk")),
     }
 
 
@@ -242,6 +243,23 @@ def _normalize_bias_check(b: Any) -> dict[str, Any] | None:
         "command": (b.get("command") or b.get("do_not") or b.get("trigger") or "").strip(),
         "invalidation": (b.get("invalidation") or "").strip(),
     }
+
+
+_TRAP_TYPES = {"false_breakout", "crowded_chase", "stop_loss_cascade", "none"}
+_TRAP_LEVELS = {"low", "medium", "high"}
+
+
+def _normalize_trap_risk(raw: Any) -> dict[str, Any]:
+    if not isinstance(raw, dict):
+        return {"type": "none", "level": "low", "evidence": []}
+    trap_type = raw.get("type")
+    if trap_type not in _TRAP_TYPES:
+        trap_type = "none"
+    level = raw.get("level")
+    if level not in _TRAP_LEVELS:
+        level = "low"
+    evidence = [str(e) for e in (raw.get("evidence") or []) if e][:3]
+    return {"type": trap_type, "level": level, "evidence": evidence}
 
 
 def analyze_reflexivity(stock_info: dict, indicators: dict) -> dict[str, Any]:

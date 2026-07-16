@@ -137,8 +137,9 @@ def gen_ai_report(
         "judge": result.get("judge"),
         "tradability": result.get("tradability"),
         "evidence_review": result.get("evidence_review"),
-        # 反量化专属：quant agent 的完整输出
+        # 反量化专属：quant agent 的完整输出 + 陷阱风险
         "quant_output": result.get("quant_output"),
+        "trap_risk": result.get("trap_risk"),
         # 反身性专属
         "reflexivity_stage": result.get("reflexivity_stage"),
         "narrative": result.get("narrative"),
@@ -224,6 +225,7 @@ def _report_to_dict(r: AIReport, cached: bool, stock=None) -> dict:
         "tradability": extras.get("tradability"),
         "evidence_review": extras.get("evidence_review"),
         "quant_output": extras.get("quant_output"),
+        "trap_risk": extras.get("trap_risk"),
         "reflexivity_stage": extras.get("reflexivity_stage"),
         "narrative": extras.get("narrative"),
         "feedback_loop": extras.get("feedback_loop"),
