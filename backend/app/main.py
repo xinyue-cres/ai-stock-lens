@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import analysis, chat, compare, positions, review, settings, signals, stocks, sync, watchlist
+from app.api import analysis, action_plan, chat, compare, positions, review, settings, signals, stocks, sync, watchlist
 from app.config import get_settings
 from app.db import init_db
 from app.scheduler import start_scheduler, stop_scheduler
@@ -45,6 +45,7 @@ def health():
 app.include_router(stocks.router)
 app.include_router(watchlist.router)
 app.include_router(analysis.router)
+app.include_router(action_plan.router)
 app.include_router(chat.router)
 app.include_router(signals.router)
 app.include_router(sync.router)

@@ -35,6 +35,7 @@ export interface BiasCheck {
   bias: BiasType
   label: string
   command?: string
+  invalidation?: string
   do_not?: string
   do_instead?: string
 }

@@ -44,6 +44,15 @@ export interface QuantFlow {
 export interface QuantOutput {
   quant_flows?: QuantFlow[]
   positioning_bias?: string
+  crowding_level?: 'low' | 'medium' | 'high' | 'extreme'
+  dominant_quant_style?: 'trend_following' | 'mean_reversion' | 'intraday_liquidity' | 'mixed'
+  crowded_trade?: {
+    direction: 'long' | 'short' | 'neutral'
+    logic: string
+    failure_trigger: string
+    unwind_risk: 'low' | 'medium' | 'high'
+  }
+  factor_conflicts?: { conflict: string; impact: string }[]
   next_5d_pressure?: string
   key_factors?: string[]
   reasoning?: string
@@ -63,6 +72,21 @@ export type ReflexivityStage =
   | 'capitulation'
   | 'reversal_bottom'
   | 'range_bound'
+
+export type Tradability = 'worth_entry' | 'wait_better_rr' | 'no_clear_edge'
+
+export interface EvidenceReview {
+  side: 'bull' | 'bear'
+  claim: string
+  rating: 'strong' | 'medium' | 'weak'
+  reason: string
+}
+
+export interface TrapRisk {
+  type: 'false_breakout' | 'crowded_chase' | 'stop_loss_cascade' | 'none'
+  level: 'low' | 'medium' | 'high'
+  evidence: string[]
+}
 
 export interface AiReport {
   cached: boolean
@@ -84,6 +108,9 @@ export interface AiReport {
   judge?: JudgeView | null
   reflection?: string | null
   quant_output?: QuantOutput | null
+  trap_risk?: TrapRisk | null
+  tradability?: Tradability | null
+  evidence_review?: EvidenceReview[] | null
   reflexivity_stage?: ReflexivityStage | null
   narrative?: string | null
   feedback_loop?: FeedbackLoop | null

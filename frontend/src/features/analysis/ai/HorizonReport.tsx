@@ -78,8 +78,8 @@ export function HorizonReport({ horizon }: Props) {
             />
           )}
           <DebateSection bull={data.bull} bear={data.bear} judge={data.judge} />
-          {(data as any).evidence_review?.length > 0 && (
-            <EvidenceReviewTable reviews={(data as any).evidence_review} />
+          {data.evidence_review && data.evidence_review.length > 0 && (
+            <EvidenceReviewTable reviews={data.evidence_review} />
           )}
           <SignalsAndRisks signals={data.key_signals} risks={data.risks} />
         </>

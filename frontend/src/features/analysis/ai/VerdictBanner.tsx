@@ -51,9 +51,9 @@ export function VerdictBanner({ data, showCachedTag, dataAsOf }: Props) {
         {typeof data.confidence === 'number' && (
           <Text type="secondary">置信度 {(data.confidence * 100).toFixed(0)}%</Text>
         )}
-        {(data as any).tradability && tradabilityLabel[(data as any).tradability] && (
-          <Tag color={tradabilityLabel[(data as any).tradability].color} style={{ margin: 0 }}>
-            {tradabilityLabel[(data as any).tradability].label}
+        {data.tradability && tradabilityLabel[data.tradability] && (
+          <Tag color={tradabilityLabel[data.tradability].color} style={{ margin: 0 }}>
+            {tradabilityLabel[data.tradability].label}
           </Tag>
         )}
         {reportAsOf && (

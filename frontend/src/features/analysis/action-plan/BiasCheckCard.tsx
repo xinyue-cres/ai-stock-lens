@@ -45,8 +45,8 @@ export function BiasCheckSection({ checks }: Props) {
 
 function BiasCheckCard({ check }: { check: BiasCheck }) {
   const label = check.label || biasFallbackLabel[check.bias] || check.bias
-  const command = (check as any).command || check.do_not || (check as any).trigger || ''
-  const invalidation = (check as any).invalidation || ''
+  const command = check.command || check.do_not || ''
+  const invalidation = check.invalidation || ''
   const isProhibit = command.startsWith('禁止')
 
   return (
