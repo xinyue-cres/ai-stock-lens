@@ -1,13 +1,11 @@
 import { Input, Radio, Space } from 'antd'
-import { DirFilter, SortKey } from './useWatchlistFilters'
+import { DirFilter } from './useWatchlistFilters'
 
 interface Props {
   keyword: string
   onKeyword: (v: string) => void
   dir: DirFilter
   onDir: (v: DirFilter) => void
-  sortKey: SortKey
-  onSort: (v: SortKey) => void
 }
 
 export function WatchlistFilters({
@@ -15,8 +13,6 @@ export function WatchlistFilters({
   onKeyword,
   dir,
   onDir,
-  sortKey,
-  onSort,
 }: Props) {
   return (
     <Space direction="vertical" size={8} style={{ width: '100%' }}>
@@ -38,17 +34,6 @@ export function WatchlistFilters({
         <Radio.Button value="bullish" style={{ flex: 1, textAlign: 'center' }}>偏多</Radio.Button>
         <Radio.Button value="bearish" style={{ flex: 1, textAlign: 'center' }}>偏空</Radio.Button>
         <Radio.Button value="neutral" style={{ flex: 1, textAlign: 'center' }}>中性</Radio.Button>
-      </Radio.Group>
-
-      <Radio.Group
-        size="small"
-        value={sortKey}
-        onChange={(e) => onSort(e.target.value)}
-        style={{ display: 'flex' }}
-      >
-        <Radio.Button value="signal" style={{ flex: 1, textAlign: 'center' }}>信号</Radio.Button>
-        <Radio.Button value="pctChg" style={{ flex: 1, textAlign: 'center' }}>涨幅</Radio.Button>
-        <Radio.Button value="name" style={{ flex: 1, textAlign: 'center' }}>名称</Radio.Button>
       </Radio.Group>
     </Space>
   )

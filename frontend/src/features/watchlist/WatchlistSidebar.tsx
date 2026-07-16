@@ -15,7 +15,7 @@ import { useWatchlistFilters } from './useWatchlistFilters'
 export function WatchlistSidebar() {
   const { code, setCode } = useStock()
   const { items, add, remove, pin, sync, syncLoading } = useWatchlistData()
-  const { filtered, keyword, setKeyword, dir, setDir, sortKey, setSortKey } =
+  const { filtered, keyword, setKeyword, dir, setDir } =
     useWatchlistFilters(items)
   const [editingCode, setEditingCode] = useState<string | null>(null)
   const editingItem = editingCode ? items.find((i) => i.code === editingCode) : null
@@ -39,8 +39,6 @@ export function WatchlistSidebar() {
             onKeyword={setKeyword}
             dir={dir}
             onDir={setDir}
-            sortKey={sortKey}
-            onSort={setSortKey}
           />
         </div>
       </div>
