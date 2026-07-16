@@ -19,6 +19,13 @@ const horizonEmpty: Record<Horizon, string> = {
   reflexivity: '反身性',
 }
 
+const antiQuantHint: Record<string, string> = {
+  neutral: '未发现拥挤风险，可顺势跟随',
+  caution: '存在拥挤迹象，注意风控',
+  bearish: '多头拥挤严重，警惕反转',
+  bullish: '空头拥挤，反弹概率较高',
+}
+
 /** 单一视角报告：拿 hook 拿状态，组合展示子块。 */
 export function HorizonReport({ horizon }: Props) {
   const { data, loading, isPending, isError, error, generate, forceRegenerate, isCachedOnly, horizonMismatch } =
@@ -32,6 +39,11 @@ export function HorizonReport({ horizon }: Props) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           {data && <VerdictBanner data={data} showCachedTag={isCachedOnly} dataAsOf={dataAsOf} />}
+          {data && horizon === 'anti_quant' && antiQuantHint[data.verdict] && (
+            <div style={{ fontSize: 12, color: '#78716c', marginTop: 4, paddingLeft: 4 }}>
+              {antiQuantHint[data.verdict]}
+            </div>
+          )}
         </div>
         <Space size={8} style={{ flexShrink: 0 }}>
           <Button type="primary" loading={isPending} onClick={generate}>
