@@ -113,12 +113,3 @@ def datasource_health():
 
     dr = get_data_router()
     return {"providers": dr.get_health()}
-
-
-@router.post("/check-scenarios")
-def check_scenarios(session: Session = Depends(get_session)):
-    """手动触发 scenario 命中检测（调试用）。"""
-    from app.services.scenario_alert_service import check_all_watchlist
-
-    total = check_all_watchlist(session)
-    return {"new_alerts": total}

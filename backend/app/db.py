@@ -35,7 +35,6 @@ def init_db() -> None:
         capital_flow,
         kline,
         position,
-        scenario_alert,
         setting,
         stock,
         sync_log,

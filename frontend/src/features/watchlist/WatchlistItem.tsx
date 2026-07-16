@@ -154,7 +154,7 @@ export function WatchlistItem({ item, active, onSelect, onPin, onRemove, onEditP
         </div>
       </div>
 
-      {/* 第二排：code + 日期 + 触发标记 + 持仓浮盈 + 操作菜单 */}
+      {/* 第二排：code + 日期 + 持仓浮盈 + 操作菜单 */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
         <Text type="secondary" style={{ fontSize: 11 }}>{item.code}</Text>
         {item.as_of_date && (
@@ -167,27 +167,6 @@ export function WatchlistItem({ item, active, onSelect, onPin, onRemove, onEditP
           >
             {formatShortDate(item.as_of_date)}
           </Text>
-        )}
-        {item.triggered_scenarios && item.triggered_scenarios.length > 0 && (
-          <Tooltip
-            title={item.triggered_scenarios.map((s) => `[${s.horizon}] ${s.trigger}`).join('\n')}
-          >
-            <span
-              style={{
-                fontSize: 11,
-                color: '#ea580c',
-                background: '#fff7ed',
-                border: '1px solid #fed7aa',
-                padding: '0 4px',
-                borderRadius: 3,
-                lineHeight: '14px',
-                fontWeight: 600,
-                cursor: 'help',
-              }}
-            >
-              ⚡{item.triggered_scenarios.length}
-            </span>
-          </Tooltip>
         )}
         {typeof posPnl === 'number' && (
           <Text

@@ -17,13 +17,6 @@ export interface StanceInfo {
   as_of: string
 }
 
-export interface TriggeredScenario {
-  horizon: string
-  trigger: string
-  direction: string
-  triggered_date: string
-}
-
 export interface SignalItem {
   code: string
   name: string
@@ -38,7 +31,6 @@ export interface SignalItem {
   position?: PositionSummary | null
   stance?: StanceInfo | null
   ai_verdict?: string | null
-  triggered_scenarios?: TriggeredScenario[]
 }
 
 export async function getTodaySignals(params: { direction?: string; category?: string } = {}) {
