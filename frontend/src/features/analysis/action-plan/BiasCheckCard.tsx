@@ -1,5 +1,5 @@
 import { Card, Space, Tag, Typography } from 'antd'
-import { BulbOutlined } from '@ant-design/icons'
+import { StopOutlined } from '@ant-design/icons'
 import { BiasCheck, BiasType } from '@/api/actionPlan'
 
 const { Text, Title } = Typography
@@ -35,8 +35,8 @@ interface Props {
 }
 
 /**
- * 展示 Trader 输出的散户易错点自查清单。piggyback 在 Trader Agent 单次调用之上，
- * 与 actions 平级但侧重心理面。放在 ActionPlanPanel 动作清单之后、免责声明之前。
+ * 展示 Trader 输出的"当前禁止事项"——基于当前走势和持仓，
+ * 纪律性约束，放在动作清单之前，防止冲动操作。
  */
 export function BiasCheckSection({ checks }: Props) {
   if (!checks || checks.length === 0) return null
@@ -44,8 +44,8 @@ export function BiasCheckSection({ checks }: Props) {
   return (
     <div>
       <Title level={5} style={{ marginBottom: 8, fontSize: 14 }}>
-        <BulbOutlined style={{ color: '#f59e0b', marginRight: 6 }} />
-        散户易错点自查（{checks.length} 条）
+        <StopOutlined style={{ color: '#dc2626', marginRight: 6 }} />
+        当前禁止事项（{checks.length} 条）
       </Title>
       <Space direction="vertical" size={8} style={{ width: '100%' }}>
         {checks.map((b, i) => (

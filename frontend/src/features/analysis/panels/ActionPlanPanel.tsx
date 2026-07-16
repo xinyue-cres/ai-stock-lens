@@ -126,6 +126,8 @@ export function ActionPlanPanel() {
 
             <ConflictsSection conflicts={data.conflicts || []} />
 
+            <BiasCheckSection checks={data.bias_checks} />
+
             {data.actions && data.actions.length > 0 && (
               <div>
                 <Title level={5} style={{ marginBottom: 8, fontSize: 14 }}>
@@ -138,8 +140,6 @@ export function ActionPlanPanel() {
                 </Space>
               </div>
             )}
-
-            <BiasCheckSection checks={data.bias_checks} />
 
             <Text type="secondary" style={{ fontSize: 12 }}>
               以上仅为技术面数据合成的建议，非投资意见，据此操作风险自负。
