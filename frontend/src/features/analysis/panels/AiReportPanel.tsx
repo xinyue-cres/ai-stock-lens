@@ -25,6 +25,7 @@ export function AiReportPanel() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['ai-report-cached', code, 'combined'] })
       qc.invalidateQueries({ queryKey: ['action-plan-deps', code] })
+      qc.invalidateQueries({ queryKey: ['signals-today'] })
     },
   })
   const genAntiQuant = useMutation({

@@ -27,6 +27,7 @@ export function useActionPlan() {
     onSuccess: (_, vars) => {
       qc.invalidateQueries({ queryKey: ['action-plan', vars.ctxCode] })
       qc.invalidateQueries({ queryKey: ['action-plan-deps', vars.ctxCode] })
+      qc.invalidateQueries({ queryKey: ['signals-today'] })
     },
   })
 
