@@ -23,10 +23,18 @@ const pressureLabel: Record<string, { label: string; color: string }> = {
   thin: { label: '流动性稀薄', color: 'default' },
 }
 
+const crowdingLabel: Record<string, { label: string; color: string }> = {
+  low: { label: '拥挤度：低', color: 'default' },
+  medium: { label: '拥挤度：中', color: 'gold' },
+  high: { label: '拥挤度：高', color: 'orange' },
+  extreme: { label: '拥挤度：极高', color: 'red' },
+}
+
 export function QuantOutputCollapse({ data }: Props) {
   if (!data) return null
   const bias = data.positioning_bias ? biasLabel[data.positioning_bias] : null
   const pressure = data.next_5d_pressure ? pressureLabel[data.next_5d_pressure] : null
+  const crowding = data.crowding_level ? crowdingLabel[data.crowding_level] : null
 
   return (
     <div>
@@ -37,6 +45,7 @@ export function QuantOutputCollapse({ data }: Props) {
 
       <Space direction="vertical" size={12} style={{ width: '100%' }}>
         <Space wrap>
+          {crowding && <Tag color={crowding.color}>{crowding.label}</Tag>}
           {bias && <Tag color={bias.color}>整体持仓偏向：{bias.label}</Tag>}
           {pressure && <Tag color={pressure.color}>未来 5 日：{pressure.label}</Tag>}
         </Space>

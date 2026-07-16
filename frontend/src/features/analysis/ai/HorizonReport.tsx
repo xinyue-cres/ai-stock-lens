@@ -1,5 +1,7 @@
 import { Alert, Button, Empty, Space, Spin, Tag } from 'antd'
+import { WarningOutlined } from '@ant-design/icons'
 import { Horizon, useAiReport, useStockAnalysis } from '@/features/stock-context'
+import { TrapRisk } from '@/api/analysis'
 import { DebateSection } from './DebateSection'
 import { QuantOutputCollapse } from './QuantOutputCollapse'
 import { ReflectionBanner } from './ReflectionBanner'
@@ -70,6 +72,9 @@ export function HorizonReport({ horizon }: Props) {
         <>
           <ReflectionBanner reflection={data.reflection} />
           {data.quant_output && <QuantOutputCollapse data={data.quant_output} />}
+          {data.trap_risk && data.trap_risk.type !== 'none' && (
+            <TrapRiskBanner trap={data.trap_risk} />
+          )}
           {(data.reflexivity_stage || data.narrative || data.feedback_loop) && (
             <ReflexivityCollapse
               stage={data.reflexivity_stage}
@@ -106,6 +111,35 @@ function EvidenceReviewTable({ reviews }: { reviews: Array<{ side: string; claim
           {r.reason && <span style={{ color: '#9ca3af', fontSize: 12 }}>— {r.reason}</span>}
         </div>
       ))}
+    </div>
+  )
+}
+
+const trapTypeLabel: Record<string, string> = {
+  false_breakout: '假突破风险',
+  crowded_chase: '诱多拥挤',
+  stop_loss_cascade: '止损踩踏',
+}
+
+const trapLevelColor: Record<string, string> = {
+  low: 'default',
+  medium: 'orange',
+  high: 'red',
+}
+
+function TrapRiskBanner({ trap }: { trap: TrapRisk }) {
+  const label = trapTypeLabel[trap.type] || trap.type
+  const color = trapLevelColor[trap.level] || 'default'
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: '#fff7ed', borderRadius: 6, border: '1px solid #fed7aa' }}>
+      <WarningOutlined style={{ color: '#ea580c', fontSize: 14 }} />
+      <Tag color={color} style={{ margin: 0 }}>{label} · {trap.level}</Tag>
+      {trap.evidence.length > 0 && (
+        <span style={{ fontSize: 12, color: '#78716c' }}>
+          {trap.evidence.join('；')}
+        </span>
+      )}
     </div>
   )
 }
