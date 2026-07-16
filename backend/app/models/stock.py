@@ -9,4 +9,4 @@ class Stock(SQLModel, table=True):
     market: str = Field(description="SH / SZ / BJ")
     is_watchlist: bool = Field(default=False, index=True)
     pinned: bool = Field(default=False, index=True, description="置顶标记")
-    added_at: datetime = Field(default_factory=datetime.utcnow)
+    added_at: datetime = Field(default_factory=datetime.now)

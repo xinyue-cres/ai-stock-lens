@@ -33,4 +33,4 @@ class AIReportReview(SQLModel, table=True):
     total_scenarios: int = Field(default=0, description="有结构化 conditions 的 scenario 总数")
 
     notes: str | None = Field(default=None, description="人机可读摘要")
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=datetime.now)

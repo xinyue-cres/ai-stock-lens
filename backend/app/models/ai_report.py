@@ -20,4 +20,4 @@ class AIReport(SQLModel, table=True):
     confidence: float | None = None
     summary: str | None = None
     extras_json: str | None = Field(default=None, description="key_signals/risks/scenarios 的 JSON 序列化")
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=datetime.now)

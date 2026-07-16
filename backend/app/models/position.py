@@ -17,4 +17,4 @@ class Position(SQLModel, table=True):
     cost_price: float = Field(description="加权平均成本价")
     opened_at: date = Field(description="首次建仓日")
     note: str | None = Field(default=None, description="用户备注")
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.now)

@@ -195,7 +195,7 @@ def _fill_missing_turnover(session: Session, code: str) -> None:
 
 
 def sync_watchlist(session: Session) -> SyncLog:
-    log = SyncLog(started_at=datetime.utcnow(), status="running")
+    log = SyncLog(started_at=datetime.now(), status="running")
     session.add(log)
     session.commit()
     session.refresh(log)
@@ -217,7 +217,7 @@ def sync_watchlist(session: Session) -> SyncLog:
             except Exception:  # noqa: BLE001
                 pass
 
-    log.finished_at = datetime.utcnow()
+    log.finished_at = datetime.now()
     log.stocks_synced = len(stocks) - len(errors)
     log.status = "success" if not errors else ("failed" if len(errors) == len(stocks) else "partial")
     log.error_msg = "\n".join(errors) if errors else None

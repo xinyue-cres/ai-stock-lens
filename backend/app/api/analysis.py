@@ -152,7 +152,7 @@ def gen_ai_report(
         confidence=result.get("confidence"),
         summary=result.get("summary"),
         extras_json=json.dumps(extras, ensure_ascii=False),
-        created_at=datetime.utcnow(),
+        created_at=datetime.now(),
     )
     session.add(report)
     session.commit()
@@ -344,7 +344,7 @@ def gen_action_plan(
         confidence=None,
         summary=result.get("summary", ""),
         extras_json=json.dumps(extras, ensure_ascii=False),
-        created_at=datetime.utcnow(),
+        created_at=datetime.now(),
     )
     session.add(report)
     session.commit()

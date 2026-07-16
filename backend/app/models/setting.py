@@ -8,4 +8,4 @@ class AppSetting(SQLModel, table=True):
 
     key: str = Field(primary_key=True, description="设置键")
     value: str = Field(description="设置值（可为 JSON 字符串）")
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.now)

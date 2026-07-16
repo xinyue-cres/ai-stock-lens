@@ -28,7 +28,7 @@ def upsert_position(
     note: str | None = None,
 ) -> Position:
     existing = get_position(session, code)
-    now = datetime.utcnow()
+    now = datetime.now()
     if existing:
         existing.quantity = quantity
         existing.cost_price = cost_price
