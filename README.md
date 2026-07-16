@@ -11,8 +11,9 @@
 
 ### Trader 操作指示
 - 消费三份分析报告 + 技术指标 + 持仓，输出统一执行清单
-- 3-6 条优先级排序的操作动作（含触发价位/仓位/止损/目标价）
-- 散户偏差提醒（do_not / do_instead 格式）
+- 3-6 条优先级排序的操作动作（含触发价位/仓位/止损/目标价/risk_reward）
+- 按 scenario_type 分桶：进攻组 / 防守组 / 观察组
+- 当前禁止事项（command + invalidation 格式的纪律命令）
 - 资金感知的仓位建议（A 股 100 股最小单位）
 
 ### 个股对话
@@ -79,16 +80,17 @@ pnpm dev
 ai-stock-lens/
 ├── backend/
 │   ├── app/
-│   │   ├── ai/              # prompts + analyzer + client
-│   │   ├── api/             # FastAPI 路由
+│   │   ├── ai/              # prompts/ (按 Agent 分文件) + normalizers + analyzer + client
+│   │   ├── api/             # FastAPI 路由 (analysis, action_plan, chat, sync, ...)
 │   │   ├── datasource/      # 数据源 provider + router
+│   │   ├── features/        # 量化因子计算 (quant_factors)
 │   │   ├── indicators/      # 技术指标计算引擎
 │   │   ├── models/          # SQLModel 数据模型
 │   │   └── services/        # 业务逻辑层
 │   └── data/                # SQLite 数据库（gitignored）
 ├── frontend/
 │   └── src/
-│       ├── api/             # 后端 API 调用
+│       ├── api/             # 后端 API 调用 + 类型定义
 │       ├── features/        # 功能模块（analysis/watchlist/settings）
 │       └── pages/           # 页面路由
 └── docker-compose.yaml

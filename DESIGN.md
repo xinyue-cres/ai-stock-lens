@@ -1,6 +1,6 @@
 # AI Stock Lens · 架构设计
 
-> 版本：v2.0
+> 版本：v2.1
 > 更新：2026-07-16
 > 定位：个人自用、本地部署的 A 股多视角 AI 技术分析工作台
 
@@ -40,11 +40,14 @@
 │                    FastAPI (Python 3.11)                        │
 │                                                                │
 │  ┌─────────────────── AI 层 ───────────────────────┐           │
-│  │ BULL → BEAR → JUDGE (综合)                      │           │
-│  │ QUANT_SIM → ANTI_QUANT (反量化)                 │           │
-│  │ REFLEXIVITY (反身性)                             │           │
-│  │ TRADER (操作指示：消费上述 + 指标 + 持仓)        │           │
-│  │ CHAT (个股对话：注入上下文 + 流式)               │           │
+│  │ ai/prompts/  (按 Agent 分文件)                  │           │
+│  │   bull_bear.py: BULL → BEAR → JUDGE (综合)      │           │
+│  │   quant.py: QUANT_SIM → ANTI_QUANT (反量化)     │           │
+│  │   reflexivity.py: REFLEXIVITY (反身性)           │           │
+│  │   trader.py: TRADER (操作指示)                   │           │
+│  │   chat.py: CHAT (个股对话)                       │           │
+│  │ ai/normalizers.py (输出校验/清洗)                │           │
+│  │ ai/analyzer.py (编排调用)                        │           │
 │  └─────────────────────────────────────────────────┘           │
 │                                                                │
 │  ┌─────── 数据源 DataRouter ────────┐  ┌─── 指标引擎 ───┐     │
@@ -85,8 +88,12 @@ Bull/Bear 并行 + Judge 串行：
 
 - Bull/Bear 通过 ThreadPoolExecutor 并行调用，节省 ~50% 延迟
 - 各 Agent 有独立 system prompt，禁止编造数据
-- Judge 产出：verdict / confidence / scenarios / key_signals / risks / report_md
+- 弱证据约束：支持证据 <3 条强论据时 confidence 不得超过 0.4
+- Judge 产出：verdict / confidence / tradability / evidence_review / scenarios / report_md
+  - `tradability`：worth_entry / wait_better_rr / no_clear_edge
+  - `evidence_review`：逐条评审牛熊论据（side + claim + rating + reason）
 - 置信度校准：强制 0-1 区间，附带校准标尺约束
+- scenarios 带 `scenario_type`（entry/add/trim/stop_loss/take_profit/observe）
 
 ### 3.2 反量化分析
 
@@ -98,10 +105,32 @@ Bull/Bear 并行 + Judge 串行：
   → Anti-Quant Agent：基于量化画像产出散户反向策略
 ```
 
+Quant Simulator 输出：
+- `dominant_quant_style`：trend_following / mean_reversion / intraday_liquidity / mixed
+- `crowding_level`：low / medium / high / extreme（因子平淡时强制 low）
+- `crowded_trade`：拥挤交易方向 + failure_trigger + unwind_risk
+- `factor_conflicts`：不同因子维度间的矛盾
+
+Anti-Quant 纪律约束：
+- crowding_level="low" 时不得强行逆向
+- 趋势资金占优且无失效信号时 → 顺势等待
+- 输出 `trap_risk`：false_breakout / crowded_chase / stop_loss_cascade / none
+
+量化因子（features/quant_factors.py）：
+- momentum: 20d/60d/120d 累计收益
+- volatility: sigma_20d/60d, atr_ratio
+- liquidity: amihud, turnover_z, turnover_percentile_120d
+- volume_anomaly: vol_ratio, vol_z, big_volume_days
+- price_position: pct_from_high/low_60d, close_over_ma60, distance_to_ma20_pct, boll_position
+- price_volume_confirmation: up_volume_ratio
+- return_decomposition: overnight/intraday
+- limit_events: limit_up/down, gap_up
+
 ### 3.3 反身性分析
 
 单次调用：基于资金流/情绪指标判断索罗斯反身性周期阶段
 - 输出：reflexivity_stage / narrative / feedback_loop / scenarios
+- 约束：narrative 和 feedback_loop 必须绑定可观察指标（价格/量比/换手率），禁止纯心理描述
 
 ### 3.4 Trader Agent（操作指示）
 
@@ -115,9 +144,11 @@ Bull/Bear 并行 + Judge 串行：
 
 核心规则：
 - 不做新分析，只做执行层编排
+- 按 scenario_type 分桶：进攻组(entry/add) / 防守组(stop_loss/trim) / 观察组(observe)
 - A 股 100 股最小交易单位
 - 资金感知仓位建议
-- bias_checks：do_not / do_instead 格式的散户偏差提醒
+- 每条买入/加仓 action 必须有 stop_loss + target_price → risk_reward
+- bias_checks：command + invalidation 格式的纪律命令（禁止追高/破位必走等）
 - confidence_adjustment：多视角冲突时的置信度折损
 
 ### 3.5 个股对话
@@ -226,7 +257,8 @@ registerPanel({ id: 'chat',        label: '对话',     order: 35 })
 | POST | `/api/stocks/{code}/chat` | 对话 (SSE) |
 | GET/POST/DELETE | `/api/positions` | 持仓 CRUD |
 | GET | `/api/signals/today` | 信号扫描 |
-| POST | `/api/sync/run` | 手动同步 |
+| POST | `/api/sync/run` | 手动同步全部自选股 |
+| POST | `/api/sync/stock/{code}` | 同步单只股票 K 线 |
 | GET | `/api/sync/status` | 调度器状态 |
 | GET | `/api/sync/datasource-health` | 数据源健康度 |
 | GET/PUT | `/api/settings/ai` | AI 配置 |
