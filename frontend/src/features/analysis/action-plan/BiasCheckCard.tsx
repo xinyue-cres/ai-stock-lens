@@ -1,21 +1,8 @@
-import { Card, Space, Tag, Typography } from 'antd'
+import { Space, Tag, Typography } from 'antd'
 import { StopOutlined } from '@ant-design/icons'
 import { BiasCheck, BiasType } from '@/api/actionPlan'
 
 const { Text, Title } = Typography
-
-const biasColor: Record<BiasType, string> = {
-  anchoring: 'gold',
-  endowment: 'purple',
-  disposition: 'volcano',
-  confirmation: 'geekblue',
-  recency: 'cyan',
-  availability: 'blue',
-  loss_aversion: 'red',
-  overconfidence: 'magenta',
-  herding: 'green',
-  sunk_cost: 'orange',
-}
 
 const biasFallbackLabel: Record<BiasType, string> = {
   anchoring: '锚定效应',
@@ -57,44 +44,21 @@ export function BiasCheckSection({ checks }: Props) {
 }
 
 function BiasCheckCard({ check }: { check: BiasCheck }) {
-  const color = biasColor[check.bias] || 'default'
   const label = check.label || biasFallbackLabel[check.bias] || check.bias
-  // 兼容旧格式（trigger/counter_action）和新格式（do_not/do_instead）
-  const doNot = check.do_not || (check as any).trigger || ''
-  const doInstead = check.do_instead || (check as any).counter_action || ''
+  const command = (check as any).command || check.do_not || (check as any).trigger || ''
+  const isProhibit = command.startsWith('禁止')
 
   return (
-    <Card
-      size="small"
-      styles={{ body: { padding: 12 } }}
-      style={{
-        borderLeft: '3px solid #f59e0b',
-        background: '#fffbeb',
-      }}
-    >
-      <Space direction="vertical" size={6} style={{ width: '100%' }}>
-        <Space align="baseline" size={8} wrap>
-          <Tag color={color} style={{ margin: 0, fontWeight: 600 }}>
-            {label}
-          </Tag>
-        </Space>
-
-        {doNot && (
-          <div>
-            <Text style={{ fontSize: 13, color: '#dc2626', fontWeight: 500 }}>
-              🚫 {doNot}
-            </Text>
-          </div>
-        )}
-
-        {doInstead && (
-          <div>
-            <Text style={{ fontSize: 13, color: '#059669', fontWeight: 500 }}>
-              ✅ {doInstead}
-            </Text>
-          </div>
-        )}
-      </Space>
-    </Card>
+    <Space align="baseline" size={8} style={{ width: '100%' }}>
+      <Tag
+        color={isProhibit ? 'red' : 'blue'}
+        style={{ margin: 0, fontWeight: 600, flexShrink: 0 }}
+      >
+        {label}
+      </Tag>
+      <Text style={{ fontSize: 13, fontWeight: 500 }}>
+        {command}
+      </Text>
+    </Space>
   )
 }

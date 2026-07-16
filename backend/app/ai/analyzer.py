@@ -238,8 +238,7 @@ def _normalize_bias_check(b: Any) -> dict[str, Any] | None:
     return {
         "bias": bias,
         "label": (b.get("label") or "").strip(),
-        "do_not": (b.get("do_not") or b.get("trigger") or "").strip(),
-        "do_instead": (b.get("do_instead") or b.get("counter_action") or "").strip(),
+        "command": (b.get("command") or b.get("do_not") or b.get("trigger") or "").strip(),
     }
 
 

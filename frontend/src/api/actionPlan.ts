@@ -34,8 +34,9 @@ export type BiasType =
 export interface BiasCheck {
   bias: BiasType
   label: string
-  do_not: string
-  do_instead: string
+  command?: string
+  do_not?: string
+  do_instead?: string
 }
 
 export interface TraderAction {
