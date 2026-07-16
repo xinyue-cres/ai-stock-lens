@@ -1,4 +1,4 @@
-import { Alert, Button, Empty, Space, Spin } from 'antd'
+import { Alert, Button, Empty, Space, Spin, Table, Tag } from 'antd'
 import { Horizon, useAiReport, useStockAnalysis } from '@/features/stock-context'
 import { DebateSection } from './DebateSection'
 import { QuantOutputCollapse } from './QuantOutputCollapse'
@@ -78,9 +78,31 @@ export function HorizonReport({ horizon }: Props) {
             />
           )}
           <DebateSection bull={data.bull} bear={data.bear} judge={data.judge} />
+          {(data as any).evidence_review?.length > 0 && (
+            <EvidenceReviewTable reviews={(data as any).evidence_review} />
+          )}
           <SignalsAndRisks signals={data.key_signals} risks={data.risks} />
         </>
       )}
     </Space>
+  )
+}
+
+const ratingColor: Record<string, string> = { strong: 'green', medium: 'gold', weak: 'default' }
+const ratingLabel: Record<string, string> = { strong: '强', medium: '中', weak: '弱' }
+
+function EvidenceReviewTable({ reviews }: { reviews: Array<{ side: string; claim: string; rating: string; reason: string }> }) {
+  return (
+    <Table
+      size="small"
+      pagination={false}
+      dataSource={reviews.map((r, i) => ({ ...r, key: i }))}
+      columns={[
+        { title: '方', dataIndex: 'side', width: 40, render: (v: string) => <Tag color={v === 'bull' ? 'red' : 'green'}>{v === 'bull' ? '牛' : '熊'}</Tag> },
+        { title: '论据', dataIndex: 'claim', ellipsis: true },
+        { title: '评级', dataIndex: 'rating', width: 50, render: (v: string) => <Tag color={ratingColor[v]}>{ratingLabel[v] || v}</Tag> },
+        { title: '理由', dataIndex: 'reason', width: 160, ellipsis: true },
+      ]}
+    />
   )
 }

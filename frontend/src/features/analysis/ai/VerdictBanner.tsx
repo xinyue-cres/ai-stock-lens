@@ -6,6 +6,12 @@ import { timeAgo } from '@/shared/timeAgo'
 
 const { Text, Paragraph } = Typography
 
+const tradabilityLabel: Record<string, { label: string; color: string }> = {
+  worth_entry: { label: '值得操作', color: 'green' },
+  wait_better_rr: { label: '等待更好盈亏比', color: 'orange' },
+  no_clear_edge: { label: '无明确优势', color: 'default' },
+}
+
 interface Props {
   data: AiReport
   showCachedTag?: boolean
@@ -44,6 +50,11 @@ export function VerdictBanner({ data, showCachedTag, dataAsOf }: Props) {
         </Tag>
         {typeof data.confidence === 'number' && (
           <Text type="secondary">置信度 {(data.confidence * 100).toFixed(0)}%</Text>
+        )}
+        {(data as any).tradability && tradabilityLabel[(data as any).tradability] && (
+          <Tag color={tradabilityLabel[(data as any).tradability].color} style={{ margin: 0 }}>
+            {tradabilityLabel[(data as any).tradability].label}
+          </Tag>
         )}
         {reportAsOf && (
           <Tooltip

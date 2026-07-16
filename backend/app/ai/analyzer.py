@@ -149,9 +149,10 @@ def analyze_debate(stock_info: dict, indicators: dict) -> dict[str, Any]:
         "bull": bull,
         "bear": bear,
         "judge": judge,
-        # 复用现有前端渲染字段，让 AIReport 一样能显示
         "verdict": judge.get("verdict", "neutral"),
         "confidence": judge.get("confidence"),
+        "tradability": judge.get("tradability"),
+        "evidence_review": judge.get("evidence_review", []),
         "summary": judge.get("summary"),
         "report_md": judge.get("report_md", ""),
         "scenarios": normalized_scenarios,
@@ -315,6 +316,7 @@ def _normalize_action(a: dict[str, Any]) -> dict[str, Any] | None:
         "size_hint": a.get("size_hint") or "",
         "stop_loss": _num_or_none(a.get("stop_loss")),
         "target_price": _num_or_none(a.get("target_price")),
+        "risk_reward": (a.get("risk_reward") or None) if isinstance(a.get("risk_reward"), str) else None,
         "distance_pct": _num_or_none(a.get("distance_pct")),
         "rationale": a.get("rationale") or "",
         "sourced_from": [
