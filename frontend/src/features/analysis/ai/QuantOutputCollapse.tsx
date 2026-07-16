@@ -1,4 +1,4 @@
-import { Collapse, Descriptions, Space, Tag, Typography } from 'antd'
+import { Descriptions, Space, Tag, Typography } from 'antd'
 import { ExperimentOutlined } from '@ant-design/icons'
 import { QuantOutput } from '@/api/analysis'
 
@@ -23,103 +23,88 @@ const pressureLabel: Record<string, { label: string; color: string }> = {
   thin: { label: '流动性稀薄', color: 'default' },
 }
 
-/**
- * 展示量化模拟 agent 的输出：机构预期动作画像。
- * 挂在反量化 Tab 的 verdict banner 之后、scenarios 之前，
- * 让用户看到"anti 的立论依据"是什么。
- */
 export function QuantOutputCollapse({ data }: Props) {
   if (!data) return null
   const bias = data.positioning_bias ? biasLabel[data.positioning_bias] : null
   const pressure = data.next_5d_pressure ? pressureLabel[data.next_5d_pressure] : null
 
   return (
-    <Collapse
-      ghost
-      defaultActiveKey={['quant']}
-      items={[
-        {
-          key: 'quant',
-          label: (
-            <Space>
-              <ExperimentOutlined style={{ color: '#7c3aed' }} />
-              <Text strong>量化机构视角推理（Step 1 · Anti 立论依据）</Text>
+    <div>
+      <Space style={{ marginBottom: 8 }}>
+        <ExperimentOutlined style={{ color: '#7c3aed' }} />
+        <Text strong style={{ fontSize: 13 }}>量化机构视角推理</Text>
+      </Space>
+
+      <Space direction="vertical" size={12} style={{ width: '100%' }}>
+        <Space wrap>
+          {bias && <Tag color={bias.color}>整体持仓偏向：{bias.label}</Tag>}
+          {pressure && <Tag color={pressure.color}>未来 5 日：{pressure.label}</Tag>}
+        </Space>
+
+        {data.reasoning && (
+          <Text type="secondary" style={{ display: 'block' }}>
+            {data.reasoning}
+          </Text>
+        )}
+
+        {data.key_factors && data.key_factors.length > 0 && (
+          <div>
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              关键因子：
+            </Text>
+            <Space wrap size={[4, 4]} style={{ marginTop: 4 }}>
+              {data.key_factors.map((f, i) => (
+                <Tag key={i} style={{ fontSize: 12 }}>
+                  {f}
+                </Tag>
+              ))}
             </Space>
-          ),
-          children: (
-            <Space direction="vertical" size={12} style={{ width: '100%' }}>
-              <Space wrap>
-                {bias && <Tag color={bias.color}>整体持仓偏向：{bias.label}</Tag>}
-                {pressure && <Tag color={pressure.color}>未来 5 日：{pressure.label}</Tag>}
-              </Space>
+          </div>
+        )}
 
-              {data.reasoning && (
-                <Text type="secondary" style={{ display: 'block' }}>
-                  {data.reasoning}
-                </Text>
-              )}
-
-              {data.key_factors && data.key_factors.length > 0 && (
-                <div>
-                  <Text type="secondary" style={{ fontSize: 12 }}>
-                    关键因子：
-                  </Text>
-                  <Space wrap size={[4, 4]} style={{ marginTop: 4 }}>
-                    {data.key_factors.map((f, i) => (
-                      <Tag key={i} style={{ fontSize: 12 }}>
-                        {f}
-                      </Tag>
-                    ))}
+        {data.quant_flows && data.quant_flows.length > 0 && (
+          <Descriptions
+            bordered
+            column={1}
+            size="small"
+            title={<Text style={{ fontSize: 13 }}>预期资金动作</Text>}
+          >
+            {data.quant_flows.map((flow, i) => (
+              <Descriptions.Item
+                key={i}
+                label={
+                  <Space direction="vertical" size={2}>
+                    <Tag color="geekblue" style={{ margin: 0 }}>
+                      {flow.type}
+                    </Tag>
+                    {typeof flow.probability === 'number' && (
+                      <Text type="secondary" style={{ fontSize: 11 }}>
+                        概率 {(flow.probability * 100).toFixed(0)}%
+                      </Text>
+                    )}
                   </Space>
-                </div>
-              )}
-
-              {data.quant_flows && data.quant_flows.length > 0 && (
-                <Descriptions
-                  bordered
-                  column={1}
-                  size="small"
-                  title={<Text style={{ fontSize: 13 }}>预期资金动作</Text>}
-                >
-                  {data.quant_flows.map((flow, i) => (
-                    <Descriptions.Item
-                      key={i}
-                      label={
-                        <Space direction="vertical" size={2}>
-                          <Tag color="geekblue" style={{ margin: 0 }}>
-                            {flow.type}
-                          </Tag>
-                          {typeof flow.probability === 'number' && (
-                            <Text type="secondary" style={{ fontSize: 11 }}>
-                              概率 {(flow.probability * 100).toFixed(0)}%
-                            </Text>
-                          )}
-                        </Space>
-                      }
-                    >
-                      <Space direction="vertical" size={4} style={{ width: '100%' }}>
-                        {flow.trigger && <Text>{flow.trigger}</Text>}
-                        <Space size={12} wrap>
-                          {flow.size_hint && (
-                            <Text type="secondary" style={{ fontSize: 12 }}>
-                              规模：{flow.size_hint}
-                            </Text>
-                          )}
-                          {typeof flow.expected_horizon_days === 'number' && (
-                            <Text type="secondary" style={{ fontSize: 12 }}>
-                              周期：{flow.expected_horizon_days} 日
-                            </Text>
-                          )}
-                        </Space>
-                      </Space>
-                    </Descriptions.Item>
-                  ))}
-                </Descriptions>
-              )}
-            </Space>
-          ),
-        },
-      ]}
-    />
+                }
+              >
+                <Space direction="vertical" size={4} style={{ width: '100%' }}>
+                  {flow.trigger && <Text>{flow.trigger}</Text>}
+                  <Space size={12} wrap>
+                    {flow.size_hint && (
+                      <Text type="secondary" style={{ fontSize: 12 }}>
+                        规模：{flow.size_hint}
+                      </Text>
+                    )}
+                    {typeof flow.expected_horizon_days === 'number' && (
+                      <Text type="secondary" style={{ fontSize: 12 }}>
+                        周期：{flow.expected_horizon_days} 日
+                      </Text>
+                    )}
+                  </Space>
+                </Space>
+              </Descriptions.Item>
+            ))}
+          </Descriptions>
+        )}
+      </Space>
+    </div>
   )
 }

@@ -1,4 +1,4 @@
-import { Collapse, Space, Tag, Typography } from 'antd'
+import { Space, Tag, Typography } from 'antd'
 import { RadarChartOutlined } from '@ant-design/icons'
 import { FeedbackLoop, ReflexivityStage } from '@/api/analysis'
 
@@ -60,10 +60,6 @@ const strengthTag: Record<NonNullable<FeedbackLoop['strength']>, { label: string
   reversing: { label: '反转中', color: 'volcano' },
 }
 
-/**
- * 展示反身性 agent 的额外结构化输出：当前所处的反身性阶段 + 主流叙事 + 反馈循环强度。
- * 挂在反身性 Tab 的 verdict banner 之后、scenarios 之前。
- */
 export function ReflexivityCollapse({ stage, narrative, feedbackLoop }: Props) {
   if (!stage && !narrative && (!feedbackLoop || Object.keys(feedbackLoop).length === 0)) {
     return null
@@ -74,62 +70,52 @@ export function ReflexivityCollapse({ stage, narrative, feedbackLoop }: Props) {
   const evidence = feedbackLoop?.key_evidence || []
 
   return (
-    <Collapse
-      ghost
-      defaultActiveKey={['reflex']}
-      items={[
-        {
-          key: 'reflex',
-          label: (
+    <div>
+      <Space style={{ marginBottom: 8 }}>
+        <RadarChartOutlined style={{ color: '#7c3aed' }} />
+        <Text strong style={{ fontSize: 13 }}>反身性阶段与叙事循环</Text>
+      </Space>
+
+      <Space direction="vertical" size={12} style={{ width: '100%' }}>
+        {s && (
+          <Space direction="vertical" size={4}>
             <Space>
-              <RadarChartOutlined style={{ color: '#7c3aed' }} />
-              <Text strong>反身性阶段与叙事循环</Text>
+              <Tag color={s.color} style={{ fontSize: 13, padding: '2px 10px' }}>
+                {s.label}
+              </Tag>
+              {dir && <Tag color={dir.color}>{dir.label}</Tag>}
+              {str && <Tag color={str.color}>{str.label}</Tag>}
             </Space>
-          ),
-          children: (
-            <Space direction="vertical" size={12} style={{ width: '100%' }}>
-              {s && (
-                <Space direction="vertical" size={4}>
-                  <Space>
-                    <Tag color={s.color} style={{ fontSize: 13, padding: '2px 10px' }}>
-                      {s.label}
-                    </Tag>
-                    {dir && <Tag color={dir.color}>{dir.label}</Tag>}
-                    {str && <Tag color={str.color}>{str.label}</Tag>}
-                  </Space>
-                  <Text type="secondary" style={{ fontSize: 12 }}>
-                    {s.desc}
-                  </Text>
-                </Space>
-              )}
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              {s.desc}
+            </Text>
+          </Space>
+        )}
 
-              {narrative && (
-                <div>
-                  <Text type="secondary" style={{ fontSize: 12 }}>
-                    主流叙事与资金行为：
-                  </Text>
-                  <Paragraph style={{ marginTop: 4, marginBottom: 0 }}>{narrative}</Paragraph>
-                </div>
-              )}
+        {narrative && (
+          <div>
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              主流叙事与资金行为：
+            </Text>
+            <Paragraph style={{ marginTop: 4, marginBottom: 0 }}>{narrative}</Paragraph>
+          </div>
+        )}
 
-              {evidence.length > 0 && (
-                <div>
-                  <Text type="secondary" style={{ fontSize: 12 }}>
-                    反馈循环关键证据：
-                  </Text>
-                  <ul style={{ margin: '4px 0 0 0', paddingLeft: 20 }}>
-                    {evidence.map((e, i) => (
-                      <li key={i}>
-                        <Text>{e}</Text>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </Space>
-          ),
-        },
-      ]}
-    />
+        {evidence.length > 0 && (
+          <div>
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              反馈循环关键证据：
+            </Text>
+            <ul style={{ margin: '4px 0 0 0', paddingLeft: 20 }}>
+              {evidence.map((e, i) => (
+                <li key={i}>
+                  <Text>{e}</Text>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </Space>
+    </div>
   )
 }
