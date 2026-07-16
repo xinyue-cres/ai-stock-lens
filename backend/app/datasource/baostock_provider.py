@@ -20,7 +20,7 @@ from datetime import date
 import pandas as pd
 
 from app.datasource.base import Adjust, StockInfo
-from app.datasource.base_provider import BaseProvider, Capabilities
+from app.datasource.base_provider import BaseProvider, Capabilities, is_fund_code
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +65,9 @@ class BaostockProvider(BaseProvider):
         end: date,
         adjust: Adjust = "qfq",
     ) -> pd.DataFrame:
+        if is_fund_code(code):
+            return self._empty_kline()
+
         symbol = _bs_symbol(code)
         flag = _ADJUST_FLAG.get(adjust, "2")
 

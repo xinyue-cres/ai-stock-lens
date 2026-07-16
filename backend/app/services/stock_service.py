@@ -54,7 +54,6 @@ def _count_stocks(session: Session) -> int:
 
 def search_stocks(session: Session, keyword: str, limit: int = 20) -> list[Stock]:
     if _count_stocks(session) < 100:
-        # 首次或几乎为空的库，先补齐全量元数据
         try:
             refresh_stock_index(session)
         except Exception:
@@ -64,7 +63,25 @@ def search_stocks(session: Session, keyword: str, limit: int = 20) -> list[Stock
         .where((Stock.name.contains(keyword)) | (Stock.code.contains(keyword)))
         .limit(limit)
     )
-    return list(session.exec(stmt))
+    results = list(session.exec(stmt))
+    if results:
+        return results
+
+    # 本地没找到，从远程列表搜索（覆盖 ETF/LOF 等本地未入库的品种）
+    try:
+        remote_matches = [
+            s for s in get_data_router().get_stock_list()
+            if keyword in s.code or keyword in s.name
+        ][:limit]
+        for info in remote_matches:
+            if not session.get(Stock, info.code):
+                session.add(Stock(code=info.code, name=info.name, market=info.market))
+        if remote_matches:
+            session.commit()
+        return [session.get(Stock, m.code) for m in remote_matches if session.get(Stock, m.code)]
+    except Exception:
+        logger.exception("远程搜索失败")
+        return []
 
 
 def list_watchlist(session: Session) -> list[Stock]:

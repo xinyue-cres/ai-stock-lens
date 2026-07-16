@@ -19,7 +19,7 @@ from datetime import date
 import pandas as pd
 
 from app.datasource.base import Adjust, StockInfo
-from app.datasource.base_provider import BaseProvider, Capabilities, infer_market
+from app.datasource.base_provider import BaseProvider, Capabilities, infer_market, is_fund_code
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +61,9 @@ class TencentProvider(BaseProvider):
         end: date,
         adjust: Adjust = "qfq",
     ) -> pd.DataFrame:
+        if is_fund_code(code):
+            return _empty_kline()
+
         today = date.today()
         if today < start or today > end:
             return _empty_kline()
