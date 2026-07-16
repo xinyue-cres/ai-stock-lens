@@ -1,7 +1,6 @@
-import { AnalysisWorkspace, StockSearchBar } from '@/features/analysis'
+import { AnalysisWorkspace } from '@/features/analysis'
 import { StockContextProvider } from '@/features/stock-context'
 import { WatchlistSidebar } from '@/features/watchlist'
-import { Space } from 'antd'
 
 export default function Workbench() {
   return (
@@ -21,10 +20,7 @@ export default function Workbench() {
         </div>
         {/* 右栏改为随内容自然增长，交给浏览器整体滚动 */}
         <div style={{ flex: 1, minWidth: 0 }}>
-          <Space direction="vertical" size={12} style={{ width: '100%' }}>
-            <StockSearchBar />
-            <AnalysisWorkspace />
-          </Space>
+          <AnalysisWorkspace />
         </div>
       </div>
     </StockContextProvider>

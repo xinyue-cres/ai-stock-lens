@@ -174,7 +174,7 @@ export function DiaryPanel() {
       <Space direction="vertical" size={12} style={{ width: '100%' }}>
         <Space align="baseline" size={8} style={{ justifyContent: 'space-between', width: '100%' }}>
           <Space align="baseline" size={8}>
-            <Title level={3} style={{ margin: 0 }}>
+            <Title level={5} style={{ margin: 0 }}>
               <HistoryOutlined style={{ color: '#7c3aed', marginRight: 8 }} />
               分析日志
             </Title>

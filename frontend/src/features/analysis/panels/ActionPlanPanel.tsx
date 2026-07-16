@@ -30,7 +30,7 @@ export function ActionPlanPanel() {
           style={{ justifyContent: 'space-between', width: '100%' }}
         >
           <Space align="baseline" size={12} wrap>
-            <Title level={3} style={{ margin: 0 }}>
+            <Title level={5} style={{ margin: 0 }}>
               <AimOutlined style={{ color: '#7c3aed', marginRight: 8 }} />
               操作指示 · Trader
             </Title>
@@ -51,7 +51,7 @@ export function ActionPlanPanel() {
             )}
           </Space>
           <Space>
-            <Button type="primary" size="large" loading={isPending} onClick={generate}>
+            <Button type="primary" loading={isPending} onClick={generate}>
               {data && !data.empty ? '刷新' : '生成清单'}
             </Button>
             {data && !data.empty && (

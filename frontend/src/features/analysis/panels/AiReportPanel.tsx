@@ -67,7 +67,7 @@ export function AiReportPanel() {
           style={{ justifyContent: 'space-between', width: '100%' }}
         >
           <Space align="baseline" size={12} wrap>
-            <Title level={3} style={{ margin: 0 }}>
+            <Title level={5} style={{ margin: 0 }}>
               <RobotOutlined style={{ color: '#7c3aed', marginRight: 8 }} />
               AI 技术分析
             </Title>
@@ -90,7 +90,7 @@ export function AiReportPanel() {
 
         <Tabs
           defaultActiveKey="combined"
-          size="large"
+          size="middle"
           items={[
             {
               key: 'combined',

@@ -25,7 +25,7 @@ export function AnalysisWorkspace() {
     <>
       <KeyMetricsStrip />
       <Tabs
-        size="large"
+        size="middle"
         type="line"
         defaultActiveKey={panels[0]?.id}
         destroyInactiveTabPane

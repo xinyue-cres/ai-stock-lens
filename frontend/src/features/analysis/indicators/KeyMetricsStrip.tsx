@@ -1,7 +1,9 @@
-import { Space, Tag } from 'antd'
-import { useStockAnalysis } from '@/features/stock-context'
+import { Space, Tag, Typography } from 'antd'
+import { useStock, useStockName, useStockAnalysis } from '@/features/stock-context'
 import { priceColor } from '@/shared/theme'
 import { ClosedBadge } from '@/features/status-bar/ClosedBadge'
+
+const { Text } = Typography
 
 const arrangementLabel: Record<string, { label: string; color: string }> = {
   bullish: { label: '多头排列', color: 'red' },
@@ -57,6 +59,8 @@ function TagFor({
  * K 线上方、AI 分析卡片内均可复用，从当前股票的 useStockAnalysis 拉数据。
  */
 export function KeyMetricsStrip({ size = 'default' }: { size?: 'small' | 'default' } = {}) {
+  const { code } = useStock()
+  const name = useStockName()
   const { data } = useStockAnalysis()
   if (!data || data.empty) return null
   const ind = (data as any).indicators || {}
@@ -72,7 +76,17 @@ export function KeyMetricsStrip({ size = 'default' }: { size?: 'small' | 'defaul
   const padding = size === 'small' ? '2px 8px' : '3px 10px'
 
   return (
-    <Space wrap size={[6, 6]}>
+    <Space wrap size={[6, 6]} style={{ background: '#fff', borderRadius: 6, padding: '8px 12px' }}>
+      {code && (
+        <span style={{ fontSize: size === 'small' ? 13 : 15, fontWeight: 600, marginRight: 4 }}>
+          {name || code}
+          {name && (
+            <Text type="secondary" style={{ fontSize: size === 'small' ? 11 : 12, fontWeight: 400, marginLeft: 4 }}>
+              {code}
+            </Text>
+          )}
+        </span>
+      )}
       <ClosedBadge finalized={finalized} size={size} />
       <Tag style={{ fontSize, padding }}>
         收盘 <strong>{fmt(price.close)}</strong>

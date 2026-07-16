@@ -13,7 +13,7 @@ export function KLinePanel() {
     <Card styles={{ body: { padding: 20 } }}>
       <Space direction="vertical" size={12} style={{ width: '100%' }}>
         <Space align="baseline" size={12} wrap>
-          <Title level={3} style={{ margin: 0 }}>
+          <Title level={5} style={{ margin: 0 }}>
             <LineChartOutlined style={{ color: '#7c3aed', marginRight: 8 }} />
             K 线
           </Title>
