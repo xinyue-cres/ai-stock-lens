@@ -38,11 +38,13 @@ export function HorizonReport({ horizon }: Props) {
       {/* 操作栏 + verdict 同行 */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
-          {data && <VerdictBanner data={data} showCachedTag={isCachedOnly} dataAsOf={dataAsOf} />}
-          {data && horizon === 'anti_quant' && antiQuantHint[data.verdict] && (
-            <div style={{ fontSize: 12, color: '#78716c', marginTop: 4, paddingLeft: 4 }}>
-              {antiQuantHint[data.verdict]}
-            </div>
+          {data && (
+            <VerdictBanner
+              data={data}
+              showCachedTag={isCachedOnly}
+              dataAsOf={dataAsOf}
+              hint={horizon === 'anti_quant' ? antiQuantHint[data.verdict] : undefined}
+            />
           )}
         </div>
         <Space size={8} style={{ flexShrink: 0 }}>

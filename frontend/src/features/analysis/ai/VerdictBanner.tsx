@@ -17,10 +17,12 @@ interface Props {
   showCachedTag?: boolean
   /** 当前 K 线数据的最新交易日；若比报告的 as_of 更新则报告陈旧 */
   dataAsOf?: string | null
+  /** 额外解读提示，显示在 summary 下方 */
+  hint?: string
 }
 
 /** 顶部彩色条带：verdict + confidence + summary + 报告日期 + 陈旧提醒。 */
-export function VerdictBanner({ data, showCachedTag, dataAsOf }: Props) {
+export function VerdictBanner({ data, showCachedTag, dataAsOf, hint }: Props) {
   const p = verdictPalette[data.verdict] || verdictPalette.neutral
   const reportAsOf = data.as_of_date
   const stale = !!(reportAsOf && dataAsOf && reportAsOf < dataAsOf)
@@ -79,6 +81,11 @@ export function VerdictBanner({ data, showCachedTag, dataAsOf }: Props) {
         <Paragraph style={{ margin: '10px 0 0', fontSize: 16, color: '#1f2937', lineHeight: 1.6 }}>
           {data.summary}
         </Paragraph>
+      )}
+      {hint && (
+        <Text type="secondary" style={{ display: 'block', marginTop: 6, fontSize: 12 }}>
+          {hint}
+        </Text>
       )}
     </div>
   )
