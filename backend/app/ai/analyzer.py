@@ -108,12 +108,19 @@ def _chat_json(system: str, user: str, temperature: float = 0.3) -> dict[str, An
 
 
 def analyze_debate(stock_info: dict, indicators: dict) -> dict[str, Any]:
-    """牛熊辩论：三次串行调用 API。"""
-    logger.info("辩论开始 · 牛派论证")
-    bull = _chat_json(BULL_SYSTEM, build_bull_prompt(stock_info, indicators), temperature=0.4)
+    """牛熊辩论：bull/bear 并行，judge 串行。"""
+    from concurrent.futures import ThreadPoolExecutor
 
-    logger.info("辩论开始 · 熊派论证")
-    bear = _chat_json(BEAR_SYSTEM, build_bear_prompt(stock_info, indicators), temperature=0.4)
+    logger.info("辩论开始 · 牛熊并行")
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        bull_future = pool.submit(
+            _chat_json, BULL_SYSTEM, build_bull_prompt(stock_info, indicators), 0.4
+        )
+        bear_future = pool.submit(
+            _chat_json, BEAR_SYSTEM, build_bear_prompt(stock_info, indicators), 0.4
+        )
+        bull = bull_future.result()
+        bear = bear_future.result()
 
     logger.info("辩论开始 · 裁判裁决")
     judge = _chat_json(

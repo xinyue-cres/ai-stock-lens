@@ -40,6 +40,17 @@ def _job_review_all() -> None:
         logger.exception("定时复盘失败")
 
 
+def _job_check_scenarios() -> None:
+    logger.info("定时任务：检查 Scenario 命中")
+    try:
+        from app.services.scenario_alert_service import check_all_watchlist
+        with Session(engine) as session:
+            total = check_all_watchlist(session)
+        logger.info("Scenario 检测完成 · 新增 %d 条 alert", total)
+    except Exception:  # noqa: BLE001
+        logger.exception("定时 Scenario 检测失败")
+
+
 def start_scheduler() -> None:
     global _scheduler
     settings = get_settings()
@@ -69,6 +80,19 @@ def start_scheduler() -> None:
             day_of_week="mon-fri",
         ),
         id="review_all",
+        replace_existing=True,
+    )
+    # 同步完约 5 分钟后检查 scenario 命中
+    scenario_minute = (settings.sync_cron_minute + 5) % 60
+    scenario_hour = settings.sync_cron_hour + ((settings.sync_cron_minute + 5) // 60)
+    _scheduler.add_job(
+        _job_check_scenarios,
+        trigger=CronTrigger(
+            hour=scenario_hour,
+            minute=scenario_minute,
+            day_of_week="mon-fri",
+        ),
+        id="check_scenarios",
         replace_existing=True,
     )
     _scheduler.start()

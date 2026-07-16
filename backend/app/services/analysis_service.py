@@ -151,13 +151,14 @@ def build_ai_input(session: Session, code: str) -> tuple[dict, dict] | None:
 def scan_watchlist_signals(session: Session) -> list[dict]:
     """遍历自选股，输出每只票当日的信号列表。"""
     from app.ai.client import get_model_name
-    from app.services import position_service
+    from app.services import position_service, scenario_alert_service
 
     stocks = list(session.exec(select(Stock).where(Stock.is_watchlist == True)))  # noqa: E712
     codes = [s.code for s in stocks]
     positions_by_code = position_service.get_positions_by_codes(session, codes)
     stance_map = _latest_stance_map(session, codes, get_model_name())
     ai_verdict_map = _latest_ai_verdict_map(session, codes, get_model_name())
+    alerts_map = scenario_alert_service.get_active_alerts(session, codes)
 
     results: list[dict] = []
     for s in stocks:
@@ -179,6 +180,7 @@ def scan_watchlist_signals(session: Session) -> list[dict]:
                     "position": position_summary,
                     "stance": stance_info,
                     "ai_verdict": ai_verdict,
+                    "triggered_scenarios": alerts_map.get(s.code, []),
                 }
             )
             continue
@@ -199,6 +201,7 @@ def scan_watchlist_signals(session: Session) -> list[dict]:
                 "position": position_summary,
                 "stance": stance_info,
                 "ai_verdict": ai_verdict,
+                "triggered_scenarios": alerts_map.get(s.code, []),
             }
         )
     return results
