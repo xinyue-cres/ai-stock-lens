@@ -103,6 +103,7 @@ function EvidenceReviewTable({ reviews }: { reviews: Array<{ side: string; claim
             {ratingLabel[r.rating] || r.rating}
           </Tag>
           <span>{r.claim}</span>
+          {r.reason && <span style={{ color: '#9ca3af', fontSize: 12 }}>— {r.reason}</span>}
         </div>
       ))}
     </div>
