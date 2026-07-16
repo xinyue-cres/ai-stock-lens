@@ -133,6 +133,43 @@ export default function Positions() {
         </Card>
       )}
 
+      {/* 总资金设置：无论是否有持仓都显示 */}
+      <Card size="small" style={{ marginBottom: 16, marginTop: positions.length === 0 ? 16 : 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <Tooltip title="总资金用于 Trader 计算具体仓位建议（股数 = 100 的整数倍）">
+            <Text style={{ fontSize: 13 }}>
+              <WalletOutlined style={{ marginRight: 4 }} />
+              总资金
+            </Text>
+          </Tooltip>
+          <InputNumber
+            size="small"
+            style={{ width: 150 }}
+            min={1000}
+            step={10000}
+            placeholder="如 100000"
+            value={capitalInput ?? currentCapital ?? undefined}
+            onChange={(v) => setCapitalInput(v)}
+            formatter={(v) => v ? `¥ ${Number(v).toLocaleString()}` : ''}
+            parser={(v) => Number((v || '').replace(/[¥,\s]/g, '')) as any}
+          />
+          <Button
+            size="small"
+            type="primary"
+            disabled={!capitalInput || capitalInput === currentCapital}
+            loading={capitalMut.isPending}
+            onClick={() => capitalInput && capitalMut.mutate(capitalInput)}
+          >
+            保存
+          </Button>
+          {currentCapital && (
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              当前：¥{currentCapital.toLocaleString()}
+            </Text>
+          )}
+        </div>
+      </Card>
+
       {positions.length > 0 && (
         <Space direction="vertical" size={16} style={{ width: '100%' }}>
           <Card>
@@ -177,41 +214,14 @@ export default function Positions() {
                   color: (summary.todayPnl ?? 0) >= 0 ? priceColor.up : priceColor.down,
                 }}
               />
-              <div>
-                <Tooltip title="总资金用于 Trader 计算具体仓位建议（股数 = 100 的整数倍）">
-                  <Text type="secondary" style={{ fontSize: 12 }}>
-                    <WalletOutlined style={{ marginRight: 4 }} />
-                    总资金
-                  </Text>
-                </Tooltip>
-                <div style={{ marginTop: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <InputNumber
-                    size="small"
-                    style={{ width: 130 }}
-                    min={1000}
-                    step={10000}
-                    placeholder="如 100000"
-                    value={capitalInput ?? currentCapital ?? undefined}
-                    onChange={(v) => setCapitalInput(v)}
-                    formatter={(v) => v ? `¥ ${Number(v).toLocaleString()}` : ''}
-                    parser={(v) => Number((v || '').replace(/[¥,\s]/g, '')) as any}
-                  />
-                  <Button
-                    size="small"
-                    type="primary"
-                    disabled={!capitalInput || capitalInput === currentCapital}
-                    loading={capitalMut.isPending}
-                    onClick={() => capitalInput && capitalMut.mutate(capitalInput)}
-                  >
-                    保存
-                  </Button>
-                </div>
-                {currentCapital && summary.marketValue != null && (
-                  <Text type="secondary" style={{ fontSize: 11, marginTop: 2, display: 'block' }}>
-                    仓位占比 {((summary.marketValue / currentCapital) * 100).toFixed(1)}%
-                  </Text>
-                )}
-              </div>
+              {currentCapital && summary.marketValue != null && (
+                <Statistic
+                  title="仓位占比"
+                  value={(summary.marketValue / currentCapital) * 100}
+                  precision={1}
+                  suffix="%"
+                />
+              )}
             </Space>
           </Card>
 
