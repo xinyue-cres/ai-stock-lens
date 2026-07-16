@@ -135,6 +135,8 @@ def gen_ai_report(
         "bull": result.get("bull"),
         "bear": result.get("bear"),
         "judge": result.get("judge"),
+        "tradability": result.get("tradability"),
+        "evidence_review": result.get("evidence_review"),
         # 反量化专属：quant agent 的完整输出
         "quant_output": result.get("quant_output"),
         # 反身性专属
@@ -210,7 +212,7 @@ def _report_to_dict(r: AIReport, cached: bool, stock=None) -> dict:
         "summary": r.summary,
         "report_md": r.report_md,
         "as_of_date": str(r.as_of_date),
-        "created_at": r.created_at.isoformat() + "Z" if r.created_at else None,
+        "created_at": r.created_at.isoformat() if r.created_at else None,
         "model": r.model,
         "key_signals": extras.get("key_signals", []),
         "risks": extras.get("risks", []),
@@ -219,6 +221,8 @@ def _report_to_dict(r: AIReport, cached: bool, stock=None) -> dict:
         "bull": extras.get("bull"),
         "bear": extras.get("bear"),
         "judge": extras.get("judge"),
+        "tradability": extras.get("tradability"),
+        "evidence_review": extras.get("evidence_review"),
         "quant_output": extras.get("quant_output"),
         "reflexivity_stage": extras.get("reflexivity_stage"),
         "narrative": extras.get("narrative"),
