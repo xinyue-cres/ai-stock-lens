@@ -14,7 +14,7 @@ from datetime import date
 import pandas as pd
 
 from app.datasource.base import Adjust, StockInfo
-from app.datasource.base_provider import BaseProvider, Capabilities, sina_symbol
+from app.datasource.base_provider import BaseProvider, Capabilities, is_fund_code, sina_symbol
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +43,9 @@ class SinaProvider(BaseProvider):
         end: date,
         adjust: Adjust = "qfq",
     ) -> pd.DataFrame:
+        if is_fund_code(code):
+            return self._get_fund_kline(code, start, end)
+
         symbol = sina_symbol(code)
         raw = self._ak.stock_zh_a_daily(
             symbol=symbol,
@@ -62,6 +65,25 @@ class SinaProvider(BaseProvider):
             ["trade_date", "open", "high", "low", "close",
              "volume", "amount", "turnover", "pct_chg"]
         ]
+
+    def _get_fund_kline(self, code: str, start: date, end: date) -> pd.DataFrame:
+        """场内基金日线 fallback：fund_etf_hist_sina。"""
+        from app.datasource.base_provider import infer_market
+
+        symbol = f"{infer_market(code).lower()}{code}"
+        raw = self._ak.fund_etf_hist_sina(symbol=symbol)
+        if raw is None or raw.empty:
+            return _empty_kline()
+        df = raw.copy()
+        df["trade_date"] = pd.to_datetime(df["date"]).dt.date
+        df = df[(df["trade_date"] >= start) & (df["trade_date"] <= end)]
+        if df.empty:
+            return _empty_kline()
+        for col in ["open", "high", "low", "close", "volume", "amount"]:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+        df["pct_chg"] = df["close"].pct_change().fillna(0) * 100
+        df["turnover"] = None
+        return df[["trade_date", "open", "high", "low", "close", "volume", "amount", "turnover", "pct_chg"]]
 
     def get_index_daily(self, code: str, start: date, end: date) -> pd.DataFrame:
         df = self._ak.stock_zh_index_daily(symbol=code)

@@ -24,9 +24,9 @@ class Capabilities:
 
 def infer_market(code: str) -> str:
     """按代码前缀推交易所：SH / SZ / BJ。默认 SH。"""
-    if code.startswith(("60", "68", "9")):
+    if code.startswith(("60", "68", "9", "51", "56", "58")):
         return "SH"
-    if code.startswith(("00", "30", "20")):
+    if code.startswith(("00", "30", "20", "15", "16")):
         return "SZ"
     if code.startswith(("43", "83", "87", "88")):
         return "BJ"
@@ -36,6 +36,11 @@ def infer_market(code: str) -> str:
 def sina_symbol(code: str) -> str:
     """转成新浪接口需要的 sh600519 / sz000001 格式。"""
     return f"{infer_market(code).lower()}{code}"
+
+
+def is_fund_code(code: str) -> bool:
+    """判断是否为场内基金（ETF/LOF）代码。"""
+    return code.startswith(("51", "56", "58", "15", "16"))
 
 
 class BaseProvider:
