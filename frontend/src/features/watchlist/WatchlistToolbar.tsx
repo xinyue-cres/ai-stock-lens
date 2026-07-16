@@ -24,7 +24,10 @@ export function WatchlistToolbar({ total, onAdd }: Props) {
     onSuccess: (r) => {
       message.success(`${code} 同步完成 · ${r.rows_inserted} 行`)
       qc.invalidateQueries({ queryKey: ['stock-analysis', code] })
+      qc.invalidateQueries({ queryKey: ['kline', code] })
       qc.invalidateQueries({ queryKey: ['signals-today'] })
+      qc.invalidateQueries({ queryKey: ['diary'] })
+      qc.invalidateQueries({ queryKey: ['watchlist'] })
     },
     onError: () => message.error('同步失败'),
   })
