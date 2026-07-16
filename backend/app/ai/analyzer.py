@@ -239,6 +239,7 @@ def _normalize_bias_check(b: Any) -> dict[str, Any] | None:
         "bias": bias,
         "label": (b.get("label") or "").strip(),
         "command": (b.get("command") or b.get("do_not") or b.get("trigger") or "").strip(),
+        "invalidation": (b.get("invalidation") or "").strip(),
     }
 
 

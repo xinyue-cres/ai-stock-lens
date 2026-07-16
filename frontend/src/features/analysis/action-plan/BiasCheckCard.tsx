@@ -46,6 +46,7 @@ export function BiasCheckSection({ checks }: Props) {
 function BiasCheckCard({ check }: { check: BiasCheck }) {
   const label = check.label || biasFallbackLabel[check.bias] || check.bias
   const command = (check as any).command || check.do_not || (check as any).trigger || ''
+  const invalidation = (check as any).invalidation || ''
   const isProhibit = command.startsWith('禁止')
 
   return (
@@ -58,6 +59,11 @@ function BiasCheckCard({ check }: { check: BiasCheck }) {
       </Tag>
       <Text style={{ fontSize: 13, fontWeight: 500 }}>
         {command}
+        {invalidation && (
+          <Text type="secondary" style={{ fontSize: 12, fontWeight: 400 }}>
+            （{invalidation}）
+          </Text>
+        )}
       </Text>
     </Space>
   )
