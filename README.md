@@ -5,7 +5,7 @@
 ## 功能概览
 
 ### AI 多视角分析
-- **综合分析**（牛熊辩论）：牛派→熊派→裁判三轮串行，输出 verdict/scenarios/signals/risks
+- **综合分析**（牛熊辩论）：牛派/熊派并行 → 裁判裁决，输出 verdict/scenarios/signals/risks
 - **反量化分析**：量化模拟器 + 散户反向策略，识别机构行为模式
 - **反身性分析**：索罗斯反身性框架，判断正/负反馈循环阶段
 
@@ -22,6 +22,7 @@
 
 ### 数据源
 - DataRouter fallback 链：东财 → BaoStock → 新浪 → 腾讯
+- 支持 A 股 + 场内基金（ETF/LOF），基金走 fund_etf_hist_sina 独立通道
 - Provider 级熔断：连续 3 次失败 → 300s 冷却
 - 腾讯 snapshot 60s 缓存，盘后快速可用
 

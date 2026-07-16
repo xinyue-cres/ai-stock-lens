@@ -1,7 +1,7 @@
 # AI Stock Lens · 架构设计
 
 > 版本：v2.0
-> 更新：2026-07-15
+> 更新：2026-07-16
 > 定位：个人自用、本地部署的 A 股多视角 AI 技术分析工作台
 
 ---
@@ -74,15 +74,16 @@
 
 ### 3.1 综合分析（牛熊辩论）
 
-三次串行 AI 调用：
+Bull/Bear 并行 + Judge 串行：
 
 ```
 输入（指标 + K 线摘要）
-  → Bull Agent：构建多头论证
-  → Bear Agent：构建空头论证
-  → Judge Agent：裁决 verdict + scenarios
+  → Bull Agent ──┐
+                  ├─→ Judge Agent：裁决 verdict + scenarios
+  → Bear Agent ──┘
 ```
 
+- Bull/Bear 通过 ThreadPoolExecutor 并行调用，节省 ~50% 延迟
 - 各 Agent 有独立 system prompt，禁止编造数据
 - Judge 产出：verdict / confidence / scenarios / key_signals / risks / report_md
 - 置信度校准：强制 0-1 区间，附带校准标尺约束
@@ -143,6 +144,8 @@ index_chain = [EastMoney, Sina]
 ```
 
 - Provider 抽象基类：`get_daily_kline()` / `get_index_daily()` / `get_stock_list()`
+- **场内基金（ETF/LOF）支持**：代码前缀路由（51/56/58→SH, 15/16→SZ），通过 `fund_etf_hist_sina` 获取日线
+- 基金代码在 BaoStock/腾讯中自动跳过（不支持），仅走东财/新浪
 - 熔断机制：连续 3 次失败 → 300s 冷却 → 自动恢复
 - 全链条失败返回空 DataFrame（不抛异常）
 - 腾讯 Provider：60s snapshot 缓存，盘后 15:01 即可获取当日数据
@@ -198,7 +201,7 @@ registerPanel({ id: 'chat',        label: '对话',     order: 35 })
 
 ```
 ┌──────────────┬──────────────────────────────────────┐
-│  自选股列表   │  KeyMetricsStrip (始终可见)           │
+│  自选股列表   │  KeyMetricsStrip (股票名+盘口指标)    │
 │  (sticky)    ├──────────────────────────────────────┤
 │  · 搜索      │  [AI分析] [操作指示] [K线] [日志] ... │
 │  · 筛选      │                                      │
