@@ -5,6 +5,11 @@ export async function runSync() {
   return data
 }
 
+export async function syncSingleStock(code: string) {
+  const { data } = await api.post(`/sync/stock/${code}`, {}, { timeout: 30_000 })
+  return data as { code: string; rows_inserted: number }
+}
+
 export async function refreshToday() {
   const { data } = await api.post('/sync/refresh-today', {}, { timeout: 60_000 })
   return data

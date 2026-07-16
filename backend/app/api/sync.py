@@ -50,6 +50,13 @@ def run_sync(session: Session = Depends(get_session)):
     }
 
 
+@router.post("/stock/{code}")
+def sync_single_stock(code: str, session: Session = Depends(get_session)):
+    """同步单只股票的最新 K 线数据。"""
+    rows = sync_service.sync_one_stock(session, code)
+    return {"code": code, "rows_inserted": rows}
+
+
 @router.post("/refresh-today")
 def refresh_today(session: Session = Depends(get_session)):
     """强制重拉今日：删除所有自选股今日 K 线，再执行一次全量同步。

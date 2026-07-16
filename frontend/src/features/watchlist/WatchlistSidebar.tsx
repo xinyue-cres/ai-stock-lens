@@ -14,7 +14,7 @@ import { useWatchlistFilters } from './useWatchlistFilters'
  */
 export function WatchlistSidebar() {
   const { code, setCode } = useStock()
-  const { items, add, remove, pin, sync, syncLoading } = useWatchlistData()
+  const { items, add, remove, pin } = useWatchlistData()
   const { filtered, keyword, setKeyword, dir, setDir } =
     useWatchlistFilters(items)
   const [editingCode, setEditingCode] = useState<string | null>(null)
@@ -29,9 +29,7 @@ export function WatchlistSidebar() {
       <div style={{ padding: 10, borderBottom: '1px solid #f0f0f0' }}>
         <WatchlistToolbar
           total={items.length}
-          syncLoading={syncLoading}
           onAdd={add}
-          onSync={sync}
         />
         <div style={{ marginTop: 8 }}>
           <WatchlistFilters

@@ -1,21 +1,33 @@
 import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { AutoComplete, Button, Space, Tooltip, Typography } from 'antd'
-import { PlusOutlined, ReloadOutlined } from '@ant-design/icons'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { AutoComplete, Button, Space, Tooltip, Typography, message } from 'antd'
+import { PlusOutlined, SyncOutlined } from '@ant-design/icons'
 import { searchStocks, StockInfo } from '@/api/stocks'
+import { syncSingleStock } from '@/api/sync'
+import { useStock } from '@/features/stock-context'
 
 const { Text } = Typography
 
 interface Props {
   total: number
-  syncLoading: boolean
   onAdd: (code: string) => void
-  onSync: () => void
 }
 
-export function WatchlistToolbar({ total, syncLoading, onAdd, onSync }: Props) {
+export function WatchlistToolbar({ total, onAdd }: Props) {
+  const { code } = useStock()
+  const qc = useQueryClient()
   const [addOpen, setAddOpen] = useState(false)
   const [addValue, setAddValue] = useState('')
+
+  const syncMut = useMutation({
+    mutationFn: () => syncSingleStock(code),
+    onSuccess: (r) => {
+      message.success(`${code} 同步完成 · ${r.rows_inserted} 行`)
+      qc.invalidateQueries({ queryKey: ['stock-analysis', code] })
+      qc.invalidateQueries({ queryKey: ['signals-today'] })
+    },
+    onError: () => message.error('同步失败'),
+  })
 
   const suggestQ = useQuery({
     queryKey: ['search', addValue],
@@ -54,8 +66,14 @@ export function WatchlistToolbar({ total, syncLoading, onAdd, onSync }: Props) {
         >
           添加
         </Button>
-        <Tooltip title="立即同步自选股">
-          <Button icon={<ReloadOutlined />} size="small" loading={syncLoading} onClick={onSync} />
+        <Tooltip title={code ? `同步 ${code} 最新K线` : '请先选择股票'}>
+          <Button
+            icon={<SyncOutlined />}
+            size="small"
+            loading={syncMut.isPending}
+            disabled={!code}
+            onClick={() => syncMut.mutate()}
+          />
         </Tooltip>
         <Text type="secondary" style={{ fontSize: 12, marginLeft: 'auto' }}>
           共 {total} 只
