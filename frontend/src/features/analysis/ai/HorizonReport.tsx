@@ -67,16 +67,16 @@ export function HorizonReport({ horizon }: Props) {
         />
       )}
 
-      {!data && !loading && !isPending && (
+      {!data && !loading && (
         <Empty
           description={`当天暂无${horizonEmpty[horizon]}报告，点击「生成分析」`}
           style={{ padding: '32px 0' }}
         />
       )}
 
-      {isPending && !data && (
+      {loading && !data && (
         <div style={{ textAlign: 'center', padding: '32px 0' }}>
-          <Spin size="large" tip="AI 正在分析…" />
+          <Spin size="large" tip={isPending ? 'AI 正在分析…' : '加载缓存…'} />
         </div>
       )}
 

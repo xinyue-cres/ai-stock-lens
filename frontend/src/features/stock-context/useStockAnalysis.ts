@@ -4,6 +4,7 @@ import { useStock } from './StockContext'
 
 /**
  * 拉取当前股票的日线 + 指标 + 图表序列 + 信号。
+ * 10 分钟内不重新拉，切换股票用共享缓存。
  */
 export function useStockAnalysis() {
   const { code } = useStock()
