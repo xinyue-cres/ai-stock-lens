@@ -26,6 +26,7 @@ export function GlobalStatusBar() {
     qc.invalidateQueries({ queryKey: ['signals'] })
     qc.invalidateQueries({ queryKey: ['analysis'] })
     qc.invalidateQueries({ queryKey: ['watchlist'] })
+    qc.invalidateQueries({ queryKey: ['market-summary'] })
   }
 
   const toastResult = (r: any, label: string) => {

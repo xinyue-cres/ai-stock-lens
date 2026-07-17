@@ -200,6 +200,13 @@ def sync_watchlist(session: Session) -> SyncLog:
     session.commit()
     session.refresh(log)
 
+    # 先同步大盘指数（供 AI 分析和大盘状态条使用）
+    try:
+        from app.services.market_service import sync_indices
+        sync_indices(session, days=30)
+    except Exception:  # noqa: BLE001
+        logger.exception("同步大盘指数失败（不影响自选股同步）")
+
     stocks = list(session.exec(select(Stock).where(Stock.is_watchlist == True)))  # noqa: E712
     total = 0
     errors: list[str] = []

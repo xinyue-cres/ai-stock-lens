@@ -28,6 +28,7 @@ export function WatchlistToolbar({ total, onAdd }: Props) {
       qc.invalidateQueries({ queryKey: ['signals-today'] })
       qc.invalidateQueries({ queryKey: ['diary'] })
       qc.invalidateQueries({ queryKey: ['watchlist'] })
+      qc.invalidateQueries({ queryKey: ['market-summary'] })
     },
     onError: () => message.error('同步失败'),
   })
