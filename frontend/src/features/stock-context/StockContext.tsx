@@ -27,7 +27,6 @@ export function StockContextProvider({ children }: { children: ReactNode }) {
     setCodeState(trimmed)
     if (trimmed) navigate(`/stock/${trimmed}`)
     else navigate('/')
-    window.scrollTo({ top: 0 })
   }
 
   return (
