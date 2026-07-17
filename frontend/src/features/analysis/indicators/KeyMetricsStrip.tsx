@@ -61,7 +61,7 @@ function TagFor({
 export function KeyMetricsStrip({ size = 'default' }: { size?: 'small' | 'default' } = {}) {
   const { code } = useStock()
   const name = useStockName()
-  const { data, isStale } = useStockAnalysis()
+  const { data } = useStockAnalysis()
   if (!data || data.empty) return null
   const ind = (data as any).indicators || {}
   const ma = ind.ma || {}
@@ -76,7 +76,7 @@ export function KeyMetricsStrip({ size = 'default' }: { size?: 'small' | 'defaul
   const padding = size === 'small' ? '2px 8px' : '3px 10px'
 
   return (
-    <Space wrap size={[6, 6]} style={{ background: '#fff', borderRadius: 6, padding: '8px 12px', opacity: isStale ? 0.3 : 1, transition: 'opacity 0.15s' }}>
+    <Space wrap size={[6, 6]} style={{ background: '#fff', borderRadius: 6, padding: '8px 12px' }}>
       {code && (
         <span style={{ fontSize: size === 'small' ? 13 : 15, fontWeight: 600, marginRight: 4 }}>
           {name || code}
