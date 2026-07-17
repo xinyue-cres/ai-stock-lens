@@ -1,11 +1,9 @@
-import { keepPreviousData, useQuery } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { getKline } from '@/api/stocks'
 import { useStock } from './StockContext'
 
 /**
  * 拉取当前股票的日线 + 指标 + 图表序列 + 信号。
- * placeholderData 保持高度防止页面上滚。
- * isPlaceholderData 暴露给组件用于隐藏旧数据避免闪烁。
  */
 export function useStockAnalysis() {
   const { code } = useStock()
@@ -15,7 +13,6 @@ export function useStockAnalysis() {
     enabled: !!code,
     staleTime: 10 * 60_000,
     gcTime: 30 * 60_000,
-    placeholderData: keepPreviousData,
   })
 }
 

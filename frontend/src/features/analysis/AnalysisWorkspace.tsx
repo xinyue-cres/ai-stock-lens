@@ -1,5 +1,5 @@
 import { Card, Empty, Tabs } from 'antd'
-import { useStock, useStockAnalysis } from '@/features/stock-context'
+import { useStock } from '@/features/stock-context'
 import { KeyMetricsStrip } from './indicators/KeyMetricsStrip'
 import { MarketContextBar } from './indicators/MarketContextBar'
 import './panels/register' // 触发面板注册
@@ -12,7 +12,6 @@ import { getPanels } from './panels/registry'
  */
 export function AnalysisWorkspace() {
   const { code } = useStock()
-  const { isPlaceholderData } = useStockAnalysis()
   const panels = getPanels()
 
   if (!code) {
@@ -24,7 +23,7 @@ export function AnalysisWorkspace() {
   }
 
   return (
-    <div style={{ visibility: isPlaceholderData ? 'hidden' : 'visible' }}>
+    <>
       <KeyMetricsStrip />
       <MarketContextBar />
       <Tabs
@@ -39,6 +38,6 @@ export function AnalysisWorkspace() {
           children: <p.Component />,
         }))}
       />
-    </div>
+    </>
   )
 }

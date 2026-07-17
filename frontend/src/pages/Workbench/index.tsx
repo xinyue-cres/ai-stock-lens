@@ -18,8 +18,8 @@ export default function Workbench() {
         >
           <WatchlistSidebar />
         </div>
-        {/* 右栏改为随内容自然增长，交给浏览器整体滚动 */}
-        <div style={{ flex: 1, minWidth: 0, minHeight: 'calc(100vh - 112px)' }}>
+        {/* 右栏独立滚动容器：切换股票时内部重渲染不影响外部页面滚动位置 */}
+        <div style={{ flex: 1, minWidth: 0, height: 'calc(100vh - 112px)', overflowY: 'auto' }}>
           <AnalysisWorkspace />
         </div>
       </div>

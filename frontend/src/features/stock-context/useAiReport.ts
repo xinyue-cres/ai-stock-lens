@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient, useIsMutating, keepPreviousData } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient, useIsMutating } from '@tanstack/react-query'
 import { AiReport, generateAiReport, getCachedAiReport } from '@/api/analysis'
 import { useStock } from './StockContext'
 
@@ -31,7 +31,6 @@ export function useAiReport(horizon: Horizon) {
     queryKey: ['ai-report-cached', code, horizon],
     queryFn: () => getCachedAiReport(code, horizon),
     enabled: !!code,
-    placeholderData: keepPreviousData,
   })
 
   const mutation = useMutation<AiReport, unknown, MutationVars>({
