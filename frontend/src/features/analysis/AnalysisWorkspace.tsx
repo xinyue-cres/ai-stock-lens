@@ -1,6 +1,7 @@
 import { Card, Empty, Tabs } from 'antd'
 import { useStock } from '@/features/stock-context'
 import { KeyMetricsStrip } from './indicators/KeyMetricsStrip'
+import { MarketContextBar } from './indicators/MarketContextBar'
 import './panels/register' // 触发面板注册
 import { getPanels } from './panels/registry'
 
@@ -24,6 +25,7 @@ export function AnalysisWorkspace() {
   return (
     <>
       <KeyMetricsStrip />
+      <MarketContextBar />
       <Tabs
         size="middle"
         type="line"
