@@ -5,6 +5,7 @@ import { useStock } from './StockContext'
 /**
  * 拉取当前股票的日线 + 指标 + 图表序列 + 信号。
  * placeholderData 保持高度防止页面上滚。
+ * isPlaceholderData 暴露给组件用于隐藏旧数据避免闪烁。
  */
 export function useStockAnalysis() {
   const { code } = useStock()
