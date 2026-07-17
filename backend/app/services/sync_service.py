@@ -18,6 +18,9 @@ logger = logging.getLogger(__name__)
 _CN_TZ = ZoneInfo("Asia/Shanghai")
 _MARKET_CLOSE = time(15, 0)
 
+_last_indices_sync: datetime | None = None
+_INDICES_COOLDOWN = timedelta(minutes=5)
+
 
 def _now_cn() -> datetime:
     return datetime.now(_CN_TZ)
@@ -194,18 +197,28 @@ def _fill_missing_turnover(session: Session, code: str) -> None:
     logger.info("[%s] 补算 %d 行缺失 turnover（流通股本推算 %.0f）", code, len(missing), float_shares)
 
 
+def _sync_indices_if_due(session: Session) -> None:
+    """带 5 分钟冷却的大盘指数同步。"""
+    global _last_indices_sync
+    now = datetime.now()
+    if _last_indices_sync and (now - _last_indices_sync) < _INDICES_COOLDOWN:
+        return
+    try:
+        from app.services.market_service import sync_indices
+        sync_indices(session, days=30)
+        _last_indices_sync = now
+    except Exception:  # noqa: BLE001
+        logger.exception("同步大盘指数失败（不影响自选股同步）")
+
+
 def sync_watchlist(session: Session) -> SyncLog:
     log = SyncLog(started_at=datetime.now(), status="running")
     session.add(log)
     session.commit()
     session.refresh(log)
 
-    # 先同步大盘指数（供 AI 分析和大盘状态条使用）
-    try:
-        from app.services.market_service import sync_indices
-        sync_indices(session, days=30)
-    except Exception:  # noqa: BLE001
-        logger.exception("同步大盘指数失败（不影响自选股同步）")
+    # 先同步大盘指数（供 AI 分析和大盘状态条使用），带冷却
+    _sync_indices_if_due(session)
 
     stocks = list(session.exec(select(Stock).where(Stock.is_watchlist == True)))  # noqa: E712
     total = 0

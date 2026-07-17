@@ -52,12 +52,9 @@ def run_sync(session: Session = Depends(get_session)):
 
 @router.post("/stock/{code}")
 def sync_single_stock(code: str, session: Session = Depends(get_session)):
-    """同步单只股票的最新 K 线数据 + 大盘指数。"""
-    from app.services.market_service import sync_indices
-    try:
-        sync_indices(session, days=30)
-    except Exception:  # noqa: BLE001
-        pass
+    """同步单只股票的最新 K 线数据 + 大盘指数（5分钟冷却）。"""
+    from app.services.sync_service import _sync_indices_if_due
+    _sync_indices_if_due(session)
     rows = sync_service.sync_one_stock(session, code)
     return {"code": code, "rows_inserted": rows}
 
