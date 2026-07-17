@@ -4,12 +4,11 @@ import { useStock } from './StockContext'
 
 /**
  * 拉取当前股票的日线 + 指标 + 图表序列 + 信号。
- * 10 分钟内不重新拉，切换股票用共享缓存。
- * placeholderData 保持上一只股票数据撑住高度，避免切换时内容塌陷引起页面上滚。
+ * placeholderData 保持高度防止页面上滚，isPlaceholderData 用于控制是否渲染内容。
  */
 export function useStockAnalysis() {
   const { code } = useStock()
-  return useQuery({
+  const query = useQuery({
     queryKey: ['kline', code],
     queryFn: () => getKline(code),
     enabled: !!code,
@@ -17,6 +16,7 @@ export function useStockAnalysis() {
     gcTime: 30 * 60_000,
     placeholderData: keepPreviousData,
   })
+  return { ...query, isStale: query.isPlaceholderData }
 }
 
 /** 派生：当前股票名称。空则 null。 */
