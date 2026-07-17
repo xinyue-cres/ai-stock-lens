@@ -19,7 +19,7 @@ export default function Workbench() {
           <WatchlistSidebar />
         </div>
         {/* 右栏改为随内容自然增长，交给浏览器整体滚动 */}
-        <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ flex: 1, minWidth: 0, minHeight: 'calc(100vh - 112px)' }}>
           <AnalysisWorkspace />
         </div>
       </div>
