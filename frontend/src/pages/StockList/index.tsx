@@ -52,8 +52,8 @@ export default function StockListPage() {
   const groupsQ = useQuery({ queryKey: ['groups'], queryFn: getGroups })
   const marketQ = useQuery({ queryKey: ['market-summary'], queryFn: () => getMarketSummary(), staleTime: 5 * 60_000 })
   const signalsQ = useQuery({
-    queryKey: ['signals-today', groupFilter === 'all' ? undefined : groupFilter],
-    queryFn: () => getTodaySignals(groupFilter === 'all' ? {} : { group_id: groupFilter }),
+    queryKey: ['signals-today'],
+    queryFn: () => getTodaySignals(),
     refetchInterval: (q) => {
       const items = (q.state.data as any)?.items ?? []
       return items.some((i: any) => i.empty) ? 3_000 : 5 * 60_000
@@ -120,6 +120,10 @@ export default function StockListPage() {
   // --- 过滤 + 排序 ---
   const filtered = useMemo(() => {
     let arr = items
+    // 分组过滤（前端）
+    if (groupFilter !== 'all') {
+      arr = arr.filter(i => i.group_id === groupFilter)
+    }
     if (search) {
       const k = search.toLowerCase()
       arr = arr.filter(i => i.code.includes(k) || (i.name || '').toLowerCase().includes(k))
@@ -154,29 +158,12 @@ export default function StockListPage() {
       sorted.sort((a, b) => Number(!!b.pinned) - Number(!!a.pinned))
     }
     return sorted
-  }, [items, search, dirFilter, sortKey, sortDir])
+  }, [items, groupFilter, search, dirFilter, sortKey, sortDir])
 
-  // --- 按分组分 section ---
+  // 全部视图：不分组，单个列表。选了某组：也是单列表（已前端过滤）
   const sections = useMemo(() => {
-    if (groupFilter !== 'all') return [{ groupName: null, items: filtered }]
-    const grouped: Record<string, SignalItem[]> = {}
-    const order: string[] = []
-    for (const item of filtered) {
-      const key = item.group_name || '未分组'
-      if (!grouped[key]) { grouped[key] = []; order.push(key) }
-      grouped[key].push(item)
-    }
-    // 按 group sort_order 排，未分组排最后
-    const groupOrder = groups.map(g => g.name)
-    order.sort((a, b) => {
-      if (a === '未分组') return 1
-      if (b === '未分组') return -1
-      const ia = groupOrder.indexOf(a)
-      const ib = groupOrder.indexOf(b)
-      return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib)
-    })
-    return order.map(name => ({ groupName: name, items: grouped[name] }))
-  }, [filtered, groupFilter, groups])
+    return [{ groupName: null, items: filtered }]
+  }, [filtered])
 
   const segOptions = [
     { label: `全部 (${items.length})`, value: 'all' as const },
