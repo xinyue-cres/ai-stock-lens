@@ -68,10 +68,10 @@ pnpm dev
 
 | 层 | 技术 |
 |---|---|
-| 后端 | Python 3.11 · FastAPI · SQLModel · SQLite |
+| 后端 | Python 3.12 · FastAPI · SQLModel · SQLite |
 | 数据源 | AKShare（东财/新浪/腾讯）· BaoStock |
 | AI | OpenAI 兼容协议（默认 DeepSeek） |
-| 前端 | React 18 · Vite · TypeScript · Ant Design · lightweight-charts |
+| 前端 | React 18 · Vite · TypeScript · Ant Design · TanStack Query |
 | 部署 | Docker Compose · Nginx |
 
 ## 项目结构
@@ -79,19 +79,31 @@ pnpm dev
 ```
 ai-stock-lens/
 ├── backend/
-│   ├── app/
-│   │   ├── ai/              # prompts/ (按 Agent 分文件) + normalizers + analyzer + client
-│   │   ├── api/             # FastAPI 路由 (analysis, action_plan, chat, sync, ...)
-│   │   ├── datasource/      # 数据源 provider + router
-│   │   ├── features/        # 量化因子计算 (quant_factors)
-│   │   ├── indicators/      # 技术指标计算引擎
-│   │   ├── models/          # SQLModel 数据模型
-│   │   └── services/        # 业务逻辑层
-│   └── data/                # SQLite 数据库（gitignored）
+│   └── app/
+│       ├── ai/              # prompts/ + normalizers + analyzer + client
+│       ├── api/             # FastAPI 路由 (signals, analysis, action_plan, ...)
+│       ├── datasource/      # 多源 provider + fallback router
+│       ├── features/        # 量化因子计算
+│       ├── indicators/      # 技术指标引擎
+│       ├── models/          # SQLModel 数据模型
+│       └── services/        # 业务逻辑层
+│           ├── analysis_service   (K线 + 指标 + AI输入)
+│           ├── signals_service    (列表聚合 + 状态查询)
+│           ├── trader_service     (操作指示)
+│           ├── sync_service       (数据同步)
+│           └── ...
 ├── frontend/
 │   └── src/
-│       ├── api/             # 后端 API 调用 + 类型定义
-│       ├── features/        # 功能模块（analysis/watchlist/settings）
-│       └── pages/           # 页面路由
+│       ├── api/             # HTTP 层 (一文件一领域)
+│       ├── hooks/           # 全局共享 hooks (useSignalsQuery)
+│       ├── shared/          # 工具 (theme, timeAgo)
+│       ├── pages/
+│       │   ├── StockList/   # 首页列表 (index + 6 子组件)
+│       │   └── StockDetail/ # 详情页
+│       └── features/
+│           ├── analysis/    # 分析功能 (hooks + panels + ai + action-plan)
+│           ├── stock-context/  # 当前股票 context
+│           ├── watchlist/   # 详情页左栏 sidebar
+│           └── settings/    # 设置
 └── docker-compose.yaml
 ```
