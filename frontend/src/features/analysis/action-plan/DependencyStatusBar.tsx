@@ -55,117 +55,107 @@ export function DependencyStatusBar() {
       style={{
         border: '1px solid #e5e7eb',
         borderRadius: 6,
-        padding: '10px 14px',
+        padding: '8px 14px',
         background: '#fafafa',
       }}
     >
-      <Space direction="vertical" size={8} style={{ width: '100%' }}>
-        {/* 数据行 */}
-        <Space size={12} wrap>
-          <Text type="secondary" style={{ fontSize: 12 }}>
-            数据
-          </Text>
-          {kline.empty ? (
-            <Tag color="error" icon={<CloseCircleOutlined />}>
-              无 K 线数据
-            </Tag>
-          ) : (
+      <Space size={12} wrap style={{ width: '100%' }}>
+        {/* 数据状态 */}
+        {kline.empty ? (
+          <Tag color="error" icon={<CloseCircleOutlined />}>
+            无 K 线数据
+          </Tag>
+        ) : (
+          <Tag
+            icon={<CheckCircleFilled />}
+            color={kline.finalized ? 'success' : 'warning'}
+            style={{ margin: 0 }}
+          >
+            {kline.as_of} · {kline.finalized ? '已收盘' : '仅盘中'}
+          </Tag>
+        )}
+        {position_dirty && (
+          <Tooltip title="持仓修改晚于最近一次操作指示生成时间，建议点右上「强制刷新」重新合成建议">
             <Tag
-              icon={<CheckCircleFilled />}
-              color={kline.finalized ? 'success' : 'warning'}
+              icon={<ExclamationCircleFilled />}
+              color="warning"
               style={{ margin: 0 }}
             >
-              {kline.as_of} · {kline.finalized ? '已收盘' : '仅盘中'}
+              持仓已变更
             </Tag>
-          )}
-          {position_dirty && (
-            <Tooltip title="持仓修改晚于最近一次操作指示生成时间，建议点右上「强制刷新」重新合成建议">
-              <Tag
-                icon={<ExclamationCircleFilled />}
-                color="warning"
-                style={{ margin: 0 }}
-              >
-                持仓已变更 · 待刷新
+          </Tooltip>
+        )}
+
+        {/* AI 分析状态 */}
+        {(Object.keys(horizonLabel) as Horizon[]).map((h) => {
+          const r = reports[h]
+          const label = horizonLabel[h]
+          if (!r) {
+            return (
+              <Space key={h} size={2}>
+                <Tag icon={<CloseCircleOutlined />} color="default" style={{ margin: 0 }}>
+                  {label} · 未生成
+                </Tag>
+                <Button
+                  size="small"
+                  type="link"
+                  icon={<ReloadOutlined />}
+                  loading={pendingHorizon === h}
+                  onClick={() => genMut.mutate(h)}
+                  style={{ padding: '0 4px', fontSize: 12 }}
+                >
+                  生成
+                </Button>
+              </Space>
+            )
+          }
+          if (r.stale) {
+            return (
+              <Space key={h} size={2}>
+                <Tooltip title={`报告 ${r.as_of} · 已落后 ${r.trading_days_behind} 交易日`}>
+                  <Tag
+                    icon={<ExclamationCircleFilled />}
+                    color="warning"
+                    style={{ margin: 0 }}
+                  >
+                    {label} · 过期
+                  </Tag>
+                </Tooltip>
+                <Button
+                  size="small"
+                  type="link"
+                  icon={<ReloadOutlined />}
+                  loading={pendingHorizon === h}
+                  onClick={() => genMut.mutate(h)}
+                  style={{ padding: '0 4px', fontSize: 12 }}
+                >
+                  刷新
+                </Button>
+              </Space>
+            )
+          }
+          return (
+            <Tooltip key={h} title={`报告 ${r.as_of} · verdict=${r.verdict}`}>
+              <Tag icon={<CheckCircleFilled />} color="success" style={{ margin: 0 }}>
+                {label}
               </Tag>
             </Tooltip>
-          )}
-        </Space>
-
-        {/* AI 分析行 */}
-        <Space size={12} wrap>
-          <Text type="secondary" style={{ fontSize: 12 }}>
-            AI 分析
-          </Text>
-          {(Object.keys(horizonLabel) as Horizon[]).map((h) => {
-            const r = reports[h]
-            const label = horizonLabel[h]
-            if (!r) {
-              return (
-                <Space key={h} size={2}>
-                  <Tag icon={<CloseCircleOutlined />} color="default" style={{ margin: 0 }}>
-                    {label} · 未生成
-                  </Tag>
-                  <Button
-                    size="small"
-                    type="link"
-                    icon={<ReloadOutlined />}
-                    loading={pendingHorizon === h}
-                    onClick={() => genMut.mutate(h)}
-                    style={{ padding: '0 4px', fontSize: 12 }}
-                  >
-                    生成
-                  </Button>
-                </Space>
-              )
-            }
-            if (r.stale) {
-              return (
-                <Space key={h} size={2}>
-                  <Tooltip title={`报告 ${r.as_of} · 已落后 ${r.trading_days_behind} 交易日`}>
-                    <Tag
-                      icon={<ExclamationCircleFilled />}
-                      color="warning"
-                      style={{ margin: 0 }}
-                    >
-                      {label} · 过期
-                    </Tag>
-                  </Tooltip>
-                  <Button
-                    size="small"
-                    type="link"
-                    icon={<ReloadOutlined />}
-                    loading={pendingHorizon === h}
-                    onClick={() => genMut.mutate(h)}
-                    style={{ padding: '0 4px', fontSize: 12 }}
-                  >
-                    刷新
-                  </Button>
-                </Space>
-              )
-            }
-            return (
-              <Tooltip key={h} title={`报告 ${r.as_of} · verdict=${r.verdict}`}>
-                <Tag icon={<CheckCircleFilled />} color="success" style={{ margin: 0 }}>
-                  {label}
-                </Tag>
-              </Tooltip>
-            )
-          })}
-        </Space>
-
-        {warnings.length > 0 && (
-          <Alert
-            type="warning"
-            showIcon
-            style={{ margin: 0, padding: '4px 10px', fontSize: 12 }}
-            message={
-              <Text style={{ fontSize: 12 }}>
-                当前建议基于不完整输入：{warnings.join('、')}
-              </Text>
-            }
-          />
-        )}
+          )
+        })}
       </Space>
+
+      {warnings.length > 0 && (
+        <Alert
+          type="warning"
+          showIcon
+          style={{ marginTop: 8, padding: '4px 10px', fontSize: 12 }}
+          message={
+            <Text style={{ fontSize: 12 }}>
+              当前建议基于不完整输入：{warnings.join('、')}
+            </Text>
+          }
+        />
+      )}
     </div>
   )
 }
