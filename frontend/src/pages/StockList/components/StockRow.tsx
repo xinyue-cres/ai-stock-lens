@@ -163,10 +163,42 @@ const HORIZON_LABELS: Record<string, string> = {
   action_plan: '指示',
 }
 
+function formatRelativeTime(timeStr: string): string {
+  const now = Date.now()
+  const then = new Date(timeStr.replace(' ', 'T')).getTime()
+  const diffMin = Math.floor((now - then) / 60_000)
+  if (diffMin < 1) return '刚刚'
+  if (diffMin < 60) return `${diffMin}m`
+  const diffH = Math.floor(diffMin / 60)
+  if (diffH < 24) return `${diffH}h`
+  const diffD = Math.floor(diffH / 24)
+  return `${diffD}d`
+}
+
 function ReportTimesIndicator({ times }: { times: ReportTimes }) {
   const entries = Object.entries(HORIZON_LABELS)
   const hasAny = entries.some(([k]) => times[k as keyof ReportTimes])
   if (!hasAny) return null
+
+  const aiHorizons = ['combined', 'anti_quant', 'reflexivity'] as const
+  const aiTimes = aiHorizons.map(h => times[h]).filter(Boolean) as string[]
+  const actionTime = times.action_plan
+
+  const oldestAi = aiTimes.length > 0
+    ? aiTimes.reduce((oldest, t) => (t < oldest ? t : oldest))
+    : null
+
+  const parts: string[] = []
+  if (aiTimes.length === 3 && oldestAi) {
+    parts.push(`AI ${formatRelativeTime(oldestAi)}`)
+  } else if (aiTimes.length > 0 && oldestAi) {
+    parts.push(`AI ${aiTimes.length}/3 ${formatRelativeTime(oldestAi)}`)
+  }
+  if (actionTime) {
+    parts.push(`指示 ${formatRelativeTime(actionTime)}`)
+  }
+
+  if (parts.length === 0) return null
 
   return (
     <Tooltip
@@ -180,21 +212,8 @@ function ReportTimesIndicator({ times }: { times: ReportTimes }) {
         </div>
       }
     >
-      <span style={{ display: 'inline-flex', gap: 2 }}>
-        {entries.map(([k, label]) => {
-          const t = times[k as keyof ReportTimes]
-          return (
-            <span
-              key={k}
-              style={{
-                width: 6,
-                height: 6,
-                borderRadius: '50%',
-                background: t ? '#16a34a' : '#e5e7eb',
-              }}
-            />
-          )
-        })}
+      <span style={{ fontSize: 10, color: '#9ca3af', whiteSpace: 'nowrap' }}>
+        {parts.join(' · ')}
       </span>
     </Tooltip>
   )
