@@ -31,10 +31,11 @@ export const stanceLabel: Record<OverallStance, { label: string; color: string; 
 }
 
 const horizonAbbrev: Record<string, string> = {
-  combined: '综',
+  combined: '综合',
   medium: '中',
   short: '短',
   anti_quant: '反量',
+  reflexivity: '反身',
 }
 
 export function PriorityBadge({ p }: { p: number }) {
