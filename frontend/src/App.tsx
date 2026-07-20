@@ -3,8 +3,9 @@ import { Button, Layout, Menu, Tooltip } from 'antd'
 import { SettingOutlined } from '@ant-design/icons'
 import { Link, Route, Routes, useLocation } from 'react-router-dom'
 import Positions from './pages/Positions'
+import StockDetail from './pages/StockDetail'
+import StockList from './pages/StockList'
 import SyncLogs from './pages/SyncLogs'
-import Workbench from './pages/Workbench'
 import { SettingsDrawer } from './features/settings'
 import { GlobalStatusBar } from './features/status-bar'
 
@@ -49,8 +50,8 @@ export default function App() {
       </Header>
       <Content style={{ padding: 16 }}>
         <Routes>
-          <Route path="/" element={<Workbench />} />
-          <Route path="/stock/:code" element={<Workbench />} />
+          <Route path="/" element={<StockList />} />
+          <Route path="/stock/:code" element={<StockDetail />} />
           <Route path="/positions" element={<Positions />} />
           <Route path="/sync" element={<SyncLogs />} />
         </Routes>

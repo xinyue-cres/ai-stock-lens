@@ -22,6 +22,9 @@ export interface SignalItem {
   name: string
   market: string
   pinned?: boolean
+  group_id?: number | null
+  group_name?: string | null
+  note?: string | null
   as_of_date?: string
   close?: number
   pct_chg?: number
@@ -33,7 +36,7 @@ export interface SignalItem {
   ai_verdict?: string | null
 }
 
-export async function getTodaySignals(params: { direction?: string; category?: string } = {}) {
+export async function getTodaySignals(params: { direction?: string; category?: string; group_id?: number } = {}) {
   const { data } = await api.get<{ count: number; items: SignalItem[] }>('/signals/today', { params })
   return data
 }
