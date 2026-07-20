@@ -163,58 +163,48 @@ const HORIZON_LABELS: Record<string, string> = {
   action_plan: '指示',
 }
 
-function formatRelativeTime(timeStr: string): string {
+const STALE_THRESHOLD_H = 24
+
+function getTimeDiffHours(timeStr: string): number {
   const now = Date.now()
   const then = new Date(timeStr.replace(' ', 'T')).getTime()
-  const diffMin = Math.floor((now - then) / 60_000)
+  return (now - then) / 3_600_000
+}
+
+function formatRelativeTime(timeStr: string): string {
+  const diffH = getTimeDiffHours(timeStr)
+  const diffMin = Math.round(diffH * 60)
   if (diffMin < 1) return '刚刚'
   if (diffMin < 60) return `${diffMin}m`
-  const diffH = Math.floor(diffMin / 60)
-  if (diffH < 24) return `${diffH}h`
-  const diffD = Math.floor(diffH / 24)
-  return `${diffD}d`
+  if (diffH < 24) return `${Math.floor(diffH)}h`
+  return `${Math.floor(diffH / 24)}d`
+}
+
+function timeColor(timeStr: string | null | undefined): string {
+  if (!timeStr) return '#e5e7eb'
+  const h = getTimeDiffHours(timeStr)
+  if (h < STALE_THRESHOLD_H) return '#16a34a'
+  if (h < STALE_THRESHOLD_H * 3) return '#f59e0b'
+  return '#dc2626'
 }
 
 function ReportTimesIndicator({ times }: { times: ReportTimes }) {
-  const entries = Object.entries(HORIZON_LABELS)
-  const hasAny = entries.some(([k]) => times[k as keyof ReportTimes])
+  const entries = Object.entries(HORIZON_LABELS) as [keyof ReportTimes, string][]
+  const hasAny = entries.some(([k]) => times[k])
   if (!hasAny) return null
 
-  const aiHorizons = ['combined', 'anti_quant', 'reflexivity'] as const
-  const aiTimes = aiHorizons.map(h => times[h]).filter(Boolean) as string[]
-  const actionTime = times.action_plan
-
-  const oldestAi = aiTimes.length > 0
-    ? aiTimes.reduce((oldest, t) => (t < oldest ? t : oldest))
-    : null
-
-  const parts: string[] = []
-  if (aiTimes.length === 3 && oldestAi) {
-    parts.push(`AI ${formatRelativeTime(oldestAi)}`)
-  } else if (aiTimes.length > 0 && oldestAi) {
-    parts.push(`AI ${aiTimes.length}/3 ${formatRelativeTime(oldestAi)}`)
-  }
-  if (actionTime) {
-    parts.push(`指示 ${formatRelativeTime(actionTime)}`)
-  }
-
-  if (parts.length === 0) return null
-
   return (
-    <Tooltip
-      title={
-        <div style={{ fontSize: 11 }}>
-          {entries.map(([k, label]) => (
-            <div key={k}>
-              {label}：{times[k as keyof ReportTimes] || '未生成'}
-            </div>
-          ))}
-        </div>
-      }
-    >
-      <span style={{ fontSize: 10, color: '#9ca3af', whiteSpace: 'nowrap' }}>
-        {parts.join(' · ')}
-      </span>
-    </Tooltip>
+    <span style={{ display: 'inline-flex', gap: 8, fontSize: 10, whiteSpace: 'nowrap' }}>
+      {entries.map(([k, label]) => {
+        const t = times[k]
+        return (
+          <Tooltip key={k} title={t || '未生成'}>
+            <span style={{ color: timeColor(t) }}>
+              {label} {t ? formatRelativeTime(t) : '--'}
+            </span>
+          </Tooltip>
+        )
+      })}
+    </span>
   )
 }
