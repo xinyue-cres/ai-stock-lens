@@ -45,6 +45,7 @@ export default function StockListPage() {
   const [addValue, setAddValue] = useState('')
   const [addOpen, setAddOpen] = useState(false)
   const [groupMgrOpen, setGroupMgrOpen] = useState(false)
+  const [selectMode, setSelectMode] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
 
   const groupsQ = useQuery({ queryKey: ['groups'], queryFn: getGroups })
@@ -284,6 +285,13 @@ export default function StockListPage() {
           <Button size="small" icon={<ReloadOutlined />} loading={syncMut.isPending} onClick={() => syncMut.mutate()}>
             同步
           </Button>
+          <Button
+            size="small"
+            type={selectMode ? 'primary' : 'default'}
+            onClick={() => { setSelectMode(m => !m); if (selectMode) setSelected(new Set()) }}
+          >
+            {selectMode ? '退出多选' : '多选'}
+          </Button>
         </div>
       </div>
 
@@ -302,13 +310,24 @@ export default function StockListPage() {
                 key={item.code}
                 item={item}
                 groups={groups}
+                selectMode={selectMode}
                 checked={selected.has(item.code)}
                 onToggle={(code) => setSelected(prev => {
                   const next = new Set(prev)
                   if (next.has(code)) next.delete(code); else next.add(code)
                   return next
                 })}
-                onClick={() => navigate(`/stock/${item.code}`)}
+                onClick={() => {
+                  if (selectMode) {
+                    setSelected(prev => {
+                      const next = new Set(prev)
+                      if (next.has(item.code)) next.delete(item.code); else next.add(item.code)
+                      return next
+                    })
+                  } else {
+                    navigate(`/stock/${item.code}`)
+                  }
+                }}
                 onRemove={() => {
                   Modal.confirm({
                     title: '移除自选？',
@@ -411,7 +430,7 @@ export default function StockListPage() {
               },
             })
           }}>移除</Button>
-          <Button size="small" type="text" style={{ color: '#9ca3af' }} onClick={() => setSelected(new Set())}>取消</Button>
+          <Button size="small" type="text" style={{ color: '#9ca3af' }} onClick={() => { setSelected(new Set()); setSelectMode(false) }}>取消</Button>
         </div>
       )}
     </div>
@@ -434,9 +453,10 @@ function getHeatColor(item: SignalItem): string | null {
   return null
 }
 
-function StockRow({ item, groups, checked, onToggle, onClick, onRemove, onGroupChange, onSync }: {
+function StockRow({ item, groups, selectMode, checked, onToggle, onClick, onRemove, onGroupChange, onSync }: {
   item: SignalItem
   groups: StockGroup[]
+  selectMode: boolean
   checked: boolean
   onToggle: (code: string) => void
   onClick: () => void
@@ -476,11 +496,13 @@ function StockRow({ item, groups, checked, onToggle, onClick, onRemove, onGroupC
       }}
     >
       {/* Checkbox */}
-      <Checkbox
-        checked={checked}
-        onClick={e => { e.stopPropagation(); onToggle(item.code) }}
-        style={{ marginRight: 8 }}
-      />
+      {selectMode && (
+        <Checkbox
+          checked={checked}
+          onClick={e => { e.stopPropagation(); onToggle(item.code) }}
+          style={{ marginRight: 8 }}
+        />
+      )}
       {/* 左：名称 + 涨跌 */}
       <div style={{ width: 140, flexShrink: 0 }}>
         <div style={{ fontWeight: 500, fontSize: 13, lineHeight: 1.3 }}>{item.name || item.code}</div>
