@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { Button, Checkbox, Dropdown, Tag, Tooltip, Typography } from 'antd'
-import { DeleteOutlined, FolderOutlined, MoreOutlined, SyncOutlined } from '@ant-design/icons'
+import { CheckCircleOutlined, CloseCircleOutlined, DeleteOutlined, FolderOutlined, LoadingOutlined, MoreOutlined, SyncOutlined } from '@ant-design/icons'
 import { SignalItem } from '@/api/signals'
 import { StockGroup } from '@/api/groups'
+import { BatchItemStatus } from '@/api/batchTask'
 import { priceColor, verdictPalette, Verdict } from '@/shared/theme'
 import { stanceLabel, actionableStances } from '../constants'
 
@@ -20,6 +21,7 @@ interface StockRowProps {
   groups: StockGroup[]
   selectMode: boolean
   checked: boolean
+  batchStatus?: BatchItemStatus | null
   onToggle: (code: string) => void
   onClick: () => void
   onRemove: () => void
@@ -27,7 +29,7 @@ interface StockRowProps {
   onSync: () => void
 }
 
-export default function StockRow({ item, groups, selectMode, checked, onToggle, onClick, onRemove, onGroupChange, onSync }: StockRowProps) {
+export default function StockRow({ item, groups, selectMode, checked, batchStatus, onToggle, onClick, onRemove, onGroupChange, onSync }: StockRowProps) {
   const [hovered, setHovered] = useState(false)
   const heat = getHeatColor(item)
   const pct = item.pct_chg
@@ -101,6 +103,7 @@ export default function StockRow({ item, groups, selectMode, checked, onToggle, 
         {item.note && (
           <Text type="secondary" style={{ fontSize: 11, marginLeft: 4 }}>{item.note}</Text>
         )}
+        {batchStatus && <BatchStatusBadge status={batchStatus} />}
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
@@ -134,4 +137,20 @@ export default function StockRow({ item, groups, selectMode, checked, onToggle, 
       </div>
     </div>
   )
+}
+
+function BatchStatusBadge({ status }: { status: BatchItemStatus }) {
+  if (status === 'running') {
+    return <span style={{ fontSize: 11, color: '#3b82f6', display: 'inline-flex', alignItems: 'center', gap: 3 }}><LoadingOutlined spin /> 生成中</span>
+  }
+  if (status === 'done') {
+    return <span style={{ fontSize: 11, color: '#16a34a', display: 'inline-flex', alignItems: 'center', gap: 3 }}><CheckCircleOutlined /> 完成</span>
+  }
+  if (status === 'error') {
+    return <span style={{ fontSize: 11, color: '#dc2626', display: 'inline-flex', alignItems: 'center', gap: 3 }}><CloseCircleOutlined /> 失败</span>
+  }
+  if (status === 'pending') {
+    return <span style={{ fontSize: 11, color: '#9ca3af' }}>等待中</span>
+  }
+  return null
 }

@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useCallback, useMemo, useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { message, Modal } from 'antd'
 import { getTodaySignals, SignalItem } from '@/api/signals'
@@ -7,6 +7,7 @@ import { getGroups, patchStock, StockGroup } from '@/api/groups'
 import { getMarketSummary } from '@/api/market'
 import { addWatchlist, removeWatchlist } from '@/api/watchlist'
 import { syncSingleStock, runSync } from '@/api/sync'
+import { batchRun, BatchItemStatus, BatchState, BatchTaskType } from '@/api/batchTask'
 import { SortKey, SortDir } from './constants'
 import SummaryBar from './components/SummaryBar'
 import Toolbar from './components/Toolbar'
@@ -17,8 +18,10 @@ import BatchActionBar from './components/BatchActionBar'
 
 export default function StockListPage() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const qc = useQueryClient()
-  const [groupFilter, setGroupFilter] = useState<number | 'all'>('all')
+  const initGroup = searchParams.get('group')
+  const [groupFilter, setGroupFilter] = useState<number | 'all'>(initGroup ? Number(initGroup) : 'all')
   const [dirFilter, setDirFilter] = useState<'' | 'bullish' | 'bearish' | 'neutral'>('')
   const [sortKey, setSortKey] = useState<SortKey>('default')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
@@ -28,6 +31,9 @@ export default function StockListPage() {
   const [groupMgrOpen, setGroupMgrOpen] = useState(false)
   const [selectMode, setSelectMode] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
+
+  // 批量任务状态
+  const [batchState, setBatchState] = useState<BatchState | null>(null)
 
   const groupsQ = useQuery({ queryKey: ['groups'], queryFn: getGroups })
   const marketQ = useQuery({ queryKey: ['market-summary'], queryFn: () => getMarketSummary(), staleTime: 5 * 60_000 })
@@ -104,6 +110,37 @@ export default function StockListPage() {
     return sorted
   }, [items, groupFilter, search, dirFilter, sortKey, sortDir])
 
+  const handleBatchStart = useCallback((type: BatchTaskType) => {
+    const codes = [...selected]
+    if (codes.length === 0) return
+    batchRun(type, codes, 3, (state) => {
+      setBatchState(state)
+      if (!state.running) {
+        const errors = [...state.items.values()].filter(s => s.status === 'error').length
+        if (errors === 0) {
+          message.success(`${state.total} 只${type === 'ai' ? ' AI 分析' : '操作指示'}全部完成`)
+        } else {
+          message.warning(`完成 ${state.completed}/${state.total}，${errors} 只失败`)
+        }
+        qc.invalidateQueries({ queryKey: ['signals-today'] })
+        if (type === 'ai') {
+          qc.invalidateQueries({ queryKey: ['ai-report-cached'] })
+        } else {
+          qc.invalidateQueries({ queryKey: ['action-plan'] })
+        }
+        setTimeout(() => setBatchState(null), 5000)
+      }
+    })
+    setSelectMode(false)
+    setSelected(new Set())
+  }, [selected, qc])
+
+  const getBatchStatus = useCallback((code: string): BatchItemStatus | null => {
+    if (!batchState) return null
+    const item = batchState.items.get(code)
+    return item?.status ?? null
+  }, [batchState])
+
   return (
     <div style={{ position: 'relative' }}>
       <GroupNav
@@ -155,6 +192,7 @@ export default function StockListPage() {
               groups={groups}
               selectMode={selectMode}
               checked={selected.has(item.code)}
+              batchStatus={getBatchStatus(item.code)}
               onToggle={(code) => setSelected(prev => {
                 const next = new Set(prev)
                 if (next.has(code)) next.delete(code); else next.add(code)
@@ -168,7 +206,8 @@ export default function StockListPage() {
                     return next
                   })
                 } else {
-                  navigate(`/stock/${item.code}`)
+                  const gParam = groupFilter !== 'all' ? `?group=${groupFilter}` : ''
+                  navigate(`/stock/${item.code}${gParam}`)
                 }
               }}
               onRemove={() => {
@@ -222,6 +261,11 @@ export default function StockListPage() {
         groups={groups}
         allItems={items}
         onClear={() => { setSelected(new Set()); setSelectMode(false) }}
+        batchRunning={batchState?.running ?? false}
+        batchType={batchState?.type ?? null}
+        batchCompleted={batchState?.completed ?? 0}
+        batchTotal={batchState?.total ?? 0}
+        onBatchStart={handleBatchStart}
       />
     </div>
   )

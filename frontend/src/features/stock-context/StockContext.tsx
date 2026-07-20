@@ -1,5 +1,5 @@
 import { createContext, ReactNode, useContext, useEffect, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 
 interface StockContextValue {
   code: string
@@ -8,14 +8,10 @@ interface StockContextValue {
 
 const StockContext = createContext<StockContextValue | null>(null)
 
-/**
- * 提供当前股票 code 的全局上下文。
- * - 与 URL /stock/:code 双向绑定
- * - 所有面板通过 useStock() 拿到当前 code，不用逐层传 prop
- */
 export function StockContextProvider({ children }: { children: ReactNode }) {
   const params = useParams<{ code?: string }>()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const [code, setCodeState] = useState<string>(params.code || '')
 
   useEffect(() => {
@@ -25,8 +21,10 @@ export function StockContextProvider({ children }: { children: ReactNode }) {
   const setCode = (c: string) => {
     const trimmed = c.trim()
     setCodeState(trimmed)
-    if (trimmed) navigate(`/stock/${trimmed}`)
-    else navigate('/')
+    const group = searchParams.get('group')
+    const suffix = group ? `?group=${group}` : ''
+    if (trimmed) navigate(`/stock/${trimmed}${suffix}`)
+    else navigate(`/${suffix}`)
   }
 
   return (

@@ -8,15 +8,20 @@ import { WatchlistToolbar } from './WatchlistToolbar'
 import { useWatchlistData } from './useWatchlistData'
 import { useWatchlistFilters } from './useWatchlistFilters'
 
-/**
- * 左栏：自选股 + 信号扫描 + 添加/同步/过滤/排序 + 单条 ⋯ 菜单。
- * 通过 StockContext 拿到 activeCode / 设置新 code。
- */
-export function WatchlistSidebar() {
+interface WatchlistSidebarProps {
+  groupId?: number | null
+}
+
+export function WatchlistSidebar({ groupId }: WatchlistSidebarProps) {
   const { code, setCode } = useStock()
   const { items, add, remove, pin } = useWatchlistData()
+
+  const visibleItems = groupId
+    ? items.filter(i => (i.group_ids || []).includes(groupId))
+    : items
+
   const { filtered, keyword, setKeyword, dir, setDir } =
-    useWatchlistFilters(items)
+    useWatchlistFilters(visibleItems)
   const [editingCode, setEditingCode] = useState<string | null>(null)
   const editingItem = editingCode ? items.find((i) => i.code === editingCode) : null
 
