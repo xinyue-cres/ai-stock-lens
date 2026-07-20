@@ -1,28 +1,15 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { message } from 'antd'
-import { getTodaySignals, SignalItem } from '@/api/signals'
 import { addWatchlist, removeWatchlist, setPinned } from '@/api/watchlist'
 import { runSync } from '@/api/sync'
 import { useStock } from '@/features/stock-context'
+import { useSignalsQuery } from '@/hooks/useSignalsQuery'
 
-/**
- * 一次性聚合"自选股列表"页面需要的所有查询和 mutation。
- * 便于 Sidebar 及其子组件各自消费自己关心的部分。
- */
 export function useWatchlistData() {
   const qc = useQueryClient()
   const { setCode } = useStock()
 
-  const signalsQ = useQuery({
-    queryKey: ['signals-today'],
-    queryFn: () => getTodaySignals(),
-    // 有 item.empty=true（后台正在首次同步）时缩短到 3s；全部就绪 5min
-    refetchInterval: (q) => {
-      const data = q.state.data as { items?: SignalItem[] } | undefined
-      const items = data?.items ?? []
-      return items.some((i) => i.empty) ? 3_000 : 5 * 60_000
-    },
-  })
+  const { items, isLoading } = useSignalsQuery()
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ['watchlist'] })
@@ -64,11 +51,9 @@ export function useWatchlistData() {
     },
   })
 
-  const items: SignalItem[] = signalsQ.data?.items ?? []
-
   return {
     items,
-    loading: signalsQ.isLoading,
+    loading: isLoading,
     add: addMut.mutate,
     addLoading: addMut.isPending,
     remove: rmMut.mutate,

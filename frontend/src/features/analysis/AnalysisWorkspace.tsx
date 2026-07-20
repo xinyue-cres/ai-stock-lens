@@ -2,8 +2,7 @@ import { Card, Empty, Tabs } from 'antd'
 import { useStock } from '@/features/stock-context'
 import { KeyMetricsStrip } from './indicators/KeyMetricsStrip'
 import { MarketContextBar } from './indicators/MarketContextBar'
-import './panels/register' // 触发面板注册
-import { getPanels } from './panels/registry'
+import { getPanels } from './panels/panelRegistry'
 
 /**
  * 右栏容器：所有已注册面板作为 Tabs 展示。

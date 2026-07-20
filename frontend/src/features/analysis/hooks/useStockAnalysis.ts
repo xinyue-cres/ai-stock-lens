@@ -1,6 +1,6 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { getKline } from '@/api/stocks'
-import { useStock } from './StockContext'
+import { useStock } from '@/features/stock-context/StockContext'
 
 /**
  * 拉取当前股票的日线 + 指标 + 图表序列 + 信号。

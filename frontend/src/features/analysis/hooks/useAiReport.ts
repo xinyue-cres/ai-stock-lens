@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient, useIsMutating, keepPreviousData } from '@tanstack/react-query'
 import { AiReport, generateAiReport, getCachedAiReport } from '@/api/analysis'
-import { useStock } from './StockContext'
+import { useStock } from '@/features/stock-context/StockContext'
 
 export type Horizon = 'combined' | 'anti_quant' | 'reflexivity'
 

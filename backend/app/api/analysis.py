@@ -17,7 +17,7 @@ from app.db import get_session
 from app.features.quant_factors import compute_quant_features
 from app.models.ai_report import AIReport
 from app.models.stock import Stock
-from app.services import analysis_service, sync_service
+from app.services import analysis_service, signals_service, sync_service
 from app.services.analysis_service import load_kline_df
 from app.services.stock_service import ensure_stock
 
@@ -93,7 +93,7 @@ def gen_ai_report(
     as_of = _parse_date(indicators.get("as_of_date")) or date.today()
 
     # 塞入上次报告 + 最新复盘作为反思上下文（排除今天的旧版本，避免自我反思）
-    previous = analysis_service.get_previous_context(session, code, hz, model, exclude_as_of=as_of)
+    previous = signals_service.get_previous_context(session, code, hz, model, exclude_as_of=as_of)
     if previous:
         indicators = {**indicators, "previous": previous}
 

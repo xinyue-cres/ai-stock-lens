@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends
 from sqlmodel import Session
 
 from app.db import get_session
-from app.services import analysis_service
+from app.services import signals_service
 
 router = APIRouter(prefix="/api/signals", tags=["signals"])
 
@@ -22,7 +22,7 @@ def signals_today(
     - category: ma | oscillator | volume | pattern | strength，可选过滤
     - group_id: 只扫描指定分组，可选
     """
-    items = analysis_service.scan_watchlist_signals(session, group_id=group_id)
+    items = signals_service.scan_watchlist_signals(session, group_id=group_id)
 
     if direction or category:
         for item in items:

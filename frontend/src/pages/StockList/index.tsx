@@ -2,12 +2,12 @@ import { useCallback, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { message, Modal } from 'antd'
-import { getTodaySignals, SignalItem } from '@/api/signals'
 import { getGroups, patchStock, StockGroup } from '@/api/groups'
 import { getMarketSummary } from '@/api/market'
 import { addWatchlist, removeWatchlist } from '@/api/watchlist'
 import { syncSingleStock, runSync } from '@/api/sync'
 import { batchRun, BatchItemStatus, BatchState, BatchTaskType } from '@/api/batchTask'
+import { useSignalsQuery } from '@/hooks/useSignalsQuery'
 import { SortKey, SortDir } from './constants'
 import SummaryBar from './components/SummaryBar'
 import Toolbar from './components/Toolbar'
@@ -46,14 +46,7 @@ export default function StockListPage() {
 
   const groupsQ = useQuery({ queryKey: ['groups'], queryFn: getGroups })
   const marketQ = useQuery({ queryKey: ['market-summary'], queryFn: () => getMarketSummary(), staleTime: 5 * 60_000 })
-  const signalsQ = useQuery({
-    queryKey: ['signals-today'],
-    queryFn: () => getTodaySignals(),
-    refetchInterval: (q) => {
-      const items = (q.state.data as any)?.items ?? []
-      return items.some((i: any) => i.empty) ? 3_000 : 5 * 60_000
-    },
-  })
+  const { items } = useSignalsQuery()
 
   const syncMut = useMutation({
     mutationFn: runSync,
@@ -75,7 +68,6 @@ export default function StockListPage() {
     },
   })
 
-  const items: SignalItem[] = signalsQ.data?.items ?? []
   const groups: StockGroup[] = groupsQ.data ?? []
 
   const filtered = useMemo(() => {

@@ -3,7 +3,7 @@ import { RobotOutlined, ThunderboltOutlined } from '@ant-design/icons'
 import { useMutation, useQueryClient, useIsMutating } from '@tanstack/react-query'
 import { generateAiReport } from '@/api/analysis'
 import { useStock, useStockAnalysis, useStockName } from '@/features/stock-context'
-import { Horizon, aiReportMutationKey } from '@/features/stock-context/useAiReport'
+import { Horizon, aiReportMutationKey } from '@/features/analysis/hooks/useAiReport'
 import { StaleDateBadge } from '@/features/status-bar'
 import { HorizonReport } from '../ai/HorizonReport'
 
