@@ -117,7 +117,7 @@ export default function StockRow({ item, groups, selectMode, checked, batchStatu
           const diffD = Math.floor((Date.now() - new Date(item.as_of_date).getTime()) / 86_400_000)
           const color = diffD <= 1 ? '#16a34a' : diffD <= 3 ? '#f59e0b' : '#dc2626'
           return (
-            <span style={{ fontSize: 10, color, border: `1px solid ${color}`, borderRadius: 3, padding: '1px 4px', lineHeight: 1.4 }}>
+            <span style={{ fontSize: 11, color, border: `1px solid ${color}`, borderRadius: 3, padding: '0 5px', lineHeight: '20px' }}>
               数据 {item.as_of_date.slice(5)}
             </span>
           )
@@ -200,7 +200,7 @@ function ReportTimesIndicator({ times }: { times: ReportTimes }) {
   if (!hasAny) return null
 
   return (
-    <span style={{ display: 'inline-flex', gap: 4, fontSize: 10, whiteSpace: 'nowrap' }}>
+    <span style={{ display: 'inline-flex', gap: 4, fontSize: 11, whiteSpace: 'nowrap' }}>
       {entries.map(([k, label]) => {
         const t = times[k]
         const color = timeColor(t)
@@ -210,8 +210,9 @@ function ReportTimesIndicator({ times }: { times: ReportTimes }) {
               color,
               border: `1px solid ${color}`,
               borderRadius: 3,
-              padding: '1px 4px',
-              lineHeight: 1.4,
+              padding: '0 5px',
+              fontSize: 11,
+              lineHeight: '20px',
             }}>
               {label} {t ? formatRelativeTime(t) : '--'}
             </span>
