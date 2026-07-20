@@ -84,11 +84,11 @@ export function HorizonReport({ horizon }: Props) {
 
       {data && (
         <>
-          <ReflectionBanner reflection={data.reflection} />
-          {data.quant_output && <QuantOutputCollapse data={data.quant_output} />}
           {data.trap_risk && data.trap_risk.type !== 'none' && (
             <TrapRiskBanner trap={data.trap_risk} />
           )}
+          <ReflectionBanner reflection={data.reflection} />
+          {data.quant_output && <QuantOutputCollapse data={data.quant_output} />}
           {(data.reflexivity_stage || data.narrative || data.feedback_loop) && (
             <ReflexivityCollapse
               stage={data.reflexivity_stage}
