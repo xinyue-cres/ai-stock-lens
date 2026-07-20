@@ -96,11 +96,12 @@ export default function StockListPage() {
         const pb = b.position?.unrealized_pnl_pct ?? -999
         return (pa - pb) * dir
       })
-    } else if (sortKey === 'confidence') {
+    } else if (sortKey === 'verdict') {
+      const verdictRank: Record<string, number> = { bullish: 2, neutral: 1, caution: 1, bearish: 0 }
       sorted.sort((a, b) => {
-        const ca = (a.stance as any)?.confidence ?? 0
-        const cb = (b.stance as any)?.confidence ?? 0
-        return (ca - cb) * dir
+        const va = verdictRank[a.ai_verdict || ''] ?? 1
+        const vb = verdictRank[b.ai_verdict || ''] ?? 1
+        return (va - vb) * dir
       })
     } else if (sortKey === 'name') {
       sorted.sort((a, b) => (a.name || '').localeCompare(b.name || '') * dir)

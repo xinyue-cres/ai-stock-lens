@@ -9,13 +9,13 @@ export const stanceLabel: Record<string, { label: string; color: string }> = {
 
 export const actionableStances = new Set(['opportunistic_buy', 'trim', 'reduce', 'exit'])
 
-export type SortKey = 'default' | 'pct_chg' | 'position' | 'confidence' | 'name'
+export type SortKey = 'default' | 'pct_chg' | 'position' | 'verdict' | 'name'
 export type SortDir = 'asc' | 'desc'
 
 export const sortLabels: Record<SortKey, string> = {
   default: '默认',
   pct_chg: '涨跌幅',
   position: '持仓盈亏',
-  confidence: 'AI 置信度',
+  verdict: '多空排序',
   name: '名称',
 }
