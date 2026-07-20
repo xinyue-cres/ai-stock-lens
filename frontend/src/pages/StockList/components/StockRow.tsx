@@ -194,12 +194,19 @@ function ReportTimesIndicator({ times }: { times: ReportTimes }) {
   if (!hasAny) return null
 
   return (
-    <span style={{ display: 'inline-flex', gap: 8, fontSize: 10, whiteSpace: 'nowrap' }}>
+    <span style={{ display: 'inline-flex', gap: 4, fontSize: 10, whiteSpace: 'nowrap' }}>
       {entries.map(([k, label]) => {
         const t = times[k]
+        const color = timeColor(t)
         return (
           <Tooltip key={k} title={t || '未生成'}>
-            <span style={{ color: timeColor(t) }}>
+            <span style={{
+              color,
+              border: `1px solid ${color}`,
+              borderRadius: 3,
+              padding: '1px 4px',
+              lineHeight: 1.4,
+            }}>
               {label} {t ? formatRelativeTime(t) : '--'}
             </span>
           </Tooltip>
