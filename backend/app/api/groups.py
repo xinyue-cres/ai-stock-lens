@@ -2,11 +2,12 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlmodel import Session, func, select
+from sqlmodel import Session, select
 
 from app.db import get_session
 from app.models.stock import Stock
 from app.models.stock_group import StockGroup
+from app.services.stock_service import get_group_ids
 
 router = APIRouter(prefix="/api/groups", tags=["groups"])
 
@@ -24,13 +25,11 @@ class GroupUpdate(BaseModel):
 @router.get("")
 def list_groups(session: Session = Depends(get_session)):
     groups = list(session.exec(select(StockGroup).order_by(StockGroup.sort_order)))
-    counts = dict(
-        session.exec(
-            select(Stock.group_id, func.count())
-            .where(Stock.is_watchlist == True, Stock.group_id.isnot(None))  # noqa: E712
-            .group_by(Stock.group_id)
-        ).all()
-    )
+    stocks = list(session.exec(select(Stock).where(Stock.is_watchlist == True)))  # noqa: E712
+    counts: dict[int, int] = {}
+    for s in stocks:
+        for gid in get_group_ids(s):
+            counts[gid] = counts.get(gid, 0) + 1
     return [
         {
             "id": g.id,
