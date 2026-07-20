@@ -162,6 +162,7 @@ def scan_watchlist_signals(session: Session, group_id: int | None = None) -> lis
     positions_by_code = position_service.get_positions_by_codes(session, codes)
     stance_map = _latest_stance_map(session, codes, get_model_name())
     ai_verdict_map = _latest_ai_verdict_map(session, codes, get_model_name())
+    report_times_map = _latest_report_times_map(session, codes, get_model_name())
 
     group_names: dict[int, str] = {}
     group_ids = {s.group_id for s in stocks if s.group_id}
@@ -188,6 +189,7 @@ def scan_watchlist_signals(session: Session, group_id: int | None = None) -> lis
             "position": position_summary,
             "stance": stance_info,
             "ai_verdict": ai_verdict,
+            "report_times": report_times_map.get(s.code, {}),
         }
 
         if df.empty:
@@ -329,3 +331,35 @@ def get_previous_context(
             else None
         ),
     }
+
+
+_REPORT_HORIZONS = ("combined", "anti_quant", "reflexivity", "action_plan")
+
+
+def _latest_report_times_map(
+    session: Session, codes: list[str], model: str
+) -> dict[str, dict[str, str | None]]:
+    """批量查每只票各 horizon 最新 created_at。
+    返回 {code: {combined: "2026-07-20 14:30:00", anti_quant: None, ...}}
+    """
+    if not codes:
+        return {}
+    result: dict[str, dict[str, str | None]] = {
+        code: {h: None for h in _REPORT_HORIZONS} for code in codes
+    }
+    reports = session.exec(
+        select(AIReport)
+        .where(
+            AIReport.code.in_(codes),  # type: ignore[attr-defined]
+            AIReport.model == model,
+            AIReport.horizon.in_(_REPORT_HORIZONS),  # type: ignore[attr-defined]
+        )
+        .order_by(AIReport.code, AIReport.horizon, AIReport.created_at.desc())
+    )
+    seen: set[tuple[str, str]] = set()
+    for r in reports:
+        key = (r.code, r.horizon)
+        if key not in seen:
+            seen.add(key)
+            result[r.code][r.horizon] = r.created_at.strftime("%Y-%m-%d %H:%M")
+    return result

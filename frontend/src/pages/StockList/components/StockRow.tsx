@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Button, Checkbox, Dropdown, Tag, Tooltip, Typography } from 'antd'
 import { CheckCircleOutlined, CloseCircleOutlined, DeleteOutlined, FolderOutlined, LoadingOutlined, MoreOutlined, SyncOutlined } from '@ant-design/icons'
-import { SignalItem } from '@/api/signals'
+import { SignalItem, ReportTimes } from '@/api/signals'
 import { StockGroup } from '@/api/groups'
 import { BatchItemStatus } from '@/api/batchTask'
 import { priceColor, verdictPalette, Verdict } from '@/shared/theme'
@@ -107,6 +107,7 @@ export default function StockRow({ item, groups, selectMode, checked, batchStatu
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+        {item.report_times && <ReportTimesIndicator times={item.report_times} />}
         {typeof posPnl === 'number' && (
           <span style={{ fontSize: 12, fontWeight: 500, color: posPnl >= 0 ? priceColor.up : priceColor.down, minWidth: 60, textAlign: 'right' }}>
             持仓 {posPnl >= 0 ? '+' : ''}{(posPnl * 100).toFixed(1)}%
@@ -153,4 +154,48 @@ function BatchStatusBadge({ status }: { status: BatchItemStatus }) {
     return <span style={{ fontSize: 11, color: '#9ca3af' }}>等待中</span>
   }
   return null
+}
+
+const HORIZON_LABELS: Record<string, string> = {
+  combined: '综合',
+  anti_quant: '反量化',
+  reflexivity: '反身性',
+  action_plan: '指示',
+}
+
+function ReportTimesIndicator({ times }: { times: ReportTimes }) {
+  const entries = Object.entries(HORIZON_LABELS)
+  const hasAny = entries.some(([k]) => times[k as keyof ReportTimes])
+  if (!hasAny) return null
+
+  return (
+    <Tooltip
+      title={
+        <div style={{ fontSize: 11 }}>
+          {entries.map(([k, label]) => (
+            <div key={k}>
+              {label}：{times[k as keyof ReportTimes] || '未生成'}
+            </div>
+          ))}
+        </div>
+      }
+    >
+      <span style={{ display: 'inline-flex', gap: 2 }}>
+        {entries.map(([k, label]) => {
+          const t = times[k as keyof ReportTimes]
+          return (
+            <span
+              key={k}
+              style={{
+                width: 6,
+                height: 6,
+                borderRadius: '50%',
+                background: t ? '#16a34a' : '#e5e7eb',
+              }}
+            />
+          )
+        })}
+      </span>
+    </Tooltip>
+  )
 }

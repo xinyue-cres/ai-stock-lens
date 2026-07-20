@@ -17,6 +17,13 @@ export interface StanceInfo {
   as_of: string
 }
 
+export interface ReportTimes {
+  combined?: string | null
+  anti_quant?: string | null
+  reflexivity?: string | null
+  action_plan?: string | null
+}
+
 export interface SignalItem {
   code: string
   name: string
@@ -34,6 +41,7 @@ export interface SignalItem {
   position?: PositionSummary | null
   stance?: StanceInfo | null
   ai_verdict?: string | null
+  report_times?: ReportTimes
 }
 
 export async function getTodaySignals(params: { direction?: string; category?: string; group_id?: number } = {}) {
