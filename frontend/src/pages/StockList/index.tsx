@@ -171,7 +171,7 @@ export default function StockListPage() {
   ]
 
   return (
-    <div>
+    <div style={{ maxWidth: 960, margin: '0 auto' }}>
       {/* 摘要条 */}
       <div style={{ display: 'flex', gap: 24, marginBottom: 16, padding: '12px 16px', background: '#fff', borderRadius: 8, border: '1px solid #f0f0f0' }}>
         <SummaryCard
@@ -383,7 +383,7 @@ function StockRow({ item, groups, onClick, onRemove, onGroupChange, onSync }: {
       }}
     >
       {/* 左：名称 + 涨跌 */}
-      <div style={{ width: 160, flexShrink: 0 }}>
+      <div style={{ width: 140, flexShrink: 0 }}>
         <div style={{ fontWeight: 500, fontSize: 13, lineHeight: 1.3 }}>{item.name || item.code}</div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
           <Text type="secondary" style={{ fontSize: 11 }}>{item.code}</Text>
@@ -412,7 +412,7 @@ function StockRow({ item, groups, onClick, onRemove, onGroupChange, onSync }: {
       </div>
 
       {/* 右：持仓 + 日期 + 操作 */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
         {typeof posPnl === 'number' && (
           <span style={{ fontSize: 12, fontWeight: 500, color: posPnl >= 0 ? priceColor.up : priceColor.down, minWidth: 60, textAlign: 'right' }}>
             持仓 {posPnl >= 0 ? '+' : ''}{(posPnl * 100).toFixed(1)}%
