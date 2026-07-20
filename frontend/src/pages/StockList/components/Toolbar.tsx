@@ -114,6 +114,12 @@ export default function Toolbar(props: ToolbarProps) {
         <Button size="small" icon={<ReloadOutlined />} loading={syncLoading} onClick={onSync}>
           同步
         </Button>
+        {selectMode && (
+          <>
+            <Button size="small" onClick={onSelectAll}>全选</Button>
+            <Button size="small" onClick={onSelectInvert}>反选</Button>
+          </>
+        )}
         <Button
           size="small"
           type={selectMode ? 'primary' : 'default'}
@@ -121,12 +127,6 @@ export default function Toolbar(props: ToolbarProps) {
         >
           {selectMode ? '退出多选' : '多选'}
         </Button>
-        {selectMode && (
-          <>
-            <Button size="small" onClick={onSelectAll}>全选</Button>
-            <Button size="small" onClick={onSelectInvert}>反选</Button>
-          </>
-        )}
       </div>
     </div>
   )
