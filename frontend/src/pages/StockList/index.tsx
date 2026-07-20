@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { AutoComplete, Button, Dropdown, Input, message, Modal, Segmented, Space, Tag, Tooltip, Typography } from 'antd'
+import { AutoComplete, Button, Checkbox, Dropdown, Input, message, Modal, Segmented, Space, Tag, Tooltip, Typography } from 'antd'
 import { ArrowDownOutlined, ArrowUpOutlined, DeleteOutlined, EditOutlined, FolderOutlined, MoreOutlined, PlusOutlined, ReloadOutlined, SearchOutlined, SettingOutlined, SortAscendingOutlined, SyncOutlined } from '@ant-design/icons'
 import { getTodaySignals, SignalItem } from '@/api/signals'
 import { createGroup, deleteGroup, getGroups, patchStock, StockGroup, updateGroup } from '@/api/groups'
@@ -44,6 +44,7 @@ export default function StockListPage() {
   const [addValue, setAddValue] = useState('')
   const [addOpen, setAddOpen] = useState(false)
   const [groupMgrOpen, setGroupMgrOpen] = useState(false)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
 
   const groupsQ = useQuery({ queryKey: ['groups'], queryFn: getGroups })
   const signalsQ = useQuery({
@@ -281,6 +282,12 @@ export default function StockListPage() {
                 key={item.code}
                 item={item}
                 groups={groups}
+                checked={selected.has(item.code)}
+                onToggle={(code) => setSelected(prev => {
+                  const next = new Set(prev)
+                  if (next.has(code)) next.delete(code); else next.add(code)
+                  return next
+                })}
                 onClick={() => navigate(`/stock/${item.code}`)}
                 onRemove={() => {
                   Modal.confirm({
@@ -323,6 +330,70 @@ export default function StockListPage() {
           qc.invalidateQueries({ queryKey: ['signals-today'] })
         }}
       />
+
+      {/* 批量操作浮动栏 */}
+      {selected.size > 0 && (
+        <div style={{
+          position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)',
+          background: '#1f2937', color: '#fff', borderRadius: 8, padding: '10px 20px',
+          display: 'flex', alignItems: 'center', gap: 12, boxShadow: '0 4px 20px rgba(0,0,0,0.2)',
+          zIndex: 100,
+        }}>
+          <Text style={{ color: '#fff', fontSize: 13 }}>已选 {selected.size} 只</Text>
+          <Dropdown
+            menu={{
+              items: [
+                ...groups.map(g => ({
+                  key: `g-${g.id}`,
+                  label: `移到「${g.name}」`,
+                  onClick: () => {
+                    Promise.all([...selected].map(code => patchStock(code, { group_id: g.id }))).then(() => {
+                      message.success(`${selected.size} 只已移到「${g.name}」`)
+                      setSelected(new Set())
+                      qc.invalidateQueries({ queryKey: ['signals-today'] })
+                      qc.invalidateQueries({ queryKey: ['groups'] })
+                    })
+                  },
+                })),
+                { key: 'g-none', label: '取消分组', onClick: () => {
+                  Promise.all([...selected].map(code => patchStock(code, { group_id: 0 }))).then(() => {
+                    message.success('已取消分组')
+                    setSelected(new Set())
+                    qc.invalidateQueries({ queryKey: ['signals-today'] })
+                    qc.invalidateQueries({ queryKey: ['groups'] })
+                  })
+                }},
+              ],
+            }}
+            trigger={['click']}
+          >
+            <Button size="small" ghost icon={<FolderOutlined />}>移组</Button>
+          </Dropdown>
+          <Button size="small" ghost icon={<SyncOutlined />} onClick={() => {
+            Promise.all([...selected].map(code => syncSingleStock(code))).then(() => {
+              message.success(`${selected.size} 只同步完成`)
+              setSelected(new Set())
+              qc.invalidateQueries({ queryKey: ['signals-today'] })
+            })
+          }}>同步</Button>
+          <Button size="small" ghost danger icon={<DeleteOutlined />} onClick={() => {
+            Modal.confirm({
+              title: `批量移除 ${selected.size} 只自选？`,
+              okText: '移除',
+              okButtonProps: { danger: true },
+              onOk: () => {
+                Promise.all([...selected].map(code => removeWatchlist(code))).then(() => {
+                  message.success(`已移除 ${selected.size} 只`)
+                  setSelected(new Set())
+                  qc.invalidateQueries({ queryKey: ['signals-today'] })
+                  qc.invalidateQueries({ queryKey: ['groups'] })
+                })
+              },
+            })
+          }}>移除</Button>
+          <Button size="small" type="text" style={{ color: '#9ca3af' }} onClick={() => setSelected(new Set())}>取消</Button>
+        </div>
+      )}
     </div>
   )
 }
@@ -343,9 +414,11 @@ function getHeatColor(item: SignalItem): string | null {
   return null
 }
 
-function StockRow({ item, groups, onClick, onRemove, onGroupChange, onSync }: {
+function StockRow({ item, groups, checked, onToggle, onClick, onRemove, onGroupChange, onSync }: {
   item: SignalItem
   groups: StockGroup[]
+  checked: boolean
+  onToggle: (code: string) => void
   onClick: () => void
   onRemove: () => void
   onGroupChange: (gid: number | null) => void
@@ -382,6 +455,12 @@ function StockRow({ item, groups, onClick, onRemove, onGroupChange, onSync }: {
         transition: 'background 0.1s',
       }}
     >
+      {/* Checkbox */}
+      <Checkbox
+        checked={checked}
+        onClick={e => { e.stopPropagation(); onToggle(item.code) }}
+        style={{ marginRight: 8 }}
+      />
       {/* 左：名称 + 涨跌 */}
       <div style={{ width: 140, flexShrink: 0 }}>
         <div style={{ fontWeight: 500, fontSize: 13, lineHeight: 1.3 }}>{item.name || item.code}</div>
