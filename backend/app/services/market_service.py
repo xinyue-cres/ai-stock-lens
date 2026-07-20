@@ -18,9 +18,17 @@ from sqlmodel import Session
 
 from app.datasource.router import get_data_router
 from app.models.kline import KlineDaily
-from app.services.compare_math import pct_change
 
 logger = logging.getLogger(__name__)
+
+
+def pct_change(series: pd.Series, period: int) -> float | None:
+    if len(series) <= period:
+        return None
+    old = series.iloc[-period - 1]
+    if old == 0:
+        return None
+    return round((series.iloc[-1] / old - 1) * 100, 2)
 
 INDEX_CODES = {
     "sh000001": "上证指数",
