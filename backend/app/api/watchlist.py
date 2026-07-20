@@ -17,7 +17,6 @@ router = APIRouter(prefix="/api/watchlist", tags=["watchlist"])
 
 class WatchlistAdd(BaseModel):
     code: str
-    group_id: int | None = None
     note: str | None = None
 
 
@@ -70,8 +69,6 @@ def add_watch(
     session: Session = Depends(get_session),
 ):
     stock = stock_service.add_to_watchlist(session, payload.code)
-    if payload.group_id is not None:
-        stock.group_id = payload.group_id
     if payload.note is not None:
         stock.note = payload.note
     session.add(stock)

@@ -5,6 +5,7 @@ import { SignalItem, ReportTimes } from '@/api/signals'
 import { StockGroup } from '@/api/groups'
 import { BatchItemStatus } from '@/api/batchTask'
 import { priceColor, verdictPalette, Verdict } from '@/shared/theme'
+import { timeAgoShort, timeDiffHours } from '@/shared/timeAgo'
 import { stanceLabel, actionableStances } from '../constants'
 
 const { Text } = Typography
@@ -171,24 +172,9 @@ const HORIZON_LABELS: Record<string, string> = {
 
 const STALE_THRESHOLD_H = 24
 
-function getTimeDiffHours(timeStr: string): number {
-  const now = Date.now()
-  const then = new Date(timeStr.replace(' ', 'T')).getTime()
-  return (now - then) / 3_600_000
-}
-
-function formatRelativeTime(timeStr: string): string {
-  const diffH = getTimeDiffHours(timeStr)
-  const diffMin = Math.round(diffH * 60)
-  if (diffMin < 1) return '刚刚'
-  if (diffMin < 60) return `${diffMin}m`
-  if (diffH < 24) return `${Math.floor(diffH)}h`
-  return `${Math.floor(diffH / 24)}d`
-}
-
-function timeColor(timeStr: string | null | undefined): string {
+function staleColor(timeStr: string | null | undefined): string {
   if (!timeStr) return '#e5e7eb'
-  const h = getTimeDiffHours(timeStr)
+  const h = timeDiffHours(timeStr)
   if (h < STALE_THRESHOLD_H) return '#16a34a'
   if (h < STALE_THRESHOLD_H * 3) return '#f59e0b'
   return '#dc2626'
@@ -203,7 +189,7 @@ function ReportTimesIndicator({ times }: { times: ReportTimes }) {
     <span style={{ display: 'inline-flex', gap: 4, fontSize: 11, whiteSpace: 'nowrap' }}>
       {entries.map(([k, label]) => {
         const t = times[k]
-        const color = timeColor(t)
+        const color = staleColor(t)
         return (
           <Tooltip key={k} title={t || '未生成'}>
             <span style={{
@@ -214,7 +200,7 @@ function ReportTimesIndicator({ times }: { times: ReportTimes }) {
               fontSize: 11,
               lineHeight: '20px',
             }}>
-              {label} {t ? formatRelativeTime(t) : '--'}
+              {label} {t ? timeAgoShort(t) : '--'}
             </span>
           </Tooltip>
         )

@@ -67,14 +67,21 @@ def update_group(group_id: int, payload: GroupUpdate, session: Session = Depends
 
 @router.delete("/{group_id}")
 def delete_group(group_id: int, session: Session = Depends(get_session)):
+    from app.services.stock_service import get_group_ids
+
     group = session.get(StockGroup, group_id)
     if not group:
         raise HTTPException(404, "分组不存在")
-    # 组内票变为未分组
-    stocks = list(session.exec(select(Stock).where(Stock.group_id == group_id)))
+    import json as _json
+    stocks = list(session.exec(select(Stock).where(Stock.is_watchlist == True)))  # noqa: E712
+    affected = 0
     for s in stocks:
-        s.group_id = None
-        session.add(s)
+        ids = get_group_ids(s)
+        if group_id in ids:
+            new_ids = [gid for gid in ids if gid != group_id]
+            s.group_ids = _json.dumps(new_ids) if new_ids else None
+            session.add(s)
+            affected += 1
     session.delete(group)
     session.commit()
-    return {"ok": True, "released_stocks": len(stocks)}
+    return {"ok": True, "released_stocks": affected}
