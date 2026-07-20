@@ -18,10 +18,19 @@ import BatchActionBar from './components/BatchActionBar'
 
 export default function StockListPage() {
   const navigate = useNavigate()
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const qc = useQueryClient()
   const initGroup = searchParams.get('group')
-  const [groupFilter, setGroupFilter] = useState<number | 'all'>(initGroup ? Number(initGroup) : 'all')
+  const [groupFilter, setGroupFilterState] = useState<number | 'all'>(initGroup ? Number(initGroup) : 'all')
+
+  const setGroupFilter = useCallback((g: number | 'all') => {
+    setGroupFilterState(g)
+    if (g === 'all') {
+      setSearchParams({}, { replace: true })
+    } else {
+      setSearchParams({ group: String(g) }, { replace: true })
+    }
+  }, [setSearchParams])
   const [dirFilter, setDirFilter] = useState<'' | 'bullish' | 'bearish' | 'neutral'>('')
   const [sortKey, setSortKey] = useState<SortKey>('default')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
