@@ -174,8 +174,8 @@ export default function StockListPage() {
   ]
 
   return (
-    <div style={{ maxWidth: 960, margin: '0 auto' }}>
-      {/* 摘要条 */}
+    <div>
+      {/* 摘要条 — 全宽 */}
       <div style={{ display: 'flex', gap: 24, marginBottom: 16, padding: '12px 16px', background: '#fff', borderRadius: 8, border: '1px solid #f0f0f0' }}>
         <SummaryCard
           label="涨跌分布"
@@ -220,12 +220,8 @@ export default function StockListPage() {
         )}
       </div>
 
-      {/* 操作栏 */}
+      {/* 操作栏 — 全宽 */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12, flexWrap: 'wrap' }}>
-        <Segmented options={segOptions} value={groupFilter} onChange={(v) => setGroupFilter(v as any)} size="small" />
-        <Tooltip title="管理分组">
-          <Button size="small" icon={<SettingOutlined />} onClick={() => setGroupMgrOpen(true)} />
-        </Tooltip>
         <Input
           prefix={<SearchOutlined />}
           placeholder="搜索"
@@ -313,69 +309,100 @@ export default function StockListPage() {
         </div>
       </div>
 
-      {/* 分组列表 */}
-      <div style={{ background: '#fff', borderRadius: 8, border: '1px solid #f0f0f0', overflow: 'hidden' }}>
-        {sections.map((section, si) => (
-          <div key={section.groupName || si}>
-            {section.groupName && sections.length > 1 && (
-              <div style={{ padding: '8px 16px', background: '#fafafa', borderBottom: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', gap: 8 }}>
-                <Text strong style={{ fontSize: 12, color: '#6b7280' }}>{section.groupName}</Text>
-                <Text type="secondary" style={{ fontSize: 11 }}>({section.items.length})</Text>
-              </div>
-            )}
-            {section.items.map(item => (
-              <StockRow
-                key={item.code}
-                item={item}
-                groups={groups}
-                selectMode={selectMode}
-                checked={selected.has(item.code)}
-                onToggle={(code) => setSelected(prev => {
-                  const next = new Set(prev)
-                  if (next.has(code)) next.delete(code); else next.add(code)
-                  return next
-                })}
-                onClick={() => {
-                  if (selectMode) {
-                    setSelected(prev => {
-                      const next = new Set(prev)
-                      if (next.has(item.code)) next.delete(item.code); else next.add(item.code)
-                      return next
-                    })
-                  } else {
-                    navigate(`/stock/${item.code}`)
-                  }
-                }}
-                onRemove={() => {
-                  Modal.confirm({
-                    title: '移除自选？',
-                    content: `将从自选中移除 ${item.name || item.code}`,
-                    okText: '移除',
-                    okButtonProps: { danger: true },
-                    onOk: () => removeMut.mutate(item.code),
-                  })
-                }}
-                onGroupChange={(gids) => {
-                  patchStock(item.code, { group_ids: gids }).then(() => {
-                    qc.invalidateQueries({ queryKey: ['signals-today'] })
-                    qc.invalidateQueries({ queryKey: ['groups'] })
-                  })
-                }}
-                onSync={() => {
-                  syncSingleStock(item.code).then(() => {
-                    message.success(`${item.name} 同步完成`)
-                    qc.invalidateQueries({ queryKey: ['signals-today'] })
-                  })
-                }}
+      {/* 主体：左侧分组导航 + 右侧列表 */}
+      <div style={{ display: 'flex', gap: 16 }}>
+        {/* 左侧分组 */}
+        <div style={{ width: 120, flexShrink: 0 }}>
+          <div style={{ background: '#fff', borderRadius: 8, border: '1px solid #f0f0f0', padding: '8px 0' }}>
+            <GroupNavItem
+              label={`全部 (${items.length})`}
+              active={groupFilter === 'all'}
+              onClick={() => setGroupFilter('all')}
+            />
+            {groups.map(g => (
+              <GroupNavItem
+                key={g.id}
+                label={`${g.name} (${g.stock_count})`}
+                active={groupFilter === g.id}
+                onClick={() => setGroupFilter(g.id)}
               />
             ))}
+            <div style={{ borderTop: '1px solid #f0f0f0', margin: '4px 0' }} />
+            <GroupNavItem
+              label="管理分组"
+              active={false}
+              onClick={() => setGroupMgrOpen(true)}
+              muted
+            />
           </div>
-        ))}
-        {filtered.length === 0 && (
-          <div style={{ padding: '40px 0', textAlign: 'center', color: '#9ca3af' }}>
-            {items.length === 0 ? '还没有自选股，点击「添加」开始' : '当前筛选无结果'}
+        </div>
+
+        {/* 右侧列表 */}
+        <div style={{ flex: 1, minWidth: 0, maxWidth: 900 }}>
+          <div style={{ background: '#fff', borderRadius: 8, border: '1px solid #f0f0f0', overflow: 'hidden' }}>
+            {sections.map((section, si) => (
+              <div key={section.groupName || si}>
+                {section.groupName && sections.length > 1 && (
+                  <div style={{ padding: '8px 16px', background: '#fafafa', borderBottom: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <Text strong style={{ fontSize: 12, color: '#6b7280' }}>{section.groupName}</Text>
+                    <Text type="secondary" style={{ fontSize: 11 }}>({section.items.length})</Text>
+                  </div>
+                )}
+                {section.items.map(item => (
+                  <StockRow
+                    key={item.code}
+                    item={item}
+                    groups={groups}
+                    selectMode={selectMode}
+                    checked={selected.has(item.code)}
+                    onToggle={(code) => setSelected(prev => {
+                      const next = new Set(prev)
+                      if (next.has(code)) next.delete(code); else next.add(code)
+                      return next
+                    })}
+                    onClick={() => {
+                      if (selectMode) {
+                        setSelected(prev => {
+                          const next = new Set(prev)
+                          if (next.has(item.code)) next.delete(item.code); else next.add(item.code)
+                          return next
+                        })
+                      } else {
+                        navigate(`/stock/${item.code}`)
+                      }
+                    }}
+                    onRemove={() => {
+                      Modal.confirm({
+                        title: '移除自选？',
+                        content: `将从自选中移除 ${item.name || item.code}`,
+                        okText: '移除',
+                        okButtonProps: { danger: true },
+                        onOk: () => removeMut.mutate(item.code),
+                      })
+                    }}
+                    onGroupChange={(gids) => {
+                      patchStock(item.code, { group_ids: gids }).then(() => {
+                        qc.invalidateQueries({ queryKey: ['signals-today'] })
+                        qc.invalidateQueries({ queryKey: ['groups'] })
+                      })
+                    }}
+                    onSync={() => {
+                      syncSingleStock(item.code).then(() => {
+                        message.success(`${item.name} 同步完成`)
+                        qc.invalidateQueries({ queryKey: ['signals-today'] })
+                      })
+                    }}
+                  />
+                ))}
+              </div>
+            ))}
+            {filtered.length === 0 && (
+              <div style={{ padding: '40px 0', textAlign: 'center', color: '#9ca3af' }}>
+                {items.length === 0 ? '还没有自选股，点击「添加」开始' : '当前筛选无结果'}
+              </div>
+            )}
           </div>
-        )}
+        </div>
       </div>
 
       <GroupManagerModal
@@ -719,5 +746,25 @@ function GroupManagerModal({ open, groups, onClose, onChange }: {
         )}
       </div>
     </Modal>
+  )
+}
+
+function GroupNavItem({ label, active, onClick, muted }: { label: string; active: boolean; onClick: () => void; muted?: boolean }) {
+  return (
+    <div
+      onClick={onClick}
+      style={{
+        padding: '6px 12px',
+        cursor: 'pointer',
+        fontSize: 12,
+        fontWeight: active ? 600 : 400,
+        color: muted ? '#9ca3af' : active ? '#1d4ed8' : '#374151',
+        background: active ? '#eff6ff' : 'transparent',
+        borderLeft: active ? '3px solid #3b82f6' : '3px solid transparent',
+        transition: 'all 0.1s',
+      }}
+    >
+      {label}
+    </div>
   )
 }
