@@ -5,6 +5,7 @@ import { AutoComplete, Button, Checkbox, Dropdown, Input, message, Modal, Segmen
 import { ArrowDownOutlined, ArrowUpOutlined, DeleteOutlined, EditOutlined, FolderOutlined, MoreOutlined, PlusOutlined, ReloadOutlined, SearchOutlined, SettingOutlined, SortAscendingOutlined, SyncOutlined } from '@ant-design/icons'
 import { getTodaySignals, SignalItem } from '@/api/signals'
 import { createGroup, deleteGroup, getGroups, patchStock, StockGroup, updateGroup } from '@/api/groups'
+import { getMarketSummary } from '@/api/market'
 import { addWatchlist, removeWatchlist } from '@/api/watchlist'
 import { syncSingleStock, runSync } from '@/api/sync'
 import { searchStocks, StockInfo } from '@/api/stocks'
@@ -49,6 +50,7 @@ export default function StockListPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set())
 
   const groupsQ = useQuery({ queryKey: ['groups'], queryFn: getGroups })
+  const marketQ = useQuery({ queryKey: ['market-summary'], queryFn: () => getMarketSummary(), staleTime: 5 * 60_000 })
   const signalsQ = useQuery({
     queryKey: ['signals-today', groupFilter === 'all' ? undefined : groupFilter],
     queryFn: () => getTodaySignals(groupFilter === 'all' ? {} : { group_id: groupFilter }),
@@ -213,6 +215,19 @@ export default function StockListPage() {
             </span>
           }
         />
+        {marketQ.data && (
+          <div style={{ marginLeft: 'auto', display: 'flex', gap: 16, alignItems: 'center' }}>
+            {marketQ.data.indices.map(idx => (
+              <span key={idx.code} style={{ fontSize: 12 }}>
+                <span style={{ color: '#6b7280' }}>{idx.name.replace('指数', '')}</span>
+                {' '}
+                <span style={{ fontWeight: 600, color: (idx.pct_1d ?? 0) >= 0 ? priceColor.up : priceColor.down }}>
+                  {(idx.pct_1d ?? 0) >= 0 ? '+' : ''}{(idx.pct_1d ?? 0).toFixed(2)}%
+                </span>
+              </span>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* 操作栏 */}
