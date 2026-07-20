@@ -33,13 +33,13 @@ export default function BatchActionBar({
     <div style={{
       position: 'fixed',
       top: '35%',
-      right: 'max(8px, calc(50% - 450px - 130px))',
+      right: 'max(8px, calc(50% - 450px - 154px))',
       transform: 'translateY(-50%)',
-      width: 110,
+      width: 132,
       zIndex: 50,
     }}>
-      <div style={{ background: '#fff', borderRadius: 8, border: '1px solid #f0f0f0', padding: '8px 0', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
-        <div style={{ padding: '4px 12px', fontSize: 12, fontWeight: 600, color: '#374151', borderBottom: '1px solid #f0f0f0', marginBottom: 4 }}>
+      <div style={{ background: '#fff', borderRadius: 8, border: '1px solid #f0f0f0', padding: '10px 0', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
+        <div style={{ padding: '5px 14px', fontSize: 14, fontWeight: 600, color: '#374151', borderBottom: '1px solid #f0f0f0', marginBottom: 4 }}>
           {batchRunning ? `处理 ${batchCompleted}/${batchTotal}` : `已选 ${selected.size} 只`}
         </div>
         {!batchRunning && (
@@ -80,7 +80,7 @@ export default function BatchActionBar({
                   trigger={['click']}
                   placement="bottomRight"
                 >
-                  <div style={{ padding: '6px 12px', cursor: 'pointer', fontSize: 12, color: '#374151', transition: 'background 0.1s' }}
+                  <div style={{ padding: '7px 14px', cursor: 'pointer', fontSize: 14, color: '#374151', transition: 'background 0.1s' }}
                     onMouseEnter={e => (e.currentTarget.style.background = '#f9fafb')}
                     onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
                   >
@@ -133,9 +133,9 @@ function NavItem({ icon, label, onClick, danger, muted }: {
     <div
       onClick={onClick}
       style={{
-        padding: '6px 12px',
+        padding: '7px 14px',
         cursor: 'pointer',
-        fontSize: 12,
+        fontSize: 14,
         color: danger ? '#dc2626' : muted ? '#9ca3af' : '#374151',
         transition: 'background 0.1s',
       }}
