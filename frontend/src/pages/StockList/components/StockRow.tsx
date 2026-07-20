@@ -164,8 +164,8 @@ function BatchStatusBadge({ status }: { status: BatchItemStatus }) {
 
 const HORIZON_LABELS: Record<string, string> = {
   combined: '综合',
-  anti_quant: '反量化',
-  reflexivity: '反身性',
+  anti_quant: '反量',
+  reflexivity: '反身',
   action_plan: '指示',
 }
 

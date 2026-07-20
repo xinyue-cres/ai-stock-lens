@@ -16,8 +16,8 @@ type Horizon = 'combined' | 'anti_quant' | 'reflexivity'
 
 const horizonLabel: Record<Horizon, string> = {
   combined: '综合',
-  anti_quant: '反量化',
-  reflexivity: '反身性',
+  anti_quant: '反量',
+  reflexivity: '反身',
 }
 
 /**

@@ -15,8 +15,8 @@ interface Props {
 
 const horizonEmpty: Record<Horizon, string> = {
   combined: '综合',
-  anti_quant: '反量化',
-  reflexivity: '反身性',
+  anti_quant: '反量',
+  reflexivity: '反身',
 }
 
 const antiQuantHint: Record<string, string> = {

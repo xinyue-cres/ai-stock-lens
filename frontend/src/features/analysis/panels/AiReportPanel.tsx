@@ -100,12 +100,12 @@ export function AiReportPanel() {
             },
             {
               key: 'anti_quant',
-              label: '反量化视角',
+              label: '反量视角',
               children: <HorizonReport horizon="anti_quant" />,
             },
             {
               key: 'reflexivity',
-              label: '反身性视角',
+              label: '反身视角',
               children: <HorizonReport horizon="reflexivity" />,
             },
           ]}
