@@ -13,14 +13,16 @@ router = APIRouter(prefix="/api/signals", tags=["signals"])
 def signals_today(
     direction: str | None = None,
     category: str | None = None,
+    group_id: int | None = None,
     session: Session = Depends(get_session),
 ):
     """扫描自选股当日信号。
 
     - direction: bullish | bearish | neutral，可选过滤
     - category: ma | oscillator | volume | pattern | strength，可选过滤
+    - group_id: 只扫描指定分组，可选
     """
-    items = analysis_service.scan_watchlist_signals(session)
+    items = analysis_service.scan_watchlist_signals(session, group_id=group_id)
 
     if direction or category:
         for item in items:

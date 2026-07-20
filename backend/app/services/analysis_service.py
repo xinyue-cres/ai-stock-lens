@@ -148,16 +148,26 @@ def build_ai_input(session: Session, code: str) -> tuple[dict, dict] | None:
     }
 
 
-def scan_watchlist_signals(session: Session) -> list[dict]:
+def scan_watchlist_signals(session: Session, group_id: int | None = None) -> list[dict]:
     """遍历自选股，输出每只票当日的信号列表。"""
     from app.ai.client import get_model_name
+    from app.models.stock_group import StockGroup
     from app.services import position_service
 
-    stocks = list(session.exec(select(Stock).where(Stock.is_watchlist == True)))  # noqa: E712
+    stmt = select(Stock).where(Stock.is_watchlist == True)  # noqa: E712
+    if group_id is not None:
+        stmt = stmt.where(Stock.group_id == group_id)
+    stocks = list(session.exec(stmt))
     codes = [s.code for s in stocks]
     positions_by_code = position_service.get_positions_by_codes(session, codes)
     stance_map = _latest_stance_map(session, codes, get_model_name())
     ai_verdict_map = _latest_ai_verdict_map(session, codes, get_model_name())
+
+    group_names: dict[int, str] = {}
+    group_ids = {s.group_id for s in stocks if s.group_id}
+    if group_ids:
+        for g in session.exec(select(StockGroup).where(StockGroup.id.in_(group_ids))):  # type: ignore[attr-defined]
+            group_names[g.id] = g.name
 
     results: list[dict] = []
     for s in stocks:
@@ -167,40 +177,33 @@ def scan_watchlist_signals(session: Session) -> list[dict]:
         stance_info = stance_map.get(s.code)
         ai_verdict = ai_verdict_map.get(s.code)
 
+        base = {
+            "code": s.code,
+            "name": s.name,
+            "market": s.market,
+            "pinned": bool(s.pinned),
+            "group_id": s.group_id,
+            "group_name": group_names.get(s.group_id) if s.group_id else None,
+            "note": s.note,
+            "position": position_summary,
+            "stance": stance_info,
+            "ai_verdict": ai_verdict,
+        }
+
         if df.empty:
-            results.append(
-                {
-                    "code": s.code,
-                    "name": s.name,
-                    "market": s.market,
-                    "pinned": bool(s.pinned),
-                    "empty": True,
-                    "signals": [],
-                    "position": position_summary,
-                    "stance": stance_info,
-                    "ai_verdict": ai_verdict,
-                }
-            )
+            results.append({**base, "empty": True, "signals": [], "top_signal": None})
             continue
         indicators = compute_all(df)
         signals = scan_signals(indicators)
         latest_price = indicators.get("latest_price", {})
-        results.append(
-            {
-                "code": s.code,
-                "name": s.name,
-                "market": s.market,
-                "pinned": bool(s.pinned),
-                "as_of_date": indicators.get("as_of_date"),
-                "close": latest_price.get("close"),
-                "pct_chg": latest_price.get("pct_chg"),
-                "signals": signals,
-                "top_signal": signals[0] if signals else None,
-                "position": position_summary,
-                "stance": stance_info,
-                "ai_verdict": ai_verdict,
-            }
-        )
+        results.append({
+            **base,
+            "as_of_date": indicators.get("as_of_date"),
+            "close": latest_price.get("close"),
+            "pct_chg": latest_price.get("pct_chg"),
+            "signals": signals,
+            "top_signal": signals[0] if signals else None,
+        })
     return results
 
 

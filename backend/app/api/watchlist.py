@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, BackgroundTasks, Depends
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel
 from sqlmodel import Session
 
 from app.db import engine, get_session
+from app.models.stock_group import StockGroup
 from app.services import position_service, stock_service, sync_service
 
 logger = logging.getLogger(__name__)
@@ -16,6 +17,8 @@ router = APIRouter(prefix="/api/watchlist", tags=["watchlist"])
 
 class WatchlistAdd(BaseModel):
     code: str
+    group_id: int | None = None
+    note: str | None = None
 
 
 @router.get("")
@@ -23,14 +26,29 @@ def get_watchlist(session: Session = Depends(get_session)):
     stocks = stock_service.list_watchlist(session)
     codes = [s.code for s in stocks]
     positions = position_service.get_positions_by_codes(session, codes)
+    group_names = _group_name_map(session)
     result = []
     for s in stocks:
-        item = {"code": s.code, "name": s.name, "market": s.market, "pinned": bool(s.pinned)}
+        item = {
+            "code": s.code,
+            "name": s.name,
+            "market": s.market,
+            "pinned": bool(s.pinned),
+            "group_id": s.group_id,
+            "group_name": group_names.get(s.group_id),
+            "note": s.note,
+        }
         pos = positions.get(s.code)
         if pos and pos.quantity > 0:
             item["position"] = position_service.summarize(session, pos)
         result.append(item)
     return result
+
+
+def _group_name_map(session: Session) -> dict[int, str]:
+    from sqlmodel import select
+    groups = session.exec(select(StockGroup)).all()
+    return {g.id: g.name for g in groups}
 
 
 def _background_sync(code: str) -> None:
@@ -51,6 +69,13 @@ def add_watch(
     session: Session = Depends(get_session),
 ):
     stock = stock_service.add_to_watchlist(session, payload.code)
+    if payload.group_id is not None:
+        stock.group_id = payload.group_id
+    if payload.note is not None:
+        stock.note = payload.note
+    session.add(stock)
+    session.commit()
+    session.refresh(stock)
     background_tasks.add_task(_background_sync, stock.code)
     return {"code": stock.code, "name": stock.name, "syncing": True}
 
@@ -71,3 +96,26 @@ def set_pin(code: str, payload: PinPayload, session: Session = Depends(get_sessi
     if not stock:
         return {"ok": False, "reason": "not found"}
     return {"ok": True, "code": stock.code, "pinned": stock.pinned}
+
+
+class StockPatch(BaseModel):
+    group_id: int | None = None
+    note: str | None = None
+
+
+@router.patch("/{code}")
+def patch_stock(code: str, payload: StockPatch, session: Session = Depends(get_session)):
+    """修改自选股的分组或备注。"""
+    from sqlmodel import select
+    from app.models.stock import Stock
+    stock = session.get(Stock, code)
+    if not stock or not stock.is_watchlist:
+        raise HTTPException(404, "不在自选列表中")
+    if payload.group_id is not None:
+        stock.group_id = payload.group_id if payload.group_id > 0 else None
+    if payload.note is not None:
+        stock.note = payload.note or None
+    session.add(stock)
+    session.commit()
+    session.refresh(stock)
+    return {"ok": True, "code": stock.code, "group_id": stock.group_id, "note": stock.note}

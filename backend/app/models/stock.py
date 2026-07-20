@@ -9,4 +9,6 @@ class Stock(SQLModel, table=True):
     market: str = Field(description="SH / SZ / BJ")
     is_watchlist: bool = Field(default=False, index=True)
     pinned: bool = Field(default=False, index=True, description="置顶标记")
+    group_id: int | None = Field(default=None, index=True)
+    note: str | None = Field(default=None)
     added_at: datetime = Field(default_factory=datetime.now)
