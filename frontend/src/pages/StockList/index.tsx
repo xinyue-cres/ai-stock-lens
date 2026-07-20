@@ -2,12 +2,13 @@ import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AutoComplete, Button, Checkbox, Dropdown, Input, message, Modal, Segmented, Space, Tag, Tooltip, Typography } from 'antd'
-import { ArrowDownOutlined, ArrowUpOutlined, DeleteOutlined, EditOutlined, FolderOutlined, MoreOutlined, PlusOutlined, ReloadOutlined, SearchOutlined, SettingOutlined, SortAscendingOutlined, SyncOutlined } from '@ant-design/icons'
+import { ArrowDownOutlined, ArrowUpOutlined, DeleteOutlined, EditOutlined, ExperimentOutlined, FolderOutlined, MoreOutlined, PlusOutlined, ReloadOutlined, SearchOutlined, SettingOutlined, SortAscendingOutlined, SyncOutlined } from '@ant-design/icons'
 import { getTodaySignals, SignalItem } from '@/api/signals'
 import { createGroup, deleteGroup, getGroups, patchStock, StockGroup, updateGroup } from '@/api/groups'
 import { getMarketSummary } from '@/api/market'
 import { addWatchlist, removeWatchlist } from '@/api/watchlist'
 import { syncSingleStock, runSync } from '@/api/sync'
+import { batchGenerateAiReports, BatchProgress } from '@/api/batchAi'
 import { searchStocks, StockInfo } from '@/api/stocks'
 import { priceColor, verdictPalette, Verdict } from '@/shared/theme'
 
@@ -48,6 +49,8 @@ export default function StockListPage() {
   const [groupMgrOpen, setGroupMgrOpen] = useState(false)
   const [selectMode, setSelectMode] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [batchAiRunning, setBatchAiRunning] = useState(false)
+  const [batchAiProgress, setBatchAiProgress] = useState<BatchProgress | null>(null)
 
   const groupsQ = useQuery({ queryKey: ['groups'], queryFn: getGroups })
   const marketQ = useQuery({ queryKey: ['market-summary'], queryFn: () => getMarketSummary(), staleTime: 5 * 60_000 })
@@ -294,6 +297,19 @@ export default function StockListPage() {
           >
             {selectMode ? '退出多选' : '多选'}
           </Button>
+          {selectMode && (
+            <>
+              <Button size="small" onClick={() => setSelected(new Set(filtered.map(i => i.code)))}>全选</Button>
+              <Button size="small" onClick={() => {
+                const all = new Set(filtered.map(i => i.code))
+                setSelected(prev => {
+                  const next = new Set<string>()
+                  for (const code of all) { if (!prev.has(code)) next.add(code) }
+                  return next
+                })
+              }}>反选</Button>
+            </>
+          )}
         </div>
       </div>
 
@@ -423,6 +439,33 @@ export default function StockListPage() {
               qc.invalidateQueries({ queryKey: ['signals-today'] })
             })
           }}>同步</Button>
+          <Button
+            size="small"
+            ghost
+            icon={<ExperimentOutlined />}
+            loading={batchAiRunning}
+            onClick={() => {
+              const codes = [...selected]
+              setBatchAiRunning(true)
+              setBatchAiProgress({ total: codes.length, completed: 0, current: null, errors: [] })
+              batchGenerateAiReports(codes, { horizon: 'combined' }, 2, (p) => {
+                setBatchAiProgress(p)
+              }).then((result) => {
+                setBatchAiRunning(false)
+                if (result.errors.length === 0) {
+                  message.success(`${result.total} 只 AI 分析全部完成`)
+                } else {
+                  message.warning(`完成 ${result.completed}/${result.total}，${result.errors.length} 只失败`)
+                }
+                setSelected(new Set())
+                qc.invalidateQueries({ queryKey: ['signals-today'] })
+              })
+            }}
+          >
+            {batchAiProgress && batchAiRunning
+              ? `AI 分析 ${batchAiProgress.completed}/${batchAiProgress.total}`
+              : 'AI 分析'}
+          </Button>
           <Button size="small" ghost danger icon={<DeleteOutlined />} onClick={() => {
             Modal.confirm({
               title: `批量移除 ${selected.size} 只自选？`,
