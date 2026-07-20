@@ -113,9 +113,15 @@ export default function StockRow({ item, groups, selectMode, checked, batchStatu
             持仓 {posPnl >= 0 ? '+' : ''}{(posPnl * 100).toFixed(1)}%
           </span>
         )}
-        {item.as_of_date && (
-          <Text type="secondary" style={{ fontSize: 10, minWidth: 40, textAlign: 'right' }}>{item.as_of_date.slice(5)}</Text>
-        )}
+        {item.as_of_date && (() => {
+          const diffD = Math.floor((Date.now() - new Date(item.as_of_date).getTime()) / 86_400_000)
+          const color = diffD <= 1 ? '#16a34a' : diffD <= 3 ? '#f59e0b' : '#dc2626'
+          return (
+            <span style={{ fontSize: 10, color, border: `1px solid ${color}`, borderRadius: 3, padding: '1px 4px', lineHeight: 1.4 }}>
+              数据 {item.as_of_date.slice(5)}
+            </span>
+          )
+        })()}
 
         <div style={{ width: 56, display: 'flex', gap: 2, visibility: hovered ? 'visible' : 'hidden' }}>
           <Tooltip title="同步">
