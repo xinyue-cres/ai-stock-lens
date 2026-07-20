@@ -38,6 +38,7 @@ export default function StockListPage() {
   const navigate = useNavigate()
   const qc = useQueryClient()
   const [groupFilter, setGroupFilter] = useState<number | 'all'>('all')
+  const [dirFilter, setDirFilter] = useState<'' | 'bullish' | 'bearish' | 'neutral'>('')
   const [sortKey, setSortKey] = useState<SortKey>('default')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
   const [search, setSearch] = useState('')
@@ -120,6 +121,14 @@ export default function StockListPage() {
       const k = search.toLowerCase()
       arr = arr.filter(i => i.code.includes(k) || (i.name || '').toLowerCase().includes(k))
     }
+    if (dirFilter) {
+      arr = arr.filter(i => {
+        const v = i.ai_verdict
+        if (!v) return dirFilter === 'neutral'
+        if (v === 'caution') return dirFilter === 'neutral'
+        return v === dirFilter
+      })
+    }
     const sorted = [...arr]
     const dir = sortDir === 'asc' ? 1 : -1
     if (sortKey === 'pct_chg') {
@@ -142,7 +151,7 @@ export default function StockListPage() {
       sorted.sort((a, b) => Number(!!b.pinned) - Number(!!a.pinned))
     }
     return sorted
-  }, [items, search, sortKey, sortDir])
+  }, [items, search, dirFilter, sortKey, sortDir])
 
   // --- 按分组分 section ---
   const sections = useMemo(() => {
@@ -219,6 +228,17 @@ export default function StockListPage() {
           value={search}
           onChange={e => setSearch(e.target.value)}
           allowClear
+        />
+        <Segmented
+          size="small"
+          options={[
+            { label: '全部', value: '' },
+            { label: '偏多', value: 'bullish' },
+            { label: '偏空', value: 'bearish' },
+            { label: '中性', value: 'neutral' },
+          ]}
+          value={dirFilter}
+          onChange={(v) => setDirFilter(v as any)}
         />
         <Dropdown
           menu={{
