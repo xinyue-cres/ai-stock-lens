@@ -119,6 +119,12 @@ def sync_one_stock(session: Session, code: str, full: bool = False) -> int:
         return 0
 
     df = router.fetch_stock_daily(code, start, end)
+
+    # 全量拉失败时降级到 2 年
+    if (df is None or df.empty) and (end - start).days > 365 * 2:
+        logger.warning("[%s] 全量 5 年拉取为空，降级到 2 年", code)
+        start = end - timedelta(days=365 * 2)
+        df = router.fetch_stock_daily(code, start, end)
     if df is None or df.empty:
         return 0
 
