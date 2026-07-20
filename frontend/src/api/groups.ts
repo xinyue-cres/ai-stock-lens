@@ -27,7 +27,7 @@ export async function deleteGroup(id: number) {
   return data
 }
 
-export async function patchStock(code: string, payload: { group_id?: number | null; note?: string | null }) {
+export async function patchStock(code: string, payload: { group_ids?: number[]; note?: string | null }) {
   const { data } = await api.patch(`/watchlist/${code}`, payload)
   return data
 }

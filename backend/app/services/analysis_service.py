@@ -152,12 +152,12 @@ def scan_watchlist_signals(session: Session, group_id: int | None = None) -> lis
     """遍历自选股，输出每只票当日的信号列表。"""
     from app.ai.client import get_model_name
     from app.models.stock_group import StockGroup
-    from app.services import position_service
+    from app.services import position_service, stock_service
 
     stmt = select(Stock).where(Stock.is_watchlist == True)  # noqa: E712
-    if group_id is not None:
-        stmt = stmt.where(Stock.group_id == group_id)
     stocks = list(session.exec(stmt))
+    if group_id is not None:
+        stocks = [s for s in stocks if group_id in stock_service.get_group_ids(s)]
     codes = [s.code for s in stocks]
     positions_by_code = position_service.get_positions_by_codes(session, codes)
     stance_map = _latest_stance_map(session, codes, get_model_name())
@@ -182,8 +182,8 @@ def scan_watchlist_signals(session: Session, group_id: int | None = None) -> lis
             "name": s.name,
             "market": s.market,
             "pinned": bool(s.pinned),
-            "group_id": s.group_id,
-            "group_name": group_names.get(s.group_id) if s.group_id else None,
+            "group_ids": stock_service.get_group_ids(s),
+            "group_names": [group_names.get(gid, '') for gid in stock_service.get_group_ids(s) if gid in group_names],
             "note": s.note,
             "position": position_summary,
             "stance": stance_info,

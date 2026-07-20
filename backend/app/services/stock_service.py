@@ -1,6 +1,7 @@
 """股票元数据服务。"""
 from __future__ import annotations
 
+import json
 import logging
 
 from sqlmodel import Session, select
@@ -111,6 +112,31 @@ def set_pinned(session: Session, code: str, pinned: bool) -> Stock | None:
     if not stock:
         return None
     stock.pinned = pinned
+    session.add(stock)
+    session.commit()
+    session.refresh(stock)
+    return stock
+
+
+def get_group_ids(stock: Stock) -> list[int]:
+    if not stock.group_ids:
+        # 兼容旧数据：如果有 group_id 但没 group_ids，迁移
+        if stock.group_id:
+            return [stock.group_id]
+        return []
+    try:
+        ids = json.loads(stock.group_ids)
+        return [int(i) for i in ids] if isinstance(ids, list) else []
+    except (json.JSONDecodeError, TypeError, ValueError):
+        return []
+
+
+def set_group_ids(session: Session, code: str, group_ids: list[int]) -> Stock | None:
+    stock = session.get(Stock, code)
+    if not stock:
+        return None
+    stock.group_ids = json.dumps(group_ids) if group_ids else None
+    stock.group_id = group_ids[0] if group_ids else None  # 兼容旧字段
     session.add(stock)
     session.commit()
     session.refresh(stock)

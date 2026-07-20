@@ -22,8 +22,8 @@ export interface SignalItem {
   name: string
   market: string
   pinned?: boolean
-  group_id?: number | null
-  group_name?: string | null
+  group_ids?: number[]
+  group_names?: string[]
   note?: string | null
   as_of_date?: string
   close?: number

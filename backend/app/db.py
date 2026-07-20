@@ -49,9 +49,10 @@ def init_db() -> None:
     # 增量迁移：stock.pinned
     _migrate_add_column("stock", "pinned", "BOOLEAN DEFAULT 0")
 
-    # 增量迁移：stock.group_id + stock.note
+    # 增量迁移：stock.group_id + stock.note + stock.group_ids
     _migrate_add_column("stock", "group_id", "INTEGER")
     _migrate_add_column("stock", "note", "TEXT")
+    _migrate_add_column("stock", "group_ids", "TEXT")
 
 
 def _migrate_ai_report_horizon() -> None:

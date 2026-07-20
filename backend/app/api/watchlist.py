@@ -29,13 +29,14 @@ def get_watchlist(session: Session = Depends(get_session)):
     group_names = _group_name_map(session)
     result = []
     for s in stocks:
+        gids = stock_service.get_group_ids(s)
         item = {
             "code": s.code,
             "name": s.name,
             "market": s.market,
             "pinned": bool(s.pinned),
-            "group_id": s.group_id,
-            "group_name": group_names.get(s.group_id),
+            "group_ids": gids,
+            "group_names": [group_names.get(gid, '') for gid in gids if gid in group_names],
             "note": s.note,
         }
         pos = positions.get(s.code)
@@ -99,23 +100,23 @@ def set_pin(code: str, payload: PinPayload, session: Session = Depends(get_sessi
 
 
 class StockPatch(BaseModel):
-    group_id: int | None = None
+    group_ids: list[int] | None = None
     note: str | None = None
 
 
 @router.patch("/{code}")
 def patch_stock(code: str, payload: StockPatch, session: Session = Depends(get_session)):
-    """修改自选股的分组或备注。"""
-    from sqlmodel import select
+    """修改自选股的分组或备注。group_ids 为空数组表示取消所有分组。"""
     from app.models.stock import Stock
     stock = session.get(Stock, code)
     if not stock or not stock.is_watchlist:
         raise HTTPException(404, "不在自选列表中")
-    if payload.group_id is not None:
-        stock.group_id = payload.group_id if payload.group_id > 0 else None
+    if payload.group_ids is not None:
+        stock_service.set_group_ids(session, code, payload.group_ids)
+        stock = session.get(Stock, code)
     if payload.note is not None:
         stock.note = payload.note or None
-    session.add(stock)
-    session.commit()
-    session.refresh(stock)
-    return {"ok": True, "code": stock.code, "group_id": stock.group_id, "note": stock.note}
+        session.add(stock)
+        session.commit()
+        session.refresh(stock)
+    return {"ok": True, "code": stock.code, "group_ids": stock_service.get_group_ids(stock), "note": stock.note}

@@ -120,9 +120,9 @@ export default function StockListPage() {
   // --- 过滤 + 排序 ---
   const filtered = useMemo(() => {
     let arr = items
-    // 分组过滤（前端）
+    // 分组过滤（前端）— 支持多分组
     if (groupFilter !== 'all') {
-      arr = arr.filter(i => i.group_id === groupFilter)
+      arr = arr.filter(i => (i.group_ids || []).includes(groupFilter as number))
     }
     if (search) {
       const k = search.toLowerCase()
@@ -339,8 +339,8 @@ export default function StockListPage() {
                     onOk: () => removeMut.mutate(item.code),
                   })
                 }}
-                onGroupChange={(gid) => {
-                  patchStock(item.code, { group_id: gid }).then(() => {
+                onGroupChange={(gids) => {
+                  patchStock(item.code, { group_ids: gids }).then(() => {
                     qc.invalidateQueries({ queryKey: ['signals-today'] })
                     qc.invalidateQueries({ queryKey: ['groups'] })
                   })
@@ -386,19 +386,25 @@ export default function StockListPage() {
               items: [
                 ...groups.map(g => ({
                   key: `g-${g.id}`,
-                  label: `移到「${g.name}」`,
+                  label: `加入「${g.name}」`,
                   onClick: () => {
-                    Promise.all([...selected].map(code => patchStock(code, { group_id: g.id }))).then(() => {
-                      message.success(`${selected.size} 只已移到「${g.name}」`)
+                    const allItems = signalsQ.data?.items ?? []
+                    Promise.all([...selected].map(code => {
+                      const cur = allItems.find(i => i.code === code)
+                      const curIds = cur?.group_ids || []
+                      if (curIds.includes(g.id)) return Promise.resolve()
+                      return patchStock(code, { group_ids: [...curIds, g.id] })
+                    })).then(() => {
+                      message.success(`${selected.size} 只已加入「${g.name}」`)
                       setSelected(new Set())
                       qc.invalidateQueries({ queryKey: ['signals-today'] })
                       qc.invalidateQueries({ queryKey: ['groups'] })
                     })
                   },
                 })),
-                { key: 'g-none', label: '取消分组', onClick: () => {
-                  Promise.all([...selected].map(code => patchStock(code, { group_id: 0 }))).then(() => {
-                    message.success('已取消分组')
+                { key: 'g-none', label: '清除所有分组', onClick: () => {
+                  Promise.all([...selected].map(code => patchStock(code, { group_ids: [] }))).then(() => {
+                    message.success('已清除分组')
                     setSelected(new Set())
                     qc.invalidateQueries({ queryKey: ['signals-today'] })
                     qc.invalidateQueries({ queryKey: ['groups'] })
@@ -463,7 +469,7 @@ function StockRow({ item, groups, selectMode, checked, onToggle, onClick, onRemo
   onToggle: (code: string) => void
   onClick: () => void
   onRemove: () => void
-  onGroupChange: (gid: number | null) => void
+  onGroupChange: (gids: number[]) => void
   onSync: () => void
 }) {
   const [hovered, setHovered] = useState(false)
@@ -471,14 +477,24 @@ function StockRow({ item, groups, selectMode, checked, onToggle, onClick, onRemo
   const pct = item.pct_chg
   const pos = item.position
   const posPnl = pos?.unrealized_pnl_pct
+  const curIds = item.group_ids || []
 
-  const groupMenu = groups.map(g => ({
-    key: `g-${g.id}`,
-    label: g.name,
-    onClick: () => onGroupChange(g.id),
-  }))
-  if (item.group_id) {
-    groupMenu.push({ key: 'g-none', label: '取消分组', onClick: () => onGroupChange(0) })
+  const groupMenu = groups.map(g => {
+    const inGroup = curIds.includes(g.id)
+    return {
+      key: `g-${g.id}`,
+      label: inGroup ? `✓ ${g.name}` : `  ${g.name}`,
+      onClick: () => {
+        if (inGroup) {
+          onGroupChange(curIds.filter(id => id !== g.id))
+        } else {
+          onGroupChange([...curIds, g.id])
+        }
+      },
+    }
+  })
+  if (curIds.length > 0) {
+    groupMenu.push({ key: 'g-none', label: '清除所有分组', onClick: () => onGroupChange([]) })
   }
 
   return (
