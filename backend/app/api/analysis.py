@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -23,6 +23,9 @@ from app.services.stock_service import ensure_stock
 
 router = APIRouter(prefix="/api/stocks/{code}", tags=["analysis"])
 
+_auto_sync_cooldown: dict[str, datetime] = {}
+_AUTO_SYNC_INTERVAL = timedelta(minutes=10)
+
 
 class AIReportOptions(BaseModel):
     horizon: str = "medium"  # short | medium
@@ -43,11 +46,18 @@ def _normalize_horizon(h: str | None) -> str:
 def get_kline(code: str, session: Session = Depends(get_session)):
     result = analysis_service.analyze(session, code)
     if result.get("empty"):
+        now = datetime.now()
+        last_attempt = _auto_sync_cooldown.get(code)
+        if last_attempt and (now - last_attempt) < _AUTO_SYNC_INTERVAL:
+            raise HTTPException(status_code=404, detail="本地无数据，同步冷却中（10分钟内已尝试过）")
+        _auto_sync_cooldown[code] = now
         try:
             sync_service.sync_one_stock(session, code, full=True)
         except Exception as e:  # noqa: BLE001
             raise HTTPException(status_code=502, detail=f"数据同步失败：{e}") from e
         result = analysis_service.analyze(session, code)
+        if result.get("empty"):
+            raise HTTPException(status_code=404, detail="同步完成但仍无数据，可能该股票已停牌或代码无效")
     return result
 
 
