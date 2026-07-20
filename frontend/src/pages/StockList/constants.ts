@@ -14,8 +14,8 @@ export type SortDir = 'asc' | 'desc'
 
 export const sortLabels: Record<SortKey, string> = {
   default: '默认',
-  pct_chg: '涨跌幅',
-  position: '持仓盈亏',
-  verdict: '多空排序',
+  pct_chg: '涨跌',
+  position: '盈亏',
+  verdict: '多空',
   name: '名称',
 }
