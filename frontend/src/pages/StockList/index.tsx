@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AutoComplete, Button, Dropdown, Input, message, Modal, Segmented, Space, Tag, Tooltip, Typography } from 'antd'
-import { DeleteOutlined, EditOutlined, FolderOutlined, MoreOutlined, PlusOutlined, ReloadOutlined, SearchOutlined, SettingOutlined, SyncOutlined } from '@ant-design/icons'
+import { ArrowDownOutlined, ArrowUpOutlined, DeleteOutlined, EditOutlined, FolderOutlined, MoreOutlined, PlusOutlined, ReloadOutlined, SearchOutlined, SettingOutlined, SortAscendingOutlined, SyncOutlined } from '@ant-design/icons'
 import { getTodaySignals, SignalItem } from '@/api/signals'
 import { createGroup, deleteGroup, getGroups, patchStock, StockGroup, updateGroup } from '@/api/groups'
 import { addWatchlist, removeWatchlist } from '@/api/watchlist'
@@ -23,13 +23,23 @@ const stanceLabel: Record<string, { label: string; color: string }> = {
 
 const actionableStances = new Set(['opportunistic_buy', 'trim', 'reduce', 'exit'])
 
-type SortKey = 'default' | 'pct_chg' | 'position'
+type SortKey = 'default' | 'pct_chg' | 'position' | 'confidence' | 'name'
+type SortDir = 'asc' | 'desc'
+
+const sortLabels: Record<SortKey, string> = {
+  default: '默认',
+  pct_chg: '涨跌幅',
+  position: '持仓盈亏',
+  confidence: 'AI 置信度',
+  name: '名称',
+}
 
 export default function StockListPage() {
   const navigate = useNavigate()
   const qc = useQueryClient()
   const [groupFilter, setGroupFilter] = useState<number | 'all'>('all')
   const [sortKey, setSortKey] = useState<SortKey>('default')
+  const [sortDir, setSortDir] = useState<SortDir>('desc')
   const [search, setSearch] = useState('')
   const [addValue, setAddValue] = useState('')
   const [addOpen, setAddOpen] = useState(false)
@@ -110,19 +120,28 @@ export default function StockListPage() {
       arr = arr.filter(i => i.code.includes(k) || (i.name || '').toLowerCase().includes(k))
     }
     const sorted = [...arr]
+    const dir = sortDir === 'asc' ? 1 : -1
     if (sortKey === 'pct_chg') {
-      sorted.sort((a, b) => (b.pct_chg ?? 0) - (a.pct_chg ?? 0))
+      sorted.sort((a, b) => ((a.pct_chg ?? 0) - (b.pct_chg ?? 0)) * dir)
     } else if (sortKey === 'position') {
       sorted.sort((a, b) => {
         const pa = a.position?.unrealized_pnl_pct ?? -999
         const pb = b.position?.unrealized_pnl_pct ?? -999
-        return pb - pa
+        return (pa - pb) * dir
       })
+    } else if (sortKey === 'confidence') {
+      sorted.sort((a, b) => {
+        const ca = (a.stance as any)?.confidence ?? 0
+        const cb = (b.stance as any)?.confidence ?? 0
+        return (ca - cb) * dir
+      })
+    } else if (sortKey === 'name') {
+      sorted.sort((a, b) => (a.name || '').localeCompare(b.name || '') * dir)
     } else {
       sorted.sort((a, b) => Number(!!b.pinned) - Number(!!a.pinned))
     }
     return sorted
-  }, [items, search, sortKey])
+  }, [items, search, sortKey, sortDir])
 
   // --- 按分组分 section ---
   const sections = useMemo(() => {
@@ -200,16 +219,28 @@ export default function StockListPage() {
           onChange={e => setSearch(e.target.value)}
           allowClear
         />
-        <Segmented
-          size="small"
-          options={[
-            { label: '默认', value: 'default' },
-            { label: '涨跌', value: 'pct_chg' },
-            { label: '持仓', value: 'position' },
-          ]}
-          value={sortKey}
-          onChange={(v) => setSortKey(v as SortKey)}
-        />
+        <Dropdown
+          menu={{
+            items: (Object.keys(sortLabels) as SortKey[]).map(k => ({
+              key: k,
+              label: sortLabels[k],
+              onClick: () => { setSortKey(k); if (k === 'default') setSortDir('desc') },
+            })),
+            selectedKeys: [sortKey],
+          }}
+          trigger={['click']}
+        >
+          <Button size="small" icon={<SortAscendingOutlined />}>
+            {sortLabels[sortKey]}
+          </Button>
+        </Dropdown>
+        {sortKey !== 'default' && (
+          <Button
+            size="small"
+            icon={sortDir === 'desc' ? <ArrowDownOutlined /> : <ArrowUpOutlined />}
+            onClick={() => setSortDir(d => d === 'desc' ? 'asc' : 'desc')}
+          />
+        )}
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
           {addOpen ? (
             <AutoComplete
