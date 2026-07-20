@@ -42,6 +42,7 @@ export function useAiReport(horizon: Horizon) {
       qc.invalidateQueries({ queryKey: ['ai-report-cached', vars.ctxCode, vars.ctxHorizon] })
       qc.invalidateQueries({ queryKey: ['action-plan-deps', vars.ctxCode] })
       qc.invalidateQueries({ queryKey: ['action-plan', vars.ctxCode] })
+      qc.invalidateQueries({ queryKey: ['signals-today'] })
     },
   })
 

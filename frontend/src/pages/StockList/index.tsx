@@ -459,6 +459,7 @@ export default function StockListPage() {
                 }
                 setSelected(new Set())
                 qc.invalidateQueries({ queryKey: ['signals-today'] })
+                qc.invalidateQueries({ queryKey: ['ai-report-cached'] })
               })
             }}
           >
