@@ -40,3 +40,5 @@ dist/
 .DS_Store
 Thumbs.db
 data/
+.backend.pid
+.frontend.pid
