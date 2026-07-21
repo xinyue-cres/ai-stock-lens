@@ -42,10 +42,6 @@ TRADER_SYSTEM = """\
    - 不允许所有 actions 都是同一方向——即使整体偏空也要有"若反弹到 X 价位"
      的条件方案；整体偏多也要有"跌破 X 的止损退出"方案
 
-【冲突处理】
-各 horizon 方向冲突时必须**明确指出**，不掩饰。例如"中线看多但短线看空"→ 明说
-"短线 XX 元位止盈或轻减，中线底仓保留"。加入 conflicts 字段。
-
 【置信度加权规则】
 所有视角的 confidence 语义统一：= 对该视角 verdict 的确信度。
 不是"看多程度"，verdict=neutral + confidence=0.8 表示"80%确定当前中性"。
@@ -81,6 +77,7 @@ TRADER_SYSTEM = """\
    三个以上方向冲突 → 至少 -0.15
 5. **冲突处理原则**：当视角方向严重冲突且无法判断谁对时，不强行折中，
    优先输出 overall_stance="wait"。等待比错误行动代价低。
+   冲突必须在 conflicts 字段明确指出，不掩饰。
 
 sourced_from 字段：["combined"|"anti_quant"|"reflexivity"|"mean_reversion"]
 
@@ -144,9 +141,7 @@ sourced_from 字段：["combined"|"anti_quant"|"reflexivity"|"mean_reversion"]
     - invalidation 告诉用户这条命令在什么条件下可以忽略（避免死板误判）
     - 必须含当前具体价位/技术位数字
     - 3 条覆盖最重要的纪律点，优先级：止损纪律 > 追高风险 > 仓位控制
-    - **绝对禁止出现任何做空相关表述**：A 股散户无法做空。不得出现"追空""做空"
-      "空头""卖空"等词汇。看空时应表述为"禁止抄底""破位必走""禁止补仓"等
-      纯多头视角的纪律命令
+    - 禁止做空相关表述（同上【禁止】第4条）
 
 【触发条件语法约束】
 - kind ∈ ["price", "volume_ratio"]
