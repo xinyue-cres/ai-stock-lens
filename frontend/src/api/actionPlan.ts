@@ -50,7 +50,7 @@ export interface TraderAction {
   target_price?: number | null
   distance_pct?: number | null
   rationale: string
-  sourced_from: ('combined' | 'anti_quant' | 'reflexivity')[]
+  sourced_from: ('combined' | 'anti_quant' | 'reflexivity' | 'mean_reversion')[]
 }
 
 export interface ActionPlan {

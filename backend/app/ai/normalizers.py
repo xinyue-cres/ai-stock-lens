@@ -105,7 +105,7 @@ def normalize_action(a: dict[str, Any]) -> dict[str, Any] | None:
         "rationale": a.get("rationale") or "",
         "sourced_from": [
             h for h in (a.get("sourced_from") or [])
-            if h in {"combined", "anti_quant", "reflexivity"}
+            if h in {"combined", "anti_quant", "reflexivity", "mean_reversion"}
         ],
     }
 

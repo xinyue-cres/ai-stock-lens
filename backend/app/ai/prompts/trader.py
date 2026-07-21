@@ -13,7 +13,7 @@ def build_trader_prompt(payload: dict) -> str:
     warnings = payload.get("warnings", []) or []
 
     reports_block_lines: list[str] = []
-    for horizon in ("combined", "anti_quant", "reflexivity"):
+    for horizon in ("combined", "anti_quant", "reflexivity", "mean_reversion"):
         r = reports.get(horizon)
         if not r:
             reports_block_lines.append(f"【{horizon}】未生成")
