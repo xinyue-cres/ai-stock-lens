@@ -10,6 +10,7 @@ from sqlmodel import Session, select
 from app.ai.analyzer import (
     analyze_anti_quant,
     analyze_debate,
+    analyze_mean_reversion,
     analyze_reflexivity,
 )
 from app.ai.client import get_model_name
@@ -30,12 +31,14 @@ class AIReportOptions(BaseModel):
 
 
 def _normalize_horizon(h: str | None) -> str:
-    """当前保留 combined / anti_quant / reflexivity 三个视角。
+    """当前保留 combined / anti_quant / reflexivity / mean_reversion 四个视角。
     历史请求中的 short/medium 一律归为 combined，避免破坏老 URL/客户端。"""
     if h == "anti_quant":
         return "anti_quant"
     if h == "reflexivity":
         return "reflexivity"
+    if h == "mean_reversion":
+        return "mean_reversion"
     return "combined"
 
 
@@ -115,34 +118,39 @@ def gen_ai_report(
     # force=true：直接插新行，保留历史版本（同日多版本被允许）
 
     if hz == "anti_quant":
-        # 反量化视角需要额外的量化因子快照，直接从库拉一次 df
         df = load_kline_df(session, code)
         factors = compute_quant_features(df) if not df.empty else {"empty": True}
         result = analyze_anti_quant(stock_info, factors, indicators)
     elif hz == "reflexivity":
         result = analyze_reflexivity(stock_info, indicators)
+    elif hz == "mean_reversion":
+        from app.indicators.mean_reversion import compute_mean_reversion
+        df = load_kline_df(session, code)
+        mr_data = compute_mean_reversion(df) if not df.empty else {}
+        result = analyze_mean_reversion(stock_info, mr_data, indicators)
     else:
-        # 目前对外只暴露 combined / anti_quant / reflexivity 三个视角；老的 short/medium
-        # 请求会被 _normalize_horizon 归为 combined
         result = analyze_debate(stock_info, indicators)
     extras = {
         "key_signals": result.get("key_signals", []),
         "risks": result.get("risks", []),
         "scenarios": result.get("scenarios", []),
         "reflection": result.get("reflection"),
-        # 辩论专属字段：bull / bear / judge 完整对象
         "bull": result.get("bull"),
         "bear": result.get("bear"),
         "judge": result.get("judge"),
         "tradability": result.get("tradability"),
         "evidence_review": result.get("evidence_review"),
-        # 反量化专属：quant agent 的完整输出 + 陷阱风险
         "quant_output": result.get("quant_output"),
         "trap_risk": result.get("trap_risk"),
-        # 反身性专属
         "reflexivity_stage": result.get("reflexivity_stage"),
         "narrative": result.get("narrative"),
         "feedback_loop": result.get("feedback_loop"),
+        "opportunity_level": result.get("opportunity_level"),
+        "deviation_summary": result.get("deviation_summary"),
+        "support_zones": result.get("support_zones"),
+        "entry_plan": result.get("entry_plan"),
+        "statistical_edge": result.get("statistical_edge"),
+        "invalidation": result.get("invalidation"),
     }
     report = AIReport(
         code=code,
@@ -169,13 +177,13 @@ def gen_all_ai_reports(
     payload: AIReportOptions | None = None,
     session: Session = Depends(get_session),
 ):
-    """一键生成 combined + anti_quant + reflexivity 三个视角。任一失败不中断另一个。"""
+    """一键生成 combined + anti_quant + reflexivity + mean_reversion 四个视角。任一失败不中断另一个。"""
     payload = payload or AIReportOptions()
     force = payload.force
 
     results: dict[str, dict] = {}
     errors: dict[str, str] = {}
-    for hz in ("combined", "anti_quant", "reflexivity"):
+    for hz in ("combined", "anti_quant", "reflexivity", "mean_reversion"):
         try:
             results[hz] = gen_ai_report(
                 code=code,
@@ -228,6 +236,12 @@ def _report_to_dict(r: AIReport, cached: bool, stock=None) -> dict:
         "reflexivity_stage": extras.get("reflexivity_stage"),
         "narrative": extras.get("narrative"),
         "feedback_loop": extras.get("feedback_loop"),
+        "opportunity_level": extras.get("opportunity_level"),
+        "deviation_summary": extras.get("deviation_summary"),
+        "support_zones": extras.get("support_zones"),
+        "entry_plan": extras.get("entry_plan"),
+        "statistical_edge": extras.get("statistical_edge"),
+        "invalidation": extras.get("invalidation"),
     }
 
 

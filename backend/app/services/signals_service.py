@@ -191,7 +191,7 @@ def _latest_ai_verdict_map(session: Session, codes: list[str], model: str) -> di
     return result
 
 
-_REPORT_HORIZONS = ("combined", "anti_quant", "reflexivity", "action_plan")
+_REPORT_HORIZONS = ("combined", "anti_quant", "reflexivity", "mean_reversion", "action_plan")
 
 
 def _latest_report_times_map(

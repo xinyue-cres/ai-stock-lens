@@ -1,7 +1,7 @@
 import { generateActionPlan } from './actionPlan'
 import { generateAiReport } from './analysis'
 
-const AI_HORIZONS = ['combined', 'anti_quant', 'reflexivity'] as const
+const AI_HORIZONS = ['combined', 'anti_quant', 'reflexivity', 'mean_reversion'] as const
 
 export type BatchTaskType = 'ai' | 'action_plan'
 export type BatchItemStatus = 'pending' | 'running' | 'done' | 'error'

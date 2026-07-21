@@ -167,6 +167,7 @@ const HORIZON_LABELS: Record<string, string> = {
   combined: '综合',
   anti_quant: '反量',
   reflexivity: '反身',
+  mean_reversion: '左侧',
   action_plan: '指示',
 }
 

@@ -92,7 +92,7 @@ export interface AiReport {
   cached: boolean
   code: string
   name?: string | null
-  horizon: 'combined' | 'anti_quant' | 'reflexivity'
+  horizon: 'combined' | 'anti_quant' | 'reflexivity' | 'mean_reversion'
   verdict: 'bullish' | 'bearish' | 'neutral' | 'caution'
   confidence?: number | null
   summary?: string | null
@@ -117,7 +117,7 @@ export interface AiReport {
 }
 
 export interface AiReportOptions {
-  horizon?: 'combined' | 'anti_quant' | 'reflexivity'
+  horizon?: 'combined' | 'anti_quant' | 'reflexivity' | 'mean_reversion'
   force?: boolean
 }
 
@@ -144,12 +144,12 @@ export async function generateAllAiReports(code: string, force = false): Promise
 export interface CachedAiReport extends Partial<AiReport> {
   empty?: boolean
   cached?: boolean
-  horizon?: 'combined' | 'anti_quant' | 'reflexivity'
+  horizon?: 'combined' | 'anti_quant' | 'reflexivity' | 'mean_reversion'
 }
 
 export async function getCachedAiReport(
   code: string,
-  horizon: 'combined' | 'anti_quant' | 'reflexivity' = 'combined',
+  horizon: 'combined' | 'anti_quant' | 'reflexivity' | 'mean_reversion' = 'combined',
 ): Promise<CachedAiReport> {
   const { data } = await api.get(`/stocks/${code}/ai-report`, {
     params: { horizon },

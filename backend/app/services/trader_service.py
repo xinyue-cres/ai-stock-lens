@@ -22,7 +22,7 @@ from app.services.analysis_service import load_kline_df
 
 logger = logging.getLogger(__name__)
 
-_TRADER_HORIZONS = ["combined", "anti_quant", "reflexivity"]
+_TRADER_HORIZONS = ["combined", "anti_quant", "reflexivity", "mean_reversion"]
 _STALE_TRADING_DAYS = 2  # 报告 as_of 落后 K 线 as_of ≥ 2 交易日视为过期
 
 

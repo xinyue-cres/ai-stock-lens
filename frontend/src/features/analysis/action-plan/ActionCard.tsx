@@ -36,6 +36,7 @@ const horizonAbbrev: Record<string, string> = {
   short: '短',
   anti_quant: '反量',
   reflexivity: '反身',
+  mean_reversion: '左侧',
 }
 
 export function PriorityBadge({ p }: { p: number }) {

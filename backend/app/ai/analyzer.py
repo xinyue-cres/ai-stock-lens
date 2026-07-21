@@ -19,6 +19,7 @@ from app.ai.prompts import (
     BULL_SYSTEM,
     COMPARE_SYSTEM,
     JUDGE_SYSTEM,
+    MEAN_REVERSION_SYSTEM,
     QUANT_SIMULATOR_SYSTEM,
     REFLEXIVITY_SYSTEM,
     TRADER_SYSTEM,
@@ -27,6 +28,7 @@ from app.ai.prompts import (
     build_bull_prompt,
     build_compare_prompt,
     build_judge_prompt,
+    build_mean_reversion_prompt,
     build_quant_prompt,
     build_reflexivity_prompt,
     build_trader_prompt,
@@ -266,5 +268,39 @@ def analyze_compare(stocks_data: list[dict], cross_metrics: dict | None = None) 
     raw.setdefault("risk_note", "")
     raw.setdefault("summary", "")
     raw.setdefault("report_md", "")
+
+    return raw
+
+
+def analyze_mean_reversion(
+    stock_info: dict, mr_data: dict, indicators: dict
+) -> dict[str, Any]:
+    """左侧机会（均值回归+支撑强度）视角：单次调用。"""
+    logger.info("左侧机会 · 单次调用")
+    raw = _chat_json(
+        MEAN_REVERSION_SYSTEM,
+        build_mean_reversion_prompt(stock_info, mr_data, indicators),
+        temperature=0.35,
+    )
+
+    raw.setdefault("opportunity_level", "none")
+    raw.setdefault("verdict", "neutral")
+    raw.setdefault("confidence", 0.0)
+    raw.setdefault("summary", "")
+    raw.setdefault("report_md", "")
+    raw.setdefault("key_signals", [])
+    raw.setdefault("risks", [])
+    raw.setdefault("scenarios", [])
+    raw.setdefault("support_zones", [])
+    raw.setdefault("entry_plan", None)
+    raw.setdefault("statistical_edge", None)
+    raw.setdefault("invalidation", "")
+    raw.setdefault("deviation_summary", "")
+
+    scenarios = [
+        normalize_scenario(sc) for sc in (raw.get("scenarios") or [])
+        if isinstance(sc, dict)
+    ]
+    raw["scenarios"] = scenarios
 
     return raw

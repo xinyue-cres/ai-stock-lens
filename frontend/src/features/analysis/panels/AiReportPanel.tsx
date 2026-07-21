@@ -9,7 +9,7 @@ import { HorizonReport } from '../ai/HorizonReport'
 
 const { Title, Text } = Typography
 
-const ALL_HORIZONS: Horizon[] = ['combined', 'anti_quant', 'reflexivity']
+const ALL_HORIZONS: Horizon[] = ['combined', 'anti_quant', 'reflexivity', 'mean_reversion']
 
 export function AiReportPanel() {
   const { code } = useStock()
@@ -107,6 +107,11 @@ export function AiReportPanel() {
               key: 'reflexivity',
               label: '反身视角',
               children: <HorizonReport horizon="reflexivity" />,
+            },
+            {
+              key: 'mean_reversion',
+              label: '左侧机会',
+              children: <HorizonReport horizon="mean_reversion" />,
             },
           ]}
         />

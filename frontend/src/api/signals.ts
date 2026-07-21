@@ -21,6 +21,7 @@ export interface ReportTimes {
   combined?: string | null
   anti_quant?: string | null
   reflexivity?: string | null
+  mean_reversion?: string | null
   action_plan?: string | null
 }
 

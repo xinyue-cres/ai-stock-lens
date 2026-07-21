@@ -12,12 +12,13 @@ import { useStock } from '@/features/stock-context'
 
 const { Text } = Typography
 
-type Horizon = 'combined' | 'anti_quant' | 'reflexivity'
+type Horizon = 'combined' | 'anti_quant' | 'reflexivity' | 'mean_reversion'
 
 const horizonLabel: Record<Horizon, string> = {
   combined: '综合',
   anti_quant: '反量',
   reflexivity: '反身',
+  mean_reversion: '左侧',
 }
 
 /**

@@ -28,6 +28,10 @@ from app.ai.prompts.compare import (
     COMPARE_SYSTEM,
     build_compare_prompt,
 )
+from app.ai.prompts.mean_reversion import (
+    MEAN_REVERSION_SYSTEM,
+    build_mean_reversion_prompt,
+)
 from app.ai.prompts.chat import (
     CHAT_SYSTEM,
 )
@@ -49,5 +53,7 @@ __all__ = [
     "build_trader_prompt",
     "COMPARE_SYSTEM",
     "build_compare_prompt",
+    "MEAN_REVERSION_SYSTEM",
+    "build_mean_reversion_prompt",
     "CHAT_SYSTEM",
 ]

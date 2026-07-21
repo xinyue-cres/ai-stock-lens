@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient, useIsMutating, keepPreviousData 
 import { AiReport, generateAiReport, getCachedAiReport } from '@/api/analysis'
 import { useStock } from '@/features/stock-context/StockContext'
 
-export type Horizon = 'combined' | 'anti_quant' | 'reflexivity'
+export type Horizon = 'combined' | 'anti_quant' | 'reflexivity' | 'mean_reversion'
 
 /** 各处共用的 mutationKey 生成函数，确保一键按钮和 Tab 子按钮共享同一个 key。 */
 export function aiReportMutationKey(code: string, horizon: Horizon) {

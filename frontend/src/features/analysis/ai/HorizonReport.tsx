@@ -17,6 +17,7 @@ const horizonEmpty: Record<Horizon, string> = {
   combined: '综合',
   anti_quant: '反量',
   reflexivity: '反身',
+  mean_reversion: '左侧',
 }
 
 const antiQuantHint: Record<string, string> = {
