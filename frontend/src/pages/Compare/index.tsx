@@ -162,9 +162,30 @@ function CompareReportView({ report }: { report: CompareReport }) {
       {/* Markdown 报告 */}
       {report.report_md && (
         <Card size="small" title="完整报告">
-          <div style={{ fontSize: 13, lineHeight: 1.7 }}>
+          <div className="compare-report-md" style={{ fontSize: 13, lineHeight: 1.7 }}>
             <Markdown>{report.report_md}</Markdown>
           </div>
+          <style>{`
+            .compare-report-md table {
+              width: 100%;
+              border-collapse: collapse;
+              margin: 12px 0;
+              font-size: 12px;
+            }
+            .compare-report-md th,
+            .compare-report-md td {
+              border: 1px solid #e5e7eb;
+              padding: 6px 10px;
+              text-align: left;
+            }
+            .compare-report-md th {
+              background: #f9fafb;
+              font-weight: 600;
+            }
+            .compare-report-md tr:hover td {
+              background: #f9fafb;
+            }
+          `}</style>
         </Card>
       )}
     </div>
