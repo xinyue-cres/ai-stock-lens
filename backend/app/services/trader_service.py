@@ -30,6 +30,7 @@ _HORIZON_LABEL = {
     "combined": "综合",
     "anti_quant": "反量化",
     "reflexivity": "反身性",
+    "mean_reversion": "左侧机会",
 }
 
 
