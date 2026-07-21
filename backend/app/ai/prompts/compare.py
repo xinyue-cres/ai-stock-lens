@@ -53,8 +53,8 @@ ranking 按 score 降序排列。allocation 按 pct 降序排列。
 """
 
 
-def build_compare_prompt(stocks_data: list[dict]) -> str:
-    """拼接多票数据为 user prompt。
+def build_compare_prompt(stocks_data: list[dict], cross_metrics: dict | None = None) -> str:
+    """拼接多票数据 + 跨票指标为 user prompt。
 
     stocks_data 每项结构：
     {
@@ -70,12 +70,18 @@ def build_compare_prompt(stocks_data: list[dict]) -> str:
         "summary": str | None,
         "key_signals": list,
         "scenarios": list,
+        "best_entry_distance": {"price": float, "distance_pct": float} | None,
+        "best_risk_reward": float | None,
     }
     """
     blocks = []
     for i, s in enumerate(stocks_data, 1):
         ma_line = f"MA5={s.get('ma5')} MA10={s.get('ma10')} MA20={s.get('ma20')} MA60={s.get('ma60')}"
         verdict_line = f"verdict={s.get('verdict', '未分析')} confidence={s.get('confidence', 'N/A')}"
+        entry_dist = s.get("best_entry_distance")
+        entry_line = f"最近买入触发距离={entry_dist['distance_pct']}%(@{entry_dist['price']})" if entry_dist else "无明确买入触发"
+        rr = s.get("best_risk_reward")
+        rr_line = f"最优盈亏比=1:{rr}" if rr else "无盈亏比数据"
         block = (
             f"【{i}. {s.get('name')}（{s.get('code')}）】\n"
             f"  close={s.get('close')} pct_chg={s.get('pct_chg')}% turnover={s.get('turnover')}%\n"
@@ -84,12 +90,35 @@ def build_compare_prompt(stocks_data: list[dict]) -> str:
             f"  AI: {verdict_line}\n"
             f"  摘要: {s.get('summary') or '无'}\n"
             f"  关键信号: {s.get('key_signals') or '无'}\n"
+            f"  进场时机: {entry_line} · 资金效率: {rr_line}\n"
             f"  scenarios: {s.get('scenarios') or '无'}"
         )
         blocks.append(block)
 
+    cross_section = ""
+    if cross_metrics:
+        parts = []
+        corr = cross_metrics.get("correlation_matrix", [])
+        if corr:
+            corr_lines = [f"  {c['pair']}: {c['corr']} ({c['desc']})" for c in corr]
+            parts.append("【价格相关性矩阵（近60日涨跌相关系数）】\n" + "\n".join(corr_lines))
+
+        excess = cross_metrics.get("excess_returns", [])
+        if excess:
+            excess_lines = [f"  {e['name']}: 60日累计{e['cum_return_60d']:+.1f}%，超额{e['excess_vs_avg']:+.1f}%" for e in excess]
+            parts.append("【超额收益对比（相对组内平均）】\n" + "\n".join(excess_lines))
+
+        vol_note = cross_metrics.get("portfolio_vol_note", "")
+        if vol_note:
+            parts.append(f"【组合分散效果】\n  {vol_note}")
+
+        if parts:
+            cross_section = "\n\n" + "\n\n".join(parts)
+
     return f"""请对以下 {len(stocks_data)} 只 A 股进行横向对比分析。
 
 {chr(10).join(blocks)}
+{cross_section}
 
-请严格按 system 约定的 JSON schema 输出。"""
+请基于以上数据（特别是跨票的相关性、超额收益、进场距离、盈亏比等新信息）给出有区分度的对比结论。
+严格按 system 约定的 JSON schema 输出。"""

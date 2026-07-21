@@ -251,12 +251,12 @@ def analyze_trader(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def analyze_compare(stocks_data: list[dict]) -> dict[str, Any]:
+def analyze_compare(stocks_data: list[dict], cross_metrics: dict | None = None) -> dict[str, Any]:
     """多股横向对比分析：单次调用。"""
     logger.info("对比分析 · %d 只票", len(stocks_data))
     raw = _chat_json(
         COMPARE_SYSTEM,
-        build_compare_prompt(stocks_data),
+        build_compare_prompt(stocks_data, cross_metrics),
         temperature=0.3,
     )
 
