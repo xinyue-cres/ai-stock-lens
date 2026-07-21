@@ -67,15 +67,15 @@ def _trading_days_between(older: date, newer: date) -> int:
     return count
 
 
-def _condense_report(report: AIReport) -> dict:
-    """精简 AIReport → Trader 需要的字段：verdict / confidence / summary / scenarios。"""
+def _condense_report(report: AIReport, horizon: str) -> dict:
+    """精简 AIReport → Trader 需要的字段。按 horizon 额外传递关键结构化信息。"""
     extras: dict = {}
     if report.extras_json:
         try:
             extras = json.loads(report.extras_json)
         except json.JSONDecodeError:
             extras = {}
-    return {
+    base = {
         "as_of_date": str(report.as_of_date),
         "verdict": report.verdict,
         "confidence": report.confidence,
@@ -84,6 +84,31 @@ def _condense_report(report: AIReport) -> dict:
         "key_signals": extras.get("key_signals", []),
         "risks": extras.get("risks", []),
     }
+    if horizon == "anti_quant":
+        trap = extras.get("trap_risk")
+        if trap:
+            base["trap_risk"] = trap
+        qo = extras.get("quant_output")
+        if qo and isinstance(qo, dict):
+            base["quant_brief"] = {
+                "crowding_level": qo.get("crowding_level"),
+                "positioning_bias": qo.get("positioning_bias"),
+                "next_5d_pressure": qo.get("next_5d_pressure"),
+                "dominant_quant_style": qo.get("dominant_quant_style"),
+            }
+    elif horizon == "reflexivity":
+        base["reflexivity_stage"] = extras.get("reflexivity_stage")
+        fl = extras.get("feedback_loop")
+        if fl:
+            base["feedback_loop"] = fl
+    elif horizon == "mean_reversion":
+        base["opportunity_level"] = extras.get("opportunity_level")
+        base["support_zones"] = extras.get("support_zones")
+        base["entry_plan"] = extras.get("entry_plan")
+        se = extras.get("statistical_edge")
+        if se:
+            base["statistical_edge"] = se
+    return base
 
 
 def build_action_plan_input(session: Session, code: str) -> dict[str, Any]:
@@ -127,7 +152,7 @@ def build_action_plan_input(session: Session, code: str) -> dict[str, Any]:
                 f"{label}报告基于 {r.as_of_date} 数据（落后 {days_behind} 交易日）"
             )
             # 过期报告仍纳入，但由 prompt 和前端提示用户
-        reports[horizon] = {**_condense_report(r), "trading_days_behind": days_behind}
+        reports[horizon] = {**_condense_report(r, horizon), "trading_days_behind": days_behind}
 
     # 3. 拉持仓
     pos = position_service.get_position(session, code)
