@@ -80,6 +80,8 @@ def _condense_report(report: AIReport, horizon: str) -> dict:
         "verdict": report.verdict,
         "confidence": report.confidence,
         "summary": report.summary,
+        "view_applicability": extras.get("view_applicability"),
+        "why_applicable": extras.get("why_applicable"),
         "scenarios": extras.get("scenarios", []),
         "key_signals": extras.get("key_signals", []),
         "risks": extras.get("risks", []),

@@ -100,6 +100,8 @@ confidence 必须严格对照以下区间：
 
 【输出 JSON】
 {
+  "view_applicability": "high" | "medium" | "low",
+  "why_applicable": "<=30字，综合视角今天为什么有/没有明确方向",
   "verdict": "bullish" | "bearish" | "neutral" | "caution",
   "confidence": 0.0-1.0,
   "tradability": "worth_entry" | "wait_better_rr" | "no_clear_edge",

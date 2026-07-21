@@ -108,6 +108,8 @@ def analyze_debate(stock_info: dict, indicators: dict) -> dict[str, Any]:
         "verdict": judge.get("verdict", "neutral"),
         "confidence": judge.get("confidence"),
         "tradability": judge.get("tradability"),
+        "view_applicability": judge.get("view_applicability"),
+        "why_applicable": judge.get("why_applicable"),
         "evidence_review": judge.get("evidence_review", []),
         "summary": judge.get("summary"),
         "report_md": judge.get("report_md", ""),

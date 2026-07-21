@@ -52,11 +52,17 @@ def normalize_scenario(sc: dict[str, Any]) -> dict[str, Any]:
             direction = "bearish"
         else:
             direction = "neutral"
+    scenario_type = sc.get("scenario_type") or "observe"
+    valid_types = {"entry", "add", "trim", "stop_loss", "take_profit", "observe"}
+    if scenario_type not in valid_types:
+        scenario_type = "observe"
     return {
         "trigger": sc.get("trigger", ""),
         "action": action,
         "direction": direction,
+        "scenario_type": scenario_type,
         "probability": sc.get("probability"),
+        "risk_reward": sc.get("risk_reward") if isinstance(sc.get("risk_reward"), str) else None,
         "conditions": normalize_conditions(sc.get("conditions")),
     }
 

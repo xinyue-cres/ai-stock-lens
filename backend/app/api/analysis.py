@@ -135,6 +135,8 @@ def gen_ai_report(
         "risks": result.get("risks", []),
         "scenarios": result.get("scenarios", []),
         "reflection": result.get("reflection"),
+        "view_applicability": result.get("view_applicability"),
+        "why_applicable": result.get("why_applicable"),
         "bull": result.get("bull"),
         "bear": result.get("bear"),
         "judge": result.get("judge"),

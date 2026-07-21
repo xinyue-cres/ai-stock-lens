@@ -1,4 +1,4 @@
-"""端到端验证：AKShare 拉数据 → 算指标 → 调 DeepSeek → 打印报告。
+"""端到端验证：AKShare 拉数据 → 算指标 → 调 AI（综合视角）→ 打印报告。
 
 不依赖 sqlmodel/apscheduler，只测核心链路是否可用。
 
@@ -16,6 +16,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+
 # 手动加载 .env（避免依赖 pydantic_settings）
 def _load_env():
     env_file = Path(__file__).resolve().parents[1] / ".env"
@@ -31,9 +32,8 @@ def _load_env():
 _load_env()
 
 import akshare as ak  # noqa: E402,F401  # 触发早期导入检查
-from openai import OpenAI  # noqa: E402
 
-from app.ai.prompts import SYSTEM_PROMPT, build_user_prompt  # noqa: E402
+from app.ai.analyzer import analyze_debate  # noqa: E402
 from app.datasource.router import get_data_router  # noqa: E402
 from app.indicators.engine import compute_all  # noqa: E402
 from app.indicators.signals import scan_signals  # noqa: E402
@@ -49,29 +49,6 @@ def fetch_kline():
     df = get_data_router().fetch_stock_daily(CODE, start, end, adjust="qfq")
     print(f"  ✓ 拉到 {len(df)} 根 K 线，最新日期 {df['trade_date'].iloc[-1]}")
     return df
-
-
-def call_ai(indicators: dict) -> dict:
-    api_key = os.environ.get("AI_API_KEY")
-    base_url = os.environ.get("AI_BASE_URL", "https://api.deepseek.com/v1")
-    model = os.environ.get("AI_MODEL", "deepseek-chat")
-    if not api_key:
-        raise RuntimeError("AI_API_KEY 未设置")
-
-    print(f"→ 调用 {model} @ {base_url}")
-    client = OpenAI(api_key=api_key, base_url=base_url)
-    stock_info = {"code": CODE, "name": NAME, "market": "SH"}
-    resp = client.chat.completions.create(
-        model=model,
-        messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": build_user_prompt(stock_info, indicators, horizon="medium")},
-        ],
-        response_format={"type": "json_object"},
-        temperature=0.3,
-    )
-    raw = resp.choices[0].message.content or "{}"
-    return json.loads(raw)
 
 
 def main():
@@ -91,14 +68,20 @@ def main():
     for s in signals[:5]:
         print(f"    - [{s['direction']:8s}] {s['label']}  (weight={s['weight']})")
 
-    report = call_ai(indicators)
-    print("\n=" * 30)
+    stock_info = {"code": CODE, "name": NAME, "market": "SH"}
+    indicators_bundle = {"daily": indicators, "weekly": {"empty": True}, "market": {}, "as_of_date": indicators.get("as_of_date")}
+
+    print("→ 调用 AI（综合视角 analyze_debate）")
+    report = analyze_debate(stock_info, indicators_bundle)
+
+    print("\n" + "=" * 60)
     print("AI 报告：")
     print("=" * 60)
     print(f"倾向：{report.get('verdict')}  置信度：{report.get('confidence')}")
     print(f"摘要：{report.get('summary')}")
     print(f"关键信号：{report.get('key_signals')}")
     print(f"风险提示：{report.get('risks')}")
+    print(f"scenarios: {json.dumps(report.get('scenarios', []), ensure_ascii=False, indent=2)}")
     print("\n--- Markdown 报告 ---")
     print(report.get("report_md", "")[:2000])
     print("=" * 60)
