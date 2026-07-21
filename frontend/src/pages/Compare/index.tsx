@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Card, Empty, Spin, Tag, Typography } from 'antd'
+import Markdown from 'react-markdown'
 import { getCompareHistory, getCompareDetail, CompareReport, CompareListItem } from '@/api/compare'
 import { verdictPalette, Verdict } from '@/shared/theme'
 
@@ -161,8 +162,8 @@ function CompareReportView({ report }: { report: CompareReport }) {
       {/* Markdown 报告 */}
       {report.report_md && (
         <Card size="small" title="完整报告">
-          <div style={{ fontSize: 13, lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
-            {report.report_md}
+          <div style={{ fontSize: 13, lineHeight: 1.7 }}>
+            <Markdown>{report.report_md}</Markdown>
           </div>
         </Card>
       )}
