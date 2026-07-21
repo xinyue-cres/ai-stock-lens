@@ -1,11 +1,14 @@
 import { Button, Dropdown, Modal, Typography, message } from 'antd'
-import { DeleteOutlined, ExperimentOutlined, FolderOutlined, SyncOutlined, ThunderboltOutlined } from '@ant-design/icons'
+import { DeleteOutlined, ExperimentOutlined, FolderOutlined, SwapOutlined, SyncOutlined, ThunderboltOutlined } from '@ant-design/icons'
 import { useQueryClient } from '@tanstack/react-query'
+import { useNavigate } from 'react-router-dom'
 import { SignalItem } from '@/api/signals'
 import { patchStock, StockGroup } from '@/api/groups'
 import { removeWatchlist } from '@/api/watchlist'
 import { syncSingleStock } from '@/api/sync'
+import { generateCompare } from '@/api/compare'
 import { BatchTaskType } from '@/api/batchTask'
+import { useState } from 'react'
 
 const { Text } = Typography
 
@@ -26,6 +29,8 @@ export default function BatchActionBar({
   batchRunning, batchType, batchCompleted, batchTotal, onBatchStart,
 }: BatchActionBarProps) {
   const qc = useQueryClient()
+  const navigate = useNavigate()
+  const [comparing, setComparing] = useState(false)
 
   if (selected.size === 0 && !batchRunning) return null
 
@@ -98,6 +103,23 @@ export default function BatchActionBar({
             }} />
             <NavItem icon={<ExperimentOutlined />} label="AI 分析" onClick={() => onBatchStart('ai')} />
             <NavItem icon={<ThunderboltOutlined />} label="操作指示" onClick={() => onBatchStart('action_plan')} />
+            <NavItem
+              icon={<SwapOutlined />}
+              label={comparing ? '对比中...' : '对比分析'}
+              onClick={() => {
+                if (selected.size < 2) { message.warning('至少选择 2 只'); return }
+                if (selected.size > 6) { message.warning('最多选择 6 只'); return }
+                setComparing(true)
+                generateCompare([...selected]).then((res) => {
+                  setComparing(false)
+                  onClear()
+                  navigate(`/compare?id=${res.id}`)
+                }).catch(() => {
+                  setComparing(false)
+                  message.error('对比分析失败')
+                })
+              }}
+            />
             <div style={{ borderTop: '1px solid #f0f0f0', margin: '4px 0' }} />
             <NavItem icon={<DeleteOutlined />} label="移除" danger onClick={() => {
               Modal.confirm({

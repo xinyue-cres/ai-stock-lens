@@ -24,6 +24,10 @@ from app.ai.prompts.trader import (
     TRADER_SYSTEM,
     build_trader_prompt,
 )
+from app.ai.prompts.compare import (
+    COMPARE_SYSTEM,
+    build_compare_prompt,
+)
 from app.ai.prompts.chat import (
     CHAT_SYSTEM,
 )
@@ -43,5 +47,7 @@ __all__ = [
     "build_reflexivity_prompt",
     "TRADER_SYSTEM",
     "build_trader_prompt",
+    "COMPARE_SYSTEM",
+    "build_compare_prompt",
     "CHAT_SYSTEM",
 ]

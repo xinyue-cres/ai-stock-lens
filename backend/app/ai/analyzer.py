@@ -17,6 +17,7 @@ from app.ai.prompts import (
     ANTI_QUANT_SYSTEM,
     BEAR_SYSTEM,
     BULL_SYSTEM,
+    COMPARE_SYSTEM,
     JUDGE_SYSTEM,
     QUANT_SIMULATOR_SYSTEM,
     REFLEXIVITY_SYSTEM,
@@ -24,6 +25,7 @@ from app.ai.prompts import (
     build_anti_quant_prompt,
     build_bear_prompt,
     build_bull_prompt,
+    build_compare_prompt,
     build_judge_prompt,
     build_quant_prompt,
     build_reflexivity_prompt,
@@ -247,3 +249,22 @@ def analyze_trader(payload: dict[str, Any]) -> dict[str, Any]:
         "bias_checks": bias_checks,
         "confidence_adjustment": conf_adj,
     }
+
+
+def analyze_compare(stocks_data: list[dict]) -> dict[str, Any]:
+    """多股横向对比分析：单次调用。"""
+    logger.info("对比分析 · %d 只票", len(stocks_data))
+    raw = _chat_json(
+        COMPARE_SYSTEM,
+        build_compare_prompt(stocks_data),
+        temperature=0.3,
+    )
+
+    raw.setdefault("ranking", [])
+    raw.setdefault("allocation", [])
+    raw.setdefault("correlation_note", "")
+    raw.setdefault("risk_note", "")
+    raw.setdefault("summary", "")
+    raw.setdefault("report_md", "")
+
+    return raw
