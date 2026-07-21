@@ -28,7 +28,7 @@ _STALE_TRADING_DAYS = 2  # 报告 as_of 落后 K 线 as_of ≥ 2 交易日视为
 
 _HORIZON_LABEL = {
     "combined": "综合",
-    "anti_quant": "反量化",
+    "anti_quant": "量化跟随",
     "reflexivity": "反身性",
     "mean_reversion": "左侧机会",
 }

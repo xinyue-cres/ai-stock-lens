@@ -124,21 +124,21 @@ def analyze_debate(stock_info: dict, indicators: dict) -> dict[str, Any]:
 def analyze_anti_quant(
     stock_info: dict, factors: dict, indicators: dict,
 ) -> dict[str, Any]:
-    """反量化视角：两次串行调用。
+    """量化跟随视角：两次串行调用。
 
     Step 1: quant simulator 拿量化因子快照 + 大盘背景，产出机构动作画像
-    Step 2: anti-quant 拿 quant 输出 + 日线/周线指标，产出散户可执行的反向预案
+    Step 2: 跟随策略 拿 quant 输出 + 日线/周线指标，产出散户跟随/防收割预案
     """
     market = indicators.get("market") if isinstance(indicators, dict) else None
 
-    logger.info("反量化 · Step 1 · 量化模拟")
+    logger.info("量化跟随 · Step 1 · 量化模拟")
     quant_output = _chat_json(
         QUANT_SIMULATOR_SYSTEM,
         build_quant_prompt(stock_info, factors, market or {}),
         temperature=0.3,
     )
 
-    logger.info("反量化 · Step 2 · 反向策略")
+    logger.info("量化跟随 · Step 2 · 跟随策略")
     anti_output = _chat_json(
         ANTI_QUANT_SYSTEM,
         build_anti_quant_prompt(stock_info, quant_output, indicators),
@@ -168,7 +168,7 @@ def analyze_anti_quant(
         "risks": anti_output.get("risks", []),
         "key_signals": anti_output.get("key_signals", []),
         "reflection": anti_output.get("reflection"),
-        # 反量化专属：量化 agent 的完整输出，前端展开可看
+        # 量化跟随专属：量化 agent 的完整输出，前端展开可看
         "quant_output": quant_output,
         "trap_risk": normalize_trap_risk(anti_output.get("trap_risk")),
     }

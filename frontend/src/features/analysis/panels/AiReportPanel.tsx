@@ -44,6 +44,14 @@ export function AiReportPanel() {
       qc.invalidateQueries({ queryKey: ['action-plan-deps', code] })
     },
   })
+  const genMeanReversion = useMutation({
+    mutationKey: aiReportMutationKey(code, 'mean_reversion'),
+    mutationFn: () => generateAiReport(code, { horizon: 'mean_reversion', force: true }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['ai-report-cached', code, 'mean_reversion'] })
+      qc.invalidateQueries({ queryKey: ['action-plan-deps', code] })
+    },
+  })
 
   const anyPending = useIsMutating({
     predicate: (m) => {
@@ -56,6 +64,7 @@ export function AiReportPanel() {
     genCombined.mutate()
     genAntiQuant.mutate()
     genReflexivity.mutate()
+    genMeanReversion.mutate()
   }
 
   return (
@@ -100,7 +109,7 @@ export function AiReportPanel() {
             },
             {
               key: 'anti_quant',
-              label: '反量视角',
+              label: '量化视角',
               children: <HorizonReport horizon="anti_quant" />,
             },
             {

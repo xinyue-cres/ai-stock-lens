@@ -15,16 +15,16 @@ interface Props {
 
 const horizonEmpty: Record<Horizon, string> = {
   combined: '综合',
-  anti_quant: '反量',
+  anti_quant: '量化',
   reflexivity: '反身',
   mean_reversion: '左侧',
 }
 
 const antiQuantHint: Record<string, string> = {
-  neutral: '未发现拥挤风险，可顺势跟随',
-  caution: '存在拥挤迹象，注意风控',
-  bearish: '多头拥挤严重，警惕反转',
-  bullish: '空头拥挤，反弹概率较高',
+  neutral: '量化方向不明，暂不跟随',
+  caution: '有跟随机会但收割风险高',
+  bearish: '量化在撤离/卖出，规避为主',
+  bullish: '量化做多可跟随，注意撤离信号',
 }
 
 /** 单一视角报告：拿 hook 拿状态，组合展示子块。 */

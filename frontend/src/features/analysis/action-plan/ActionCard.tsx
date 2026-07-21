@@ -34,7 +34,7 @@ const horizonAbbrev: Record<string, string> = {
   combined: '综合',
   medium: '中',
   short: '短',
-  anti_quant: '反量',
+  anti_quant: '量化',
   reflexivity: '反身',
   mean_reversion: '左侧',
 }
