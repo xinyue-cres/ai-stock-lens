@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Card, Empty, Spin, Tag, Typography } from 'antd'
 import Markdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { getCompareHistory, getCompareDetail, CompareReport, CompareListItem } from '@/api/compare'
 import { verdictPalette, Verdict } from '@/shared/theme'
 
@@ -163,7 +164,7 @@ function CompareReportView({ report }: { report: CompareReport }) {
       {report.report_md && (
         <Card size="small" title="完整报告">
           <div className="compare-report-md" style={{ fontSize: 13, lineHeight: 1.7 }}>
-            <Markdown>{report.report_md}</Markdown>
+            <Markdown remarkPlugins={[remarkGfm]}>{report.report_md}</Markdown>
           </div>
           <style>{`
             .compare-report-md table {
