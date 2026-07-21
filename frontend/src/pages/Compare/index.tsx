@@ -64,15 +64,18 @@ export default function ComparePage() {
                 borderLeft: activeId === item.id ? '3px solid #3b82f6' : '3px solid transparent',
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div style={{ fontSize: 12, fontWeight: 500 }}>
-                  {item.names.join(' vs ')}
-                </div>
+              <div style={{ fontSize: 12, fontWeight: 500 }}>
+                {item.names.join(' vs ')}
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 2 }}>
+                <Text type="secondary" style={{ fontSize: 11 }}>
+                  {item.created_at} · {item.codes.length} 只
+                </Text>
                 <Button
                   type="text"
                   size="small"
                   danger
-                  icon={<DeleteOutlined style={{ fontSize: 11 }} />}
+                  icon={<DeleteOutlined style={{ fontSize: 10 }} />}
                   onClick={(e) => {
                     e.stopPropagation()
                     deleteCompare(item.id).then(() => {
@@ -81,12 +84,9 @@ export default function ComparePage() {
                       if (activeId === item.id) setActiveId(null)
                     })
                   }}
-                  style={{ padding: '0 4px' }}
+                  style={{ padding: '0 2px', height: 16 }}
                 />
               </div>
-              <Text type="secondary" style={{ fontSize: 11 }}>
-                {item.created_at} · {item.codes.length} 只
-              </Text>
             </div>
           ))}
         </Card>
