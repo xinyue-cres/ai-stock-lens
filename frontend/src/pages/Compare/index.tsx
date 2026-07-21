@@ -1,16 +1,18 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
-import { Card, Empty, Spin, Tag, Typography } from 'antd'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { Button, Card, Empty, Spin, Tag, Typography, message } from 'antd'
+import { DeleteOutlined } from '@ant-design/icons'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { getCompareHistory, getCompareDetail, CompareReport, CompareListItem } from '@/api/compare'
+import { getCompareHistory, getCompareDetail, deleteCompare, CompareReport, CompareListItem } from '@/api/compare'
 import { verdictPalette, Verdict } from '@/shared/theme'
 
-const { Text, Title } = Typography
+const { Text } = Typography
 
 export default function ComparePage() {
   const [searchParams, setSearchParams] = useSearchParams()
+  const qc = useQueryClient()
   const [activeId, setActiveId] = useState<number | null>(
     searchParams.get('id') ? Number(searchParams.get('id')) : null
   )
@@ -62,8 +64,25 @@ export default function ComparePage() {
                 borderLeft: activeId === item.id ? '3px solid #3b82f6' : '3px solid transparent',
               }}
             >
-              <div style={{ fontSize: 12, fontWeight: 500 }}>
-                {item.names.join(' vs ')}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ fontSize: 12, fontWeight: 500 }}>
+                  {item.names.join(' vs ')}
+                </div>
+                <Button
+                  type="text"
+                  size="small"
+                  danger
+                  icon={<DeleteOutlined style={{ fontSize: 11 }} />}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    deleteCompare(item.id).then(() => {
+                      message.success('已删除')
+                      qc.invalidateQueries({ queryKey: ['compare-history'] })
+                      if (activeId === item.id) setActiveId(null)
+                    })
+                  }}
+                  style={{ padding: '0 4px' }}
+                />
               </div>
               <Text type="secondary" style={{ fontSize: 11 }}>
                 {item.created_at} · {item.codes.length} 只

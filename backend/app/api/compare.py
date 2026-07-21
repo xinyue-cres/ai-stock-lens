@@ -331,3 +331,13 @@ def compare_detail(report_id: int, session: Session = Depends(get_session)):
         "created_at": report.created_at.strftime("%Y-%m-%d %H:%M"),
         **extras,
     }
+
+
+@router.delete("/{report_id}")
+def delete_compare(report_id: int, session: Session = Depends(get_session)):
+    report = session.get(AIReport, report_id)
+    if not report or report.horizon != "compare":
+        raise HTTPException(404, "对比报告不存在")
+    session.delete(report)
+    session.commit()
+    return {"ok": True}

@@ -54,3 +54,7 @@ export async function getCompareDetail(id: number): Promise<CompareReport> {
   const { data } = await api.get(`/compare/${id}`)
   return data
 }
+
+export async function deleteCompare(id: number): Promise<void> {
+  await api.delete(`/compare/${id}`)
+}
