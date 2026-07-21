@@ -1,7 +1,7 @@
 import { Alert, Button, Empty, Space, Spin, Tag } from 'antd'
 import { WarningOutlined } from '@ant-design/icons'
 import { Horizon, useAiReport, useStockAnalysis } from '@/features/stock-context'
-import { TrapRisk } from '@/api/analysis'
+import { TrapRisk, RetailTrapRisk } from '@/api/analysis'
 import { DebateSection } from './DebateSection'
 import { QuantOutputCollapse } from './QuantOutputCollapse'
 import { ReflectionBanner } from './ReflectionBanner'
@@ -89,6 +89,9 @@ export function HorizonReport({ horizon }: Props) {
           {data.trap_risk && data.trap_risk.type !== 'none' && (
             <TrapRiskBanner trap={data.trap_risk} />
           )}
+          {data.retail_trap_risk && data.retail_trap_risk.type !== 'none' && (
+            <RetailTrapBanner trap={data.retail_trap_risk} />
+          )}
           {data.quant_output && <QuantOutputCollapse data={data.quant_output} />}
           {(data.reflexivity_stage || data.narrative || data.feedback_loop) && (
             <ReflexivityCollapse
@@ -155,6 +158,41 @@ function TrapRiskBanner({ trap }: { trap: TrapRisk }) {
           {trap.evidence.join('；')}
         </span>
       )}
+    </div>
+  )
+}
+
+const retailTrapTypeLabel: Record<string, string> = {
+  chasing_top: '追高陷阱',
+  panic_selling: '恐慌割肉陷阱',
+}
+
+const retailTrapColor: Record<string, string> = {
+  chasing_top: '#dc2626',
+  panic_selling: '#7c3aed',
+}
+
+function RetailTrapBanner({ trap }: { trap: RetailTrapRisk }) {
+  const label = retailTrapTypeLabel[trap.type] || trap.type
+  const probPct = Math.round(trap.probability * 100)
+  const bgColor = trap.type === 'chasing_top' ? '#fef2f2' : '#f5f3ff'
+  const borderColor = trap.type === 'chasing_top' ? '#fecaca' : '#ddd6fe'
+  const iconColor = retailTrapColor[trap.type] || '#ea580c'
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '8px 12px', background: bgColor, borderRadius: 6, border: `1px solid ${borderColor}` }}>
+      <WarningOutlined style={{ color: iconColor, fontSize: 14, marginTop: 2 }} />
+      <div style={{ flex: 1 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Tag color={trap.type === 'chasing_top' ? 'red' : 'purple'} style={{ margin: 0 }}>{label} · {probPct}%</Tag>
+          {trap.warning && <span style={{ fontSize: 13, fontWeight: 500 }}>{trap.warning}</span>}
+        </div>
+        {trap.evidence.length > 0 && (
+          <div style={{ fontSize: 12, color: '#78716c', marginTop: 4 }}>
+            {trap.evidence.join('；')}
+          </div>
+        )}
+      </div>
     </div>
   )
 }

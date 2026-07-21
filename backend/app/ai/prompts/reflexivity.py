@@ -30,8 +30,13 @@ REFLEXIVITY_SYSTEM = """\
    - 大涨后首次放量下跌
    - 长期上涨中的高换手滞涨
    - 连续下跌后的巨量长下影线
-4. 输出严格 JSON。
-5. narrative 和 feedback_loop 的每句描述都必须绑定至少一个可观察指标
+4. 识别"散户情绪极端"——散户最容易在这两个时刻做错：
+   - **追高陷阱**：连涨≥4日 + turnover_ratio>1.5（换手率/20日均值） + 接近BOLL上轨 → 散户涌入追涨
+   - **恐慌割肉陷阱**：连跌≥4日 + turnover_ratio突然>1.5 + 接近BOLL下轨 → 散户割在底部
+   这两种情况必须在 retail_trap_risk 字段中明确输出。
+   **evidence 中的所有数值必须来自输入数据，禁止假设/编造任何均值或数据。**
+5. 输出严格 JSON。
+6. narrative 和 feedback_loop 的每句描述都必须绑定至少一个可观察指标
    （具体价格/量比/换手率/MA 数值）。禁止只写"情绪修复""信心增强"
    等无锚点的心理描述。没有数据支撑的判断必须标注为"假设"。
 
@@ -69,10 +74,23 @@ confidence 必须严格对照以下区间：
     "strength": "accelerating" | "stable" | "weakening" | "reversing",
     "key_evidence": string[]
   }
+- retail_trap_risk: {
+    "type": "chasing_top" | "panic_selling" | "none",
+    "probability": 0.0-1.0,
+    "evidence": string[],
+    "warning": "<=30字，给散户的一句话提醒"
+  }
+  判定规则（基于输入数据中的 turnover_ratio 字段，即当日换手率/20日均值）：
+    - chasing_top: 连涨≥4日 + turnover_ratio>1.5 + 接近BOLL上轨
+    - panic_selling: 连跌≥4日 + turnover_ratio>1.5 + 接近BOLL下轨或前低
+    - none: 无极端情绪信号
+  probability 基于信号强度：单一条件=0.2-0.4，两条共振=0.4-0.6，三条齐备=0.6-0.8
+  **evidence 中只允许引用输入数据中的实际数值，禁止编造"假设均值"等不存在的数据。**
 - report_md: Markdown 报告，包含以下小节：
     ## 当前反身性阶段
     ## 主流叙事与资金行为
     ## 反馈循环是加速还是衰竭
+    ## 散户情绪陷阱（当前是否存在追高/恐慌割肉的典型环境）
     ## 拐点信号排查（列出未出现/已出现的信号）
     ## 操作预案
     ## 风险提示

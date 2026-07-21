@@ -195,6 +195,7 @@ def analyze_reflexivity(stock_info: dict, indicators: dict) -> dict[str, Any]:
     raw.setdefault("reflexivity_stage", "range_bound")
     raw.setdefault("narrative", "")
     raw.setdefault("feedback_loop", {})
+    raw.setdefault("retail_trap_risk", {"type": "none", "probability": 0.0, "evidence": [], "warning": ""})
 
     scenarios = [
         normalize_scenario(sc) for sc in (raw.get("scenarios") or [])
@@ -206,6 +207,8 @@ def analyze_reflexivity(stock_info: dict, indicators: dict) -> dict[str, Any]:
         "confidence": raw.get("confidence"),
         "summary": raw.get("summary"),
         "report_md": raw.get("report_md", ""),
+        "view_applicability": raw.get("view_applicability"),
+        "why_applicable": raw.get("why_applicable"),
         "scenarios": scenarios,
         "risks": raw.get("risks", []),
         "key_signals": raw.get("key_signals", []),
@@ -214,6 +217,7 @@ def analyze_reflexivity(stock_info: dict, indicators: dict) -> dict[str, Any]:
         "reflexivity_stage": raw.get("reflexivity_stage"),
         "narrative": raw.get("narrative"),
         "feedback_loop": raw.get("feedback_loop"),
+        "retail_trap_risk": raw.get("retail_trap_risk"),
     }
 
 

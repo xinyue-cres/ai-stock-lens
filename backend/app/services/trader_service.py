@@ -103,6 +103,9 @@ def _condense_report(report: AIReport, horizon: str) -> dict:
         fl = extras.get("feedback_loop")
         if fl:
             base["feedback_loop"] = fl
+        rt = extras.get("retail_trap_risk")
+        if rt:
+            base["retail_trap_risk"] = rt
     elif horizon == "mean_reversion":
         base["opportunity_level"] = extras.get("opportunity_level")
         base["support_zones"] = extras.get("support_zones")

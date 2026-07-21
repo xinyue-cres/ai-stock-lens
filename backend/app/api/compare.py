@@ -101,8 +101,36 @@ def _build_stock_snapshot(session: Session, code: str, model: str) -> tuple[dict
         "scenarios": scenarios,
         "best_entry_distance": best_entry,
         "best_risk_reward": risk_reward,
+        "other_horizons": _get_other_horizons(session, code, model),
     }
     return snap, df
+
+
+def _get_other_horizons(session: Session, code: str, model: str) -> dict:
+    """取量化/反身性/左侧机会视角的精简摘要供对比分析参考。"""
+    result = {}
+    for hz in ("anti_quant", "reflexivity", "mean_reversion"):
+        r = session.exec(
+            select(AIReport)
+            .where(AIReport.code == code, AIReport.model == model, AIReport.horizon == hz)
+            .order_by(AIReport.as_of_date.desc(), AIReport.created_at.desc())
+            .limit(1)
+        ).first()
+        if not r:
+            continue
+        extras_hz: dict = {}
+        if r.extras_json:
+            try:
+                extras_hz = json.loads(r.extras_json)
+            except json.JSONDecodeError:
+                pass
+        result[hz] = {
+            "verdict": r.verdict,
+            "confidence": r.confidence,
+            "view_applicability": extras_hz.get("view_applicability"),
+            "summary": r.summary,
+        }
+    return result
 
 
 def _compute_cross_stock_metrics(snapshots: list[dict], dfs: dict[str, pd.DataFrame]) -> dict:

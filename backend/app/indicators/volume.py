@@ -21,6 +21,15 @@ def compute_volume(df: pd.DataFrame, avg_window: int = 5) -> dict:
     turnover = df["turnover"].iloc[-1] if "turnover" in df.columns else None
     turnover = float(turnover) if pd.notna(turnover) else None
 
+    turnover_avg_20 = None
+    turnover_ratio = None
+    if "turnover" in df.columns and len(df) >= 21:
+        avg20 = df["turnover"].iloc[-21:-1].mean()
+        if pd.notna(avg20) and avg20 > 0:
+            turnover_avg_20 = round(float(avg20), 3)
+            if turnover:
+                turnover_ratio = round(turnover / float(avg20), 2)
+
     latest_pct = df["pct_chg"].iloc[-1] if "pct_chg" in df.columns else None
     latest_pct = float(latest_pct) if pd.notna(latest_pct) else 0.0
 
@@ -28,6 +37,8 @@ def compute_volume(df: pd.DataFrame, avg_window: int = 5) -> dict:
 
     return {
         "turnover": turnover,
+        "turnover_avg_20": turnover_avg_20,
+        "turnover_ratio": turnover_ratio,
         "vol_ratio": round(vol_ratio, 2) if vol_ratio else None,
         "volume_pattern": pattern,
     }

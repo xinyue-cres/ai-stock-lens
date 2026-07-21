@@ -8,13 +8,15 @@ COMPARE_SYSTEM = """你是一位投资组合分析师，擅长横向对比多只
 输出：一份结构化的横向对比报告，帮助用户决定"资金应该优先进入哪只"。
 
 【分析维度】
-1. **多空方向对比**：各票当前 AI verdict 和 confidence，谁更明确看多/看空
+1. **多空方向对比**：各票综合 verdict + 其他视角是否共振（多视角一致=信号更强）
 2. **技术面强弱**：价格趋势（MA 排列）、动量（涨跌幅）、波动率（ATR）、盈亏比潜力
-3. **资金配置建议**：综合打分后排序 + 建议资金占比。考虑：
+3. **量化/反身性信号**：哪只票量化跟随信号更强、哪只处于反身性加速/衰竭阶段
+4. **左侧机会**：哪只票有统计优势的超跌反弹机会
+5. **资金配置建议**：综合打分后排序 + 建议资金占比。考虑：
    - 确定性高的多配
    - 波动大的少配
    - 同方向相关性高的要分散
-4. **相关性/分散度**：判断选中的票之间走势是否同质化
+6. **相关性/分散度**：判断选中的票之间走势是否同质化
 
 【约束】
 - A 股无做空机制，所有建议围绕"买入/持有/观望"
@@ -82,13 +84,25 @@ def build_compare_prompt(stocks_data: list[dict], cross_metrics: dict | None = N
         entry_line = f"最近买入触发距离={entry_dist['distance_pct']}%(@{entry_dist['price']})" if entry_dist else "无明确买入触发"
         rr = s.get("best_risk_reward")
         rr_line = f"最优盈亏比=1:{rr}" if rr else "无盈亏比数据"
+
+        # 其他视角精简摘要
+        other = s.get("other_horizons") or {}
+        horizon_lines = []
+        for hz, label in [("anti_quant", "量化跟随"), ("reflexivity", "反身性"), ("mean_reversion", "左侧机会")]:
+            h = other.get(hz)
+            if h:
+                appl = h.get("view_applicability") or "?"
+                horizon_lines.append(f"    {label}: verdict={h['verdict']} conf={h['confidence']} 适用={appl} | {h.get('summary') or ''}")
+        horizons_block = "\n".join(horizon_lines) if horizon_lines else "    （其他视角未生成）"
+
         block = (
             f"【{i}. {s.get('name')}（{s.get('code')}）】\n"
             f"  close={s.get('close')} pct_chg={s.get('pct_chg')}% turnover={s.get('turnover')}%\n"
             f"  {ma_line}\n"
             f"  ATR={s.get('atr')} BOLL上/下={s.get('boll_upper')}/{s.get('boll_lower')}\n"
-            f"  AI: {verdict_line}\n"
+            f"  综合AI: {verdict_line}\n"
             f"  摘要: {s.get('summary') or '无'}\n"
+            f"  其他视角:\n{horizons_block}\n"
             f"  关键信号: {s.get('key_signals') or '无'}\n"
             f"  进场时机: {entry_line} · 资金效率: {rr_line}\n"
             f"  scenarios: {s.get('scenarios') or '无'}"

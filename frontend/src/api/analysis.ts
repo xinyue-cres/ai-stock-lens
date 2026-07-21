@@ -88,6 +88,13 @@ export interface TrapRisk {
   evidence: string[]
 }
 
+export interface RetailTrapRisk {
+  type: 'chasing_top' | 'panic_selling' | 'none'
+  probability: number
+  evidence: string[]
+  warning: string
+}
+
 export interface AiReport {
   cached: boolean
   code: string
@@ -114,6 +121,7 @@ export interface AiReport {
   reflexivity_stage?: ReflexivityStage | null
   narrative?: string | null
   feedback_loop?: FeedbackLoop | null
+  retail_trap_risk?: RetailTrapRisk | null
 }
 
 export interface AiReportOptions {
