@@ -43,7 +43,8 @@ export default function StockRow({ item, groups, selectMode, checked, batchStatu
     return {
       key: `g-${g.id}`,
       label: inGroup ? `✓ ${g.name}` : `  ${g.name}`,
-      onClick: () => {
+      onClick: (e: any) => {
+        e?.domEvent?.stopPropagation()
         if (inGroup) {
           onGroupChange(curIds.filter(id => id !== g.id))
         } else {
@@ -53,7 +54,7 @@ export default function StockRow({ item, groups, selectMode, checked, batchStatu
     }
   })
   if (curIds.length > 0) {
-    groupMenu.push({ key: 'g-none', label: '清除所有分组', onClick: () => onGroupChange([]) })
+    groupMenu.push({ key: 'g-none', label: '清除所有分组', onClick: (e: any) => { e?.domEvent?.stopPropagation(); onGroupChange([]) } })
   }
 
   return (
@@ -133,7 +134,7 @@ export default function StockRow({ item, groups, selectMode, checked, batchStatu
               items: [
                 { key: 'group', label: '移动到分组', icon: <FolderOutlined />, children: groupMenu.length ? groupMenu : [{ key: 'empty', label: '暂无分组', disabled: true }] },
                 { type: 'divider' as const },
-                { key: 'remove', label: '移除', icon: <DeleteOutlined />, danger: true, onClick: () => { onRemove() } },
+                { key: 'remove', label: '移除', icon: <DeleteOutlined />, danger: true, onClick: (e: any) => { e?.domEvent?.stopPropagation(); onRemove() } },
               ],
             }}
             trigger={['click']}
