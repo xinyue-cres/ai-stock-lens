@@ -110,11 +110,7 @@ export function PositionEditModal({ code: initialCode, name, open, onClose }: Pr
   const invalidateAll = () => {
     qc.invalidateQueries({ queryKey: ['position'] })
     qc.invalidateQueries({ queryKey: ['positions-list'] })
-    qc.invalidateQueries({ queryKey: ['signals'] })
-    qc.invalidateQueries({ queryKey: ['watchlist'] })
-    // 持仓变动会改变 Trader 的建议方向（买入 → 加仓/止盈 等），失效对应缓存让下次
-    // 打开操作指示时自然重新拉；依赖状态栏也一并刷新（虽然 deps 只看 K 线+报告，
-    // 但兼顾未来可能把 position.updated_at 纳入判定）
+    qc.invalidateQueries({ queryKey: ['signals-today'] })
     qc.invalidateQueries({ queryKey: ['action-plan'] })
     qc.invalidateQueries({ queryKey: ['action-plan-deps'] })
   }

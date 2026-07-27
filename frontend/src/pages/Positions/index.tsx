@@ -68,6 +68,7 @@ export default function Positions() {
     onSuccess: () => {
       message.success('总资金已保存')
       qc.invalidateQueries({ queryKey: ['total-capital'] })
+      qc.invalidateQueries({ queryKey: ['action-plan'] })
     },
   })
   const [capitalInput, setCapitalInput] = useState<number | null>(null)
