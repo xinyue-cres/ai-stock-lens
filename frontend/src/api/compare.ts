@@ -41,7 +41,7 @@ export interface CompareListItem {
 }
 
 export async function generateCompare(codes: string[], force = false): Promise<CompareReport> {
-  const { data } = await api.post('/compare', { codes, force }, { timeout: 90_000 })
+  const { data } = await api.post('/compare', { codes, force }, { timeout: 60_000 })
   return data
 }
 

@@ -61,7 +61,7 @@ def _chat_json(system: str, user: str, temperature: float = 0.3) -> dict[str, An
             messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
             response_format={"type": "json_object"},
             temperature=temperature,
-            timeout=80,
+            timeout=55,
         )
     except APITimeoutError as e:
         logger.error("AI 调用超时: %s", e)
