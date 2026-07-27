@@ -133,7 +133,7 @@ export async function generateAiReport(code: string, opts: AiReportOptions = {})
   const { data } = await api.post(`/stocks/${code}/ai-report`, {
     horizon: opts.horizon ?? 'combined',
     force: opts.force ?? false,
-  })
+  }, { timeout: 90_000 })
   return data
 }
 

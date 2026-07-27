@@ -82,7 +82,7 @@ export default function ComparePage() {
                       message.success('已删除')
                       qc.invalidateQueries({ queryKey: ['compare-history'] })
                       if (activeId === item.id) setActiveId(null)
-                    })
+                    }).catch(() => message.error('删除失败'))
                   }}
                   style={{ padding: '0 2px', height: 16 }}
                 />

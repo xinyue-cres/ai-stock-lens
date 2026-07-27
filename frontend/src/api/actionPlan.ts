@@ -74,7 +74,7 @@ export async function getActionPlan(code: string): Promise<ActionPlan> {
 }
 
 export async function generateActionPlan(code: string, force = false): Promise<ActionPlan> {
-  const { data } = await api.post(`/stocks/${code}/action-plan`, { force })
+  const { data } = await api.post(`/stocks/${code}/action-plan`, { force }, { timeout: 90_000 })
   return data
 }
 

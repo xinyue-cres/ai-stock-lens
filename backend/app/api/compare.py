@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlmodel import Session, select
 
-from app.ai.analyzer import analyze_compare
+from app.ai.analyzer import AIAnalysisError, analyze_compare
 from app.ai.client import get_model_name
 from app.db import get_session
 from app.indicators.engine import compute_all
@@ -266,7 +266,10 @@ def generate_compare(payload: CompareRequest, session: Session = Depends(get_ses
     cross_metrics = _compute_cross_stock_metrics(stocks_data, kline_dfs)
 
     # 调用 AI（传入跨票指标）
-    result = analyze_compare(stocks_data, cross_metrics)
+    try:
+        result = analyze_compare(stocks_data, cross_metrics)
+    except AIAnalysisError as e:
+        raise HTTPException(status_code=502, detail=str(e)) from e
 
     # 存储
     report = AIReport(

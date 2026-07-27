@@ -5,6 +5,8 @@ import json
 import logging
 from typing import Any
 
+from openai import APIConnectionError, APITimeoutError, RateLimitError
+
 from app.ai.client import get_ai_client, get_model_name
 from app.ai.normalizers import (
     normalize_action,
@@ -46,21 +48,39 @@ def _arg_text(a: Any) -> str:
     return str(a)
 
 
+class AIAnalysisError(Exception):
+    """AI 调用失败（超时、连接、限流、返回空）。"""
+
+
 def _chat_json(system: str, user: str, temperature: float = 0.3) -> dict[str, Any]:
     client = get_ai_client()
     model = get_model_name()
-    resp = client.chat.completions.create(
-        model=model,
-        messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
-        response_format={"type": "json_object"},
-        temperature=temperature,
-    )
+    try:
+        resp = client.chat.completions.create(
+            model=model,
+            messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
+            response_format={"type": "json_object"},
+            temperature=temperature,
+            timeout=80,
+        )
+    except APITimeoutError as e:
+        logger.error("AI 调用超时: %s", e)
+        raise AIAnalysisError("AI 接口超时，请稍后重试") from e
+    except APIConnectionError as e:
+        logger.error("AI 连接失败: %s", e)
+        raise AIAnalysisError("无法连接 AI 服务，请检查网络或配置") from e
+    except RateLimitError as e:
+        logger.error("AI 限流: %s", e)
+        raise AIAnalysisError("AI 接口限流，请稍后重试") from e
     raw = resp.choices[0].message.content or "{}"
     try:
-        return json.loads(raw)
+        result = json.loads(raw)
     except json.JSONDecodeError:
         logger.exception("AI 返回非合法 JSON: %s", raw[:200])
-        return {}
+        raise AIAnalysisError("AI 返回格式异常，请重试")
+    if not result:
+        raise AIAnalysisError("AI 返回空结果，请重试")
+    return result
 
 
 def analyze_debate(stock_info: dict, indicators: dict) -> dict[str, Any]:

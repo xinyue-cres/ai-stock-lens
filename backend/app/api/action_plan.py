@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlmodel import Session, select
 
-from app.ai.analyzer import analyze_trader
+from app.ai.analyzer import AIAnalysisError, analyze_trader
 from app.ai.client import get_model_name
 from app.db import get_session
 from app.models.ai_report import AIReport
@@ -113,7 +113,10 @@ def gen_action_plan(
         if cached:
             return _action_plan_to_dict(cached, cached=True, stock=stock)
 
-    result = analyze_trader(input_bundle)
+    try:
+        result = analyze_trader(input_bundle)
+    except AIAnalysisError as e:
+        raise HTTPException(status_code=502, detail=str(e)) from e
     extras = {
         "actions": result.get("actions", []),
         "position_advice": result.get("position_advice"),

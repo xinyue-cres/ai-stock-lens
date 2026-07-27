@@ -73,7 +73,7 @@ export default function BatchActionBar({
                             message.success(`${selected.size} 只已加入「${g.name}」`)
                             onClear()
                             invalidateBoth()
-                          })
+                          }).catch(() => message.error('批量移组失败'))
                         },
                       })),
                       { key: 'g-none', label: '清除所有分组', onClick: () => {
@@ -81,7 +81,7 @@ export default function BatchActionBar({
                           message.success('已清除分组')
                           onClear()
                           invalidateBoth()
-                        })
+                        }).catch(() => message.error('清除分组失败'))
                       }},
                     ],
                   }}
@@ -102,7 +102,7 @@ export default function BatchActionBar({
                 message.success(`${selected.size} 只同步完成`)
                 onClear()
                 qc.invalidateQueries({ queryKey: ['signals-today'] })
-              })
+              }).catch(() => message.error('批量同步失败'))
             }} />
             <NavItem icon={<ExperimentOutlined />} label="AI 分析" onClick={() => onBatchStart('ai')} />
             <NavItem icon={<ThunderboltOutlined />} label="操作指示" onClick={() => onBatchStart('action_plan')} />
@@ -134,7 +134,7 @@ export default function BatchActionBar({
                     message.success(`已移除 ${selected.size} 只`)
                     onClear()
                     invalidateBoth()
-                  })
+                  }).catch(() => message.error('批量移除失败'))
                 },
               })
             }} />

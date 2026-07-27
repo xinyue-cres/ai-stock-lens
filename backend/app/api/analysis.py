@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from sqlmodel import Session, select
 
 from app.ai.analyzer import (
+    AIAnalysisError,
     analyze_anti_quant,
     analyze_debate,
     analyze_mean_reversion,
@@ -120,16 +121,28 @@ def gen_ai_report(
     if hz == "anti_quant":
         df = load_kline_df(session, code)
         factors = compute_quant_features(df) if not df.empty else {"empty": True}
-        result = analyze_anti_quant(stock_info, factors, indicators)
+        try:
+            result = analyze_anti_quant(stock_info, factors, indicators)
+        except AIAnalysisError as e:
+            raise HTTPException(status_code=502, detail=str(e)) from e
     elif hz == "reflexivity":
-        result = analyze_reflexivity(stock_info, indicators)
+        try:
+            result = analyze_reflexivity(stock_info, indicators)
+        except AIAnalysisError as e:
+            raise HTTPException(status_code=502, detail=str(e)) from e
     elif hz == "mean_reversion":
         from app.indicators.mean_reversion import compute_mean_reversion
         df = load_kline_df(session, code)
         mr_data = compute_mean_reversion(df) if not df.empty else {}
-        result = analyze_mean_reversion(stock_info, mr_data, indicators)
+        try:
+            result = analyze_mean_reversion(stock_info, mr_data, indicators)
+        except AIAnalysisError as e:
+            raise HTTPException(status_code=502, detail=str(e)) from e
     else:
-        result = analyze_debate(stock_info, indicators)
+        try:
+            result = analyze_debate(stock_info, indicators)
+        except AIAnalysisError as e:
+            raise HTTPException(status_code=502, detail=str(e)) from e
     extras = {
         "key_signals": result.get("key_signals", []),
         "risks": result.get("risks", []),

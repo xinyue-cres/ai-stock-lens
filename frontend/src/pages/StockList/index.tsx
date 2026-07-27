@@ -230,17 +230,17 @@ export default function StockListPage() {
                   content: `将从自选中移除 ${item.name || item.code}`,
                   okText: '移除',
                   okButtonProps: { danger: true },
-                  onOk: () => removeWatchlist(item.code).then(() => inv.both()),
+                  onOk: () => removeWatchlist(item.code).then(() => inv.both()).catch(() => message.error('移除失败')),
                 })
               }}
               onGroupChange={(gids) => {
-                patchStock(item.code, { group_ids: gids }).then(() => inv.both())
+                patchStock(item.code, { group_ids: gids }).then(() => inv.both()).catch(() => message.error('分组修改失败'))
               }}
               onSync={() => {
                 syncSingleStock(item.code).then(() => {
                   message.success(`${item.name} 同步完成`)
                   inv.signals()
-                })
+                }).catch(() => message.error(`${item.name} 同步失败`))
               }}
             />
           ))}
