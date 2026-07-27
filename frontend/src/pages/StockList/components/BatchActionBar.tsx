@@ -32,6 +32,11 @@ export default function BatchActionBar({
   const navigate = useNavigate()
   const [comparing, setComparing] = useState(false)
 
+  const invalidateBoth = () => {
+    qc.invalidateQueries({ queryKey: ['signals-today'] })
+    qc.invalidateQueries({ queryKey: ['groups'] })
+  }
+
   if (selected.size === 0 && !batchRunning) return null
 
   return (
@@ -67,8 +72,7 @@ export default function BatchActionBar({
                           })).then(() => {
                             message.success(`${selected.size} 只已加入「${g.name}」`)
                             onClear()
-                            qc.invalidateQueries({ queryKey: ['signals-today'] })
-                            qc.invalidateQueries({ queryKey: ['groups'] })
+                            invalidateBoth()
                           })
                         },
                       })),
@@ -76,8 +80,7 @@ export default function BatchActionBar({
                         Promise.all([...selected].map(code => patchStock(code, { group_ids: [] }))).then(() => {
                           message.success('已清除分组')
                           onClear()
-                          qc.invalidateQueries({ queryKey: ['signals-today'] })
-                          qc.invalidateQueries({ queryKey: ['groups'] })
+                          invalidateBoth()
                         })
                       }},
                     ],
@@ -130,8 +133,7 @@ export default function BatchActionBar({
                   Promise.all([...selected].map(code => removeWatchlist(code))).then(() => {
                     message.success(`已移除 ${selected.size} 只`)
                     onClear()
-                    qc.invalidateQueries({ queryKey: ['signals-today'] })
-                    qc.invalidateQueries({ queryKey: ['groups'] })
+                    invalidateBoth()
                   })
                 },
               })

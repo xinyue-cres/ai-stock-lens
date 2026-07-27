@@ -16,10 +16,23 @@ import GroupNav from './components/GroupNav'
 import GroupManagerModal from './components/GroupManagerModal'
 import BatchActionBar from './components/BatchActionBar'
 
+function useInvalidateList() {
+  const qc = useQueryClient()
+  return {
+    signals: () => qc.invalidateQueries({ queryKey: ['signals-today'] }),
+    groups: () => qc.invalidateQueries({ queryKey: ['groups'] }),
+    both: () => {
+      qc.invalidateQueries({ queryKey: ['signals-today'] })
+      qc.invalidateQueries({ queryKey: ['groups'] })
+    },
+  }
+}
+
 export default function StockListPage() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const qc = useQueryClient()
+  const inv = useInvalidateList()
   const initGroup = searchParams.get('group')
   const [groupFilter, setGroupFilterState] = useState<number | 'all'>(initGroup ? Number(initGroup) : 'all')
 
@@ -52,7 +65,7 @@ export default function StockListPage() {
     mutationFn: runSync,
     onSuccess: () => {
       message.success('同步完成')
-      qc.invalidateQueries({ queryKey: ['signals-today'] })
+      inv.signals()
       qc.invalidateQueries({ queryKey: ['market-summary'] })
     },
   })
@@ -61,8 +74,7 @@ export default function StockListPage() {
     mutationFn: (code: string) => addWatchlist(code),
     onSuccess: (d) => {
       message.success(`已加入 ${d.name || d.code}`)
-      qc.invalidateQueries({ queryKey: ['signals-today'] })
-      qc.invalidateQueries({ queryKey: ['groups'] })
+      inv.both()
       setAddValue('')
       setAddOpen(false)
     },
@@ -124,7 +136,7 @@ export default function StockListPage() {
         } else {
           message.warning(`完成 ${state.completed}/${state.total}，${errors} 只失败`)
         }
-        qc.invalidateQueries({ queryKey: ['signals-today'] })
+        inv.signals()
         if (type === 'ai') {
           qc.invalidateQueries({ queryKey: ['ai-report-cached'] })
         } else {
@@ -218,24 +230,16 @@ export default function StockListPage() {
                   content: `将从自选中移除 ${item.name || item.code}`,
                   okText: '移除',
                   okButtonProps: { danger: true },
-                  onOk: () => {
-                    removeWatchlist(item.code).then(() => {
-                      qc.invalidateQueries({ queryKey: ['signals-today'] })
-                      qc.invalidateQueries({ queryKey: ['groups'] })
-                    })
-                  },
+                  onOk: () => removeWatchlist(item.code).then(() => inv.both()),
                 })
               }}
               onGroupChange={(gids) => {
-                patchStock(item.code, { group_ids: gids }).then(() => {
-                  qc.invalidateQueries({ queryKey: ['signals-today'] })
-                  qc.invalidateQueries({ queryKey: ['groups'] })
-                })
+                patchStock(item.code, { group_ids: gids }).then(() => inv.both())
               }}
               onSync={() => {
                 syncSingleStock(item.code).then(() => {
                   message.success(`${item.name} 同步完成`)
-                  qc.invalidateQueries({ queryKey: ['signals-today'] })
+                  inv.signals()
                 })
               }}
             />
@@ -252,10 +256,7 @@ export default function StockListPage() {
         open={groupMgrOpen}
         groups={groups}
         onClose={() => setGroupMgrOpen(false)}
-        onChange={() => {
-          qc.invalidateQueries({ queryKey: ['groups'] })
-          qc.invalidateQueries({ queryKey: ['signals-today'] })
-        }}
+        onChange={() => inv.both()}
       />
 
       <BatchActionBar

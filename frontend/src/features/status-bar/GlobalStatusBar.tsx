@@ -21,11 +21,8 @@ export function GlobalStatusBar() {
 
   const invalidateAll = () => {
     qc.invalidateQueries({ queryKey: ['sync-status'] })
+    qc.invalidateQueries({ queryKey: ['signals-today'] })
     qc.invalidateQueries({ queryKey: ['kline'] })
-    qc.invalidateQueries({ queryKey: ['diary'] })
-    qc.invalidateQueries({ queryKey: ['signals'] })
-    qc.invalidateQueries({ queryKey: ['analysis'] })
-    qc.invalidateQueries({ queryKey: ['watchlist'] })
     qc.invalidateQueries({ queryKey: ['market-summary'] })
   }
 

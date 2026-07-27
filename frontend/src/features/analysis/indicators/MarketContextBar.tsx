@@ -27,7 +27,7 @@ export function MarketContextBar() {
   const stockPct = (kline as any)?.indicators?.latest_price?.pct_chg as number | undefined
 
   const { data } = useQuery({
-    queryKey: ['market-summary', stockPct],
+    queryKey: ['market-summary'],
     queryFn: () => getMarketSummary(stockPct ?? undefined),
     refetchInterval: 5 * 60_000,
     staleTime: 60_000,
