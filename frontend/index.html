@@ -7,6 +7,17 @@
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      (function() {
+        var base = 1440;
+        function setZoom() {
+          var w = window.innerWidth;
+          document.documentElement.style.zoom = Math.min(w / base, 1.15);
+        }
+        setZoom();
+        window.addEventListener('resize', setZoom);
+      })();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
