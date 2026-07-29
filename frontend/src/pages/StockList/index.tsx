@@ -133,7 +133,7 @@ export default function StockListPage() {
   const handleBatchStart = useCallback((type: BatchTaskType) => {
     const codes = [...selected]
     if (codes.length === 0) return
-    batchRun(type, codes, 3, (state) => {
+    batchRun(type, codes, 5, (state) => {
       setBatchState(state)
       if (!state.running) {
         const errors = [...state.items.values()].filter(s => s.status === 'error').length

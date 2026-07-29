@@ -32,7 +32,7 @@ export function KLineChart() {
 
     const chart = createChart(containerRef.current, {
       width: containerRef.current.clientWidth || 800,
-      height: 520,
+      height: 430,
       layout: { background: { color: '#fff' }, textColor: '#333' },
       grid: {
         vertLines: { color: '#f0f0f0' },
@@ -117,7 +117,7 @@ export function KLineChart() {
   if (error) return <Alert type="error" message="加载 K 线失败" />
   if (data?.empty) return <Alert type="warning" message={data.message || '本地无数据'} />
 
-  return <div ref={containerRef} style={{ width: '100%', height: 520 }} />
+  return <div ref={containerRef} style={{ width: '100%', height: 430 }} />
 }
 
 /** 把"手"数格式化为可读字符串：<1万→整数，<1亿→x.xx 万手，≥1亿→x.xx 亿手。 */
