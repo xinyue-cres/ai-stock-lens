@@ -1,9 +1,10 @@
 import { generateActionPlan } from './actionPlan'
 import { generateAiReport } from './analysis'
+import { syncSingleStock } from './sync'
 
 const AI_HORIZONS = ['combined', 'anti_quant', 'reflexivity', 'mean_reversion'] as const
 
-export type BatchTaskType = 'ai' | 'action_plan'
+export type BatchTaskType = 'ai' | 'action_plan' | 'sync'
 export type BatchItemStatus = 'pending' | 'running' | 'done' | 'error'
 
 export interface BatchItemState {
@@ -57,8 +58,10 @@ export async function batchRun(
           await Promise.all(AI_HORIZONS.map(horizon =>
             generateAiReport(code, { horizon, force: false })
           ))
-        } else {
+        } else if (type === 'action_plan') {
           await generateActionPlan(code, false)
+        } else {
+          await syncSingleStock(code)
         }
         state.items.set(code, { status: 'done' })
       } catch (e: any) {

@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useIsMutating, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { message, Modal } from 'antd'
@@ -54,10 +54,18 @@ export default function StockListPage() {
 
   // 批量任务状态
   const [batchState, setBatchState] = useState<BatchState | null>(null)
+  const batchDoneRef = useRef(false)
 
   const groupsQ = useQuery({ queryKey: ['groups'], queryFn: getGroups })
   const marketQ = useQuery({ queryKey: ['market-summary'], queryFn: () => getMarketSummary(), staleTime: 5 * 60_000 })
   const { items } = useSignalsQuery()
+
+  useEffect(() => {
+    if (batchDoneRef.current && batchState && !batchState.running) {
+      setBatchState(null)
+      batchDoneRef.current = false
+    }
+  }, [items])
 
   const syncMut = useMutation({
     mutationKey: SYNC_ALL_KEY,
@@ -129,23 +137,28 @@ export default function StockListPage() {
       setBatchState(state)
       if (!state.running) {
         const errors = [...state.items.values()].filter(s => s.status === 'error').length
+        const label = type === 'ai' ? ' AI 分析' : type === 'sync' ? '同步' : '操作指示'
         if (errors === 0) {
-          message.success(`${state.total} 只${type === 'ai' ? ' AI 分析' : '操作指示'}全部完成`)
+          message.success(`${state.total} 只${label}全部完成`)
         } else {
-          message.warning(`完成 ${state.completed}/${state.total}，${errors} 只失败`)
+          message.warning(`${label}完成 ${state.completed}/${state.total}，${errors} 只失败`)
         }
-        inv.signals()
-        if (type === 'ai') {
+        if (type === 'sync') {
+          globalInv.afterSync()
+        } else if (type === 'ai') {
+          globalInv.afterAiReport(codes[0])
           qc.invalidateQueries({ queryKey: ['ai-report-cached'] })
+          inv.signals()
         } else {
           qc.invalidateQueries({ queryKey: ['action-plan'] })
+          inv.signals()
         }
-        setTimeout(() => setBatchState(null), 5000)
+        setTimeout(() => { batchDoneRef.current = true }, 2000)
       }
     })
     setSelectMode(false)
     setSelected(new Set())
-  }, [selected, qc])
+  }, [selected, qc, globalInv, inv])
 
   const getBatchStatus = useCallback((code: string): BatchItemStatus | null => {
     if (!batchState) return null

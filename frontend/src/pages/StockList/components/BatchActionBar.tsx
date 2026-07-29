@@ -5,7 +5,6 @@ import { useNavigate } from 'react-router-dom'
 import { SignalItem } from '@/api/signals'
 import { patchStock, StockGroup } from '@/api/groups'
 import { removeWatchlist } from '@/api/watchlist'
-import { syncSingleStock } from '@/api/sync'
 import { generateCompare } from '@/api/compare'
 import { BatchTaskType } from '@/api/batchTask'
 import { useState } from 'react'
@@ -97,13 +96,7 @@ export default function BatchActionBar({
                 </Dropdown>
               }
             />
-            <NavItem icon={<SyncOutlined />} label="同步" onClick={() => {
-              Promise.all([...selected].map(code => syncSingleStock(code))).then(() => {
-                message.success(`${selected.size} 只同步完成`)
-                onClear()
-                qc.invalidateQueries({ queryKey: ['signals-today'] })
-              }).catch(() => message.error('批量同步失败'))
-            }} />
+            <NavItem icon={<SyncOutlined />} label="同步" onClick={() => onBatchStart('sync')} />
             <NavItem icon={<ExperimentOutlined />} label="AI 分析" onClick={() => onBatchStart('ai')} />
             <NavItem icon={<ThunderboltOutlined />} label="操作指示" onClick={() => onBatchStart('action_plan')} />
             <NavItem
