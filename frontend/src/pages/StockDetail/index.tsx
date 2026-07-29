@@ -12,14 +12,11 @@ export default function StockDetail() {
 
   return (
     <StockContextProvider>
-      <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
+      <div style={{ display: 'flex', gap: 16, height: 'calc(100vh - 112px)' }}>
         <div
           style={{
             width: 320,
             flexShrink: 0,
-            position: 'sticky',
-            top: 12,
-            height: 'calc(100vh - 112px)',
             display: 'flex',
             flexDirection: 'column',
           }}
@@ -32,11 +29,11 @@ export default function StockDetail() {
           >
             返回列表
           </Button>
-          <div style={{ flex: 1, minHeight: 0 }}>
+          <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
             <WatchlistSidebar groupId={groupId} />
           </div>
         </div>
-        <div style={{ flex: 1, minWidth: 0, minHeight: 'calc(100vh - 112px)' }}>
+        <div style={{ flex: 1, minWidth: 0, overflowY: 'auto' }}>
           <AnalysisWorkspace />
         </div>
       </div>
