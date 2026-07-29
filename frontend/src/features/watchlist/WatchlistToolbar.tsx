@@ -1,10 +1,11 @@
 import { useState } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useMutation, useIsMutating } from '@tanstack/react-query'
 import { AutoComplete, Button, Space, Tooltip, Typography, message } from 'antd'
 import { PlusOutlined, SyncOutlined } from '@ant-design/icons'
 import { searchStocks, StockInfo } from '@/api/stocks'
 import { syncSingleStock } from '@/api/sync'
 import { useStock } from '@/features/stock-context'
+import { SYNC_ALL_KEY, useInvalidation } from '@/hooks/useInvalidation'
 
 const { Text } = Typography
 
@@ -15,7 +16,8 @@ interface Props {
 
 export function WatchlistToolbar({ total, onAdd }: Props) {
   const { code } = useStock()
-  const qc = useQueryClient()
+  const globalInv = useInvalidation()
+  const syncingElsewhere = useIsMutating({ mutationKey: SYNC_ALL_KEY }) > 0
   const [addOpen, setAddOpen] = useState(false)
   const [addValue, setAddValue] = useState('')
 
@@ -23,9 +25,7 @@ export function WatchlistToolbar({ total, onAdd }: Props) {
     mutationFn: () => syncSingleStock(code),
     onSuccess: (r) => {
       message.success(`${code} 同步完成 · ${r.rows_inserted} 行`)
-      qc.invalidateQueries({ queryKey: ['kline', code] })
-      qc.invalidateQueries({ queryKey: ['signals-today'] })
-      qc.invalidateQueries({ queryKey: ['market-summary'] })
+      globalInv.afterSyncSingle(code)
     },
     onError: () => message.error('同步失败'),
   })
@@ -72,7 +72,7 @@ export function WatchlistToolbar({ total, onAdd }: Props) {
             icon={<SyncOutlined />}
             size="small"
             loading={syncMut.isPending}
-            disabled={!code}
+            disabled={!code || syncingElsewhere}
             onClick={() => syncMut.mutate()}
           />
         </Tooltip>

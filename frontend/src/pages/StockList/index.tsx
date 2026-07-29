@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useIsMutating, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { message, Modal } from 'antd'
 import { getGroups, patchStock, StockGroup } from '@/api/groups'
 import { getMarketSummary } from '@/api/market'
@@ -8,6 +8,7 @@ import { addWatchlist, removeWatchlist } from '@/api/watchlist'
 import { syncSingleStock, runSync } from '@/api/sync'
 import { batchRun, BatchItemStatus, BatchState, BatchTaskType } from '@/api/batchTask'
 import { useSignalsQuery } from '@/hooks/useSignalsQuery'
+import { SYNC_ALL_KEY, useInvalidation } from '@/hooks/useInvalidation'
 import { SortKey, SortDir } from './constants'
 import SummaryBar from './components/SummaryBar'
 import Toolbar from './components/Toolbar'
@@ -16,9 +17,13 @@ import GroupNav from './components/GroupNav'
 import GroupManagerModal from './components/GroupManagerModal'
 import BatchActionBar from './components/BatchActionBar'
 
-function useInvalidateList() {
+export default function StockListPage() {
+  const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const qc = useQueryClient()
-  return {
+  const globalInv = useInvalidation()
+  const syncingElsewhere = useIsMutating({ mutationKey: SYNC_ALL_KEY }) > 0
+  const inv = {
     signals: () => qc.invalidateQueries({ queryKey: ['signals-today'] }),
     groups: () => qc.invalidateQueries({ queryKey: ['groups'] }),
     both: () => {
@@ -26,13 +31,6 @@ function useInvalidateList() {
       qc.invalidateQueries({ queryKey: ['groups'] })
     },
   }
-}
-
-export default function StockListPage() {
-  const navigate = useNavigate()
-  const [searchParams, setSearchParams] = useSearchParams()
-  const qc = useQueryClient()
-  const inv = useInvalidateList()
   const initGroup = searchParams.get('group')
   const [groupFilter, setGroupFilterState] = useState<number | 'all'>(initGroup ? Number(initGroup) : 'all')
 
@@ -62,11 +60,11 @@ export default function StockListPage() {
   const { items } = useSignalsQuery()
 
   const syncMut = useMutation({
+    mutationKey: SYNC_ALL_KEY,
     mutationFn: runSync,
     onSuccess: () => {
       message.success('同步完成')
-      inv.signals()
-      qc.invalidateQueries({ queryKey: ['market-summary'] })
+      globalInv.afterSync()
     },
   })
 
@@ -183,7 +181,7 @@ export default function StockListPage() {
           onAddValueChange={setAddValue}
           onAddSelect={(v) => addMut.mutate(v)}
           addLoading={addMut.isPending}
-          syncLoading={syncMut.isPending}
+          syncLoading={syncingElsewhere}
           onSync={() => syncMut.mutate()}
           selectMode={selectMode}
           onSelectModeToggle={() => { setSelectMode(m => !m); if (selectMode) setSelected(new Set()) }}
@@ -239,7 +237,7 @@ export default function StockListPage() {
               onSync={() => {
                 syncSingleStock(item.code).then(() => {
                   message.success(`${item.name} 同步完成`)
-                  inv.signals()
+                  globalInv.afterSyncSingle(item.code)
                 }).catch(() => message.error(`${item.name} 同步失败`))
               }}
             />

@@ -1,6 +1,7 @@
-import { useMutation, useQuery, useQueryClient, useIsMutating, keepPreviousData } from '@tanstack/react-query'
+import { useMutation, useQuery, useIsMutating, keepPreviousData } from '@tanstack/react-query'
 import { AiReport, generateAiReport, getCachedAiReport } from '@/api/analysis'
 import { useStock } from '@/features/stock-context/StockContext'
+import { useInvalidation } from '@/hooks/useInvalidation'
 
 export type Horizon = 'combined' | 'anti_quant' | 'reflexivity' | 'mean_reversion'
 
@@ -23,7 +24,7 @@ interface MutationVars {
  */
 export function useAiReport(horizon: Horizon) {
   const { code } = useStock()
-  const qc = useQueryClient()
+  const globalInv = useInvalidation()
 
   const mutationKey = aiReportMutationKey(code, horizon)
 
@@ -39,10 +40,7 @@ export function useAiReport(horizon: Horizon) {
     mutationFn: (vars) =>
       generateAiReport(vars.ctxCode, { horizon: vars.ctxHorizon, force: vars.force }),
     onSuccess: (_, vars) => {
-      qc.invalidateQueries({ queryKey: ['ai-report-cached', vars.ctxCode, vars.ctxHorizon] })
-      qc.invalidateQueries({ queryKey: ['action-plan-deps', vars.ctxCode] })
-      qc.invalidateQueries({ queryKey: ['action-plan', vars.ctxCode] })
-      qc.invalidateQueries({ queryKey: ['signals-today'] })
+      globalInv.afterAiReport(vars.ctxCode, vars.ctxHorizon)
     },
   })
 

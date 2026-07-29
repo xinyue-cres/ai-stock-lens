@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Alert, Button, Card, Space, Statistic, Table, Tag, Typography, message } from 'antd'
 import { getDatasourceHealth, getSyncLogs, getSyncStatus, ProviderHealth, runSync } from '@/api/sync'
+import { SYNC_ALL_KEY, useInvalidation } from '@/hooks/useInvalidation'
 
 const { Text } = Typography
 
@@ -36,12 +37,16 @@ export default function SyncLogs() {
     refetchInterval: 30_000,
   })
 
+  const globalInv = useInvalidation()
+
   const syncMut = useMutation({
+    mutationKey: SYNC_ALL_KEY,
     mutationFn: runSync,
     onSuccess: (d) => {
       message.success(`同步完成 · ${d.status} · ${d.stocks_synced} 只`)
       qc.invalidateQueries({ queryKey: ['sync-status'] })
       qc.invalidateQueries({ queryKey: ['sync-logs'] })
+      globalInv.afterSync()
     },
     onError: () => message.error('同步失败'),
   })

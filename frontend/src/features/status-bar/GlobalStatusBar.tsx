@@ -1,8 +1,9 @@
 import { useMemo } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient, useIsMutating } from '@tanstack/react-query'
 import { Button, Popconfirm, Space, Tooltip, Typography, message } from 'antd'
 import { ReloadOutlined, ThunderboltOutlined } from '@ant-design/icons'
 import { getSyncStatus, refreshToday, runSync } from '@/api/sync'
+import { SYNC_ALL_KEY, useInvalidation } from '@/hooks/useInvalidation'
 
 const { Text } = Typography
 
@@ -12,6 +13,8 @@ const { Text } = Typography
  */
 export function GlobalStatusBar() {
   const qc = useQueryClient()
+  const inv = useInvalidation()
+  const syncingElsewhere = useIsMutating({ mutationKey: SYNC_ALL_KEY }) > 0
 
   const statusQ = useQuery({
     queryKey: ['sync-status'],
@@ -19,11 +22,9 @@ export function GlobalStatusBar() {
     refetchInterval: 60_000,
   })
 
-  const invalidateAll = () => {
+  const afterSync = () => {
     qc.invalidateQueries({ queryKey: ['sync-status'] })
-    qc.invalidateQueries({ queryKey: ['signals-today'] })
-    qc.invalidateQueries({ queryKey: ['kline'] })
-    qc.invalidateQueries({ queryKey: ['market-summary'] })
+    inv.afterSync()
   }
 
   const toastResult = (r: any, label: string) => {
@@ -41,20 +42,22 @@ export function GlobalStatusBar() {
   }
 
   const syncMut = useMutation({
+    mutationKey: SYNC_ALL_KEY,
     mutationFn: runSync,
     onSuccess: (r: any) => {
       toastResult(r, '同步完成')
-      invalidateAll()
+      afterSync()
     },
     onError: () => message.warning('同步超时，后台仍在运行，稍后刷新即可'),
   })
 
   const refreshTodayMut = useMutation({
+    mutationKey: SYNC_ALL_KEY,
     mutationFn: refreshToday,
     onSuccess: (r: any) => {
       const deleted = r?.rows_deleted ?? 0
       toastResult(r, `强制重拉完成 · 清除 ${deleted} 行`)
-      invalidateAll()
+      afterSync()
     },
     onError: () => message.warning('同步超时，后台仍在运行，稍后刷新即可'),
   })
@@ -65,7 +68,7 @@ export function GlobalStatusBar() {
     return relativeTime(s.finished_at)
   }, [statusQ.data])
 
-  const busy = syncMut.isPending || refreshTodayMut.isPending
+  const busy = syncMut.isPending || refreshTodayMut.isPending || syncingElsewhere
 
   return (
     <Space size={12} style={{ color: '#e5e7eb', fontSize: 13 }}>

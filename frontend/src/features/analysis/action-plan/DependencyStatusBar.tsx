@@ -5,10 +5,12 @@ import {
   ExclamationCircleFilled,
   ReloadOutlined,
 } from '@ant-design/icons'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import { getActionPlanDeps } from '@/api/actionPlan'
 import { generateAiReport } from '@/api/analysis'
 import { useStock } from '@/features/stock-context'
+import { aiReportMutationKey } from '@/features/analysis/hooks/useAiReport'
+import { useInvalidation } from '@/hooks/useInvalidation'
 
 const { Text } = Typography
 
@@ -28,8 +30,8 @@ const horizonLabel: Record<Horizon, string> = {
  * - 缺失/过期 → 就地"生成"按钮，直接 mutate 对应 horizon
  */
 export function DependencyStatusBar() {
-  const qc = useQueryClient()
   const { code } = useStock()
+  const globalInv = useInvalidation()
 
   const depsQ = useQuery({
     queryKey: ['action-plan-deps', code],
@@ -40,9 +42,9 @@ export function DependencyStatusBar() {
 
   const genMut = useMutation({
     mutationFn: (h: Horizon) => generateAiReport(code, { horizon: h, force: true }),
+    mutationKey: ['gen-ai-report', code],
     onSuccess: (_, h) => {
-      qc.invalidateQueries({ queryKey: ['action-plan-deps', code] })
-      qc.invalidateQueries({ queryKey: ['ai-report-cached', code, h] })
+      globalInv.afterAiReport(code, h)
     },
   })
 

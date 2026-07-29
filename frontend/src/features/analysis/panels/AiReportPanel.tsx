@@ -1,9 +1,10 @@
 import { Button, Card, Space, Tabs, Typography, message } from 'antd'
 import { RobotOutlined, ThunderboltOutlined } from '@ant-design/icons'
-import { useMutation, useQueryClient, useIsMutating } from '@tanstack/react-query'
+import { useMutation, useIsMutating } from '@tanstack/react-query'
 import { generateAiReport } from '@/api/analysis'
 import { useStock, useStockAnalysis, useStockName } from '@/features/stock-context'
 import { Horizon, aiReportMutationKey } from '@/features/analysis/hooks/useAiReport'
+import { useInvalidation } from '@/hooks/useInvalidation'
 import { StaleDateBadge } from '@/features/status-bar'
 import { HorizonReport } from '../ai/HorizonReport'
 
@@ -16,41 +17,27 @@ export function AiReportPanel() {
   const name = useStockName()
   const kline = useStockAnalysis()
   const asOf = (kline.data as any)?.indicators?.as_of_date || null
-  const qc = useQueryClient()
+  const globalInv = useInvalidation()
 
-  // 三个独立 mutation 共用各自 horizon 的 mutationKey，触发后子 Tab 的 useIsMutating 自动感知
   const genCombined = useMutation({
     mutationKey: aiReportMutationKey(code, 'combined'),
     mutationFn: () => generateAiReport(code, { horizon: 'combined', force: true }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['ai-report-cached', code, 'combined'] })
-      qc.invalidateQueries({ queryKey: ['action-plan-deps', code] })
-      qc.invalidateQueries({ queryKey: ['signals-today'] })
-    },
+    onSuccess: () => globalInv.afterAiReport(code, 'combined'),
   })
   const genAntiQuant = useMutation({
     mutationKey: aiReportMutationKey(code, 'anti_quant'),
     mutationFn: () => generateAiReport(code, { horizon: 'anti_quant', force: true }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['ai-report-cached', code, 'anti_quant'] })
-      qc.invalidateQueries({ queryKey: ['action-plan-deps', code] })
-    },
+    onSuccess: () => globalInv.afterAiReport(code, 'anti_quant'),
   })
   const genReflexivity = useMutation({
     mutationKey: aiReportMutationKey(code, 'reflexivity'),
     mutationFn: () => generateAiReport(code, { horizon: 'reflexivity', force: true }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['ai-report-cached', code, 'reflexivity'] })
-      qc.invalidateQueries({ queryKey: ['action-plan-deps', code] })
-    },
+    onSuccess: () => globalInv.afterAiReport(code, 'reflexivity'),
   })
   const genMeanReversion = useMutation({
     mutationKey: aiReportMutationKey(code, 'mean_reversion'),
     mutationFn: () => generateAiReport(code, { horizon: 'mean_reversion', force: true }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['ai-report-cached', code, 'mean_reversion'] })
-      qc.invalidateQueries({ queryKey: ['action-plan-deps', code] })
-    },
+    onSuccess: () => globalInv.afterAiReport(code, 'mean_reversion'),
   })
 
   const anyPending = useIsMutating({
