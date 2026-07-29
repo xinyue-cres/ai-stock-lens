@@ -2,6 +2,18 @@
 from __future__ import annotations
 
 
+def _format_recent_days(recent_days: list | None) -> str:
+    """格式化近 N 日逐日明细表格，供 prompt 使用。"""
+    if not recent_days:
+        return ""
+    lines = ["日期 | 收盘 | 涨跌幅% | 换手率%"]
+    for d in recent_days:
+        pct = f"{d['pct_chg']:+.2f}" if d.get("pct_chg") is not None else "-"
+        tur = f"{d['turnover']:.2f}" if d.get("turnover") is not None else "-"
+        lines.append(f"{d['date']} | {d['close']} | {pct} | {tur}")
+    return "\n【近10个交易日逐日明细】\n" + "\n".join(lines) + "\n"
+
+
 def _format_previous_block(previous: dict | None) -> str:
     if not previous:
         return ""

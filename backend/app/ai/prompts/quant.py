@@ -1,7 +1,7 @@
 """量化跟随视角：Quant Simulator + 跟随策略 Agent。"""
 from __future__ import annotations
 
-from app.ai.prompts._common import _format_previous_block
+from app.ai.prompts._common import _format_previous_block, _format_recent_days
 
 QUANT_SIMULATOR_SYSTEM = """\
 你是一位量化因子分析师，专注于识别规则型资金的拥挤度和触发条件。
@@ -191,8 +191,10 @@ def build_anti_quant_prompt(
     market = indicators_bundle.get("market") if isinstance(indicators_bundle, dict) else None
     as_of = indicators_bundle.get("as_of_date") if isinstance(indicators_bundle, dict) else None
     previous = indicators_bundle.get("previous") if isinstance(indicators_bundle, dict) else None
+    recent_days = indicators_bundle.get("recent_days") if isinstance(indicators_bundle, dict) else None
 
     prev_block = _format_previous_block(previous)
+    recent_block = _format_recent_days(recent_days)
 
     return f"""请基于量化研究员的判断，给出散户跟随策略建议。
 
@@ -211,7 +213,7 @@ def build_anti_quant_prompt(
 
 【周线技术指标】
 {weekly}
-{prev_block}
+{recent_block}{prev_block}
 请严格按 system 中约定的 JSON schema 输出。scenarios 至少 3 条（跟随入场 + 撤离止损 + 观望），
 trigger 中的价位/量能数值必须能从上方数据中导出，且要显式引用量化研究员判断中的
 flows / positioning。summary 需点明：当前能否跟随量化方向、主要风险在哪。"""

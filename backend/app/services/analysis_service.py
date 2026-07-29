@@ -116,7 +116,7 @@ def invalidate_analysis_cache(code: str | None = None) -> None:
 
 
 def build_ai_input(session: Session, code: str) -> tuple[dict, dict] | None:
-    """给 AI 的输入：股票信息 + { 'daily': 日线指标, 'weekly': 周线指标, 'market': 大盘上下文 }。"""
+    """给 AI 的输入：股票信息 + { 'daily': 日线指标, 'weekly': 周线指标, 'market': 大盘上下文, 'recent_days': 近10日逐日明细 }。"""
     df = load_kline_df(session, code)
     if df.empty:
         return None
@@ -130,6 +130,18 @@ def build_ai_input(session: Session, code: str) -> tuple[dict, dict] | None:
     weekly_df = aggregate_weekly(df)
     weekly_ind = compute_all(weekly_df) if not weekly_df.empty else {"empty": True}
 
+    # 近 10 个交易日逐日明细（供 AI 判断连涨/连跌等趋势）
+    recent = df.tail(10)
+    recent_days = []
+    for _, r in recent.iterrows():
+        recent_days.append({
+            "date": str(r["trade_date"]),
+            "close": round(float(r["close"]), 2),
+            "pct_chg": round(float(r["pct_chg"]), 2) if pd.notna(r.get("pct_chg")) else None,
+            "turnover": round(float(r["turnover"]), 2) if pd.notna(r.get("turnover")) else None,
+            "volume": int(r["volume"]),
+        })
+
     # 大盘上下文（无则为空 dict，不阻塞主流程）
     try:
         from app.services.market_service import get_market_context
@@ -142,6 +154,7 @@ def build_ai_input(session: Session, code: str) -> tuple[dict, dict] | None:
         "daily": daily_ind,
         "weekly": weekly_ind,
         "market": market,
+        "recent_days": recent_days,
         "as_of_date": daily_ind.get("as_of_date"),
     }
 

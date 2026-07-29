@@ -1,7 +1,7 @@
 """反身性视角。"""
 from __future__ import annotations
 
-from app.ai.prompts._common import _format_previous_block
+from app.ai.prompts._common import _format_previous_block, _format_recent_days
 
 REFLEXIVITY_SYSTEM = """\
 你是一位擅长运用索罗斯"反身性理论"分析市场的策略师。
@@ -121,8 +121,10 @@ def build_reflexivity_prompt(stock_info: dict, indicators_bundle: dict) -> str:
     market = indicators_bundle.get("market") if isinstance(indicators_bundle, dict) else None
     as_of = indicators_bundle.get("as_of_date") if isinstance(indicators_bundle, dict) else None
     previous = indicators_bundle.get("previous") if isinstance(indicators_bundle, dict) else None
+    recent_days = indicators_bundle.get("recent_days") if isinstance(indicators_bundle, dict) else None
 
     prev_block = _format_previous_block(previous)
+    recent_block = _format_recent_days(recent_days)
 
     return f"""请从反身性角度分析下面这只 A 股当前所处的市场心理阶段与反馈循环状态。
 
@@ -138,8 +140,9 @@ def build_reflexivity_prompt(stock_info: dict, indicators_bundle: dict) -> str:
 
 【周线指标快照】
 {weekly}
-{prev_block}
+{recent_block}{prev_block}
 请严格按 system 中约定的 JSON schema 输出。
+- 判断"连涨/连跌"必须且只能基于【近10个交易日逐日明细】中的实际 pct_chg 数据
 - narrative 要显式描述"参与者预期 → 资金/仓位行为 → 价格结果"这条链
 - feedback_loop.key_evidence 每条必须带具体数值（价格、量比、换手率、涨跌幅等）
 - scenarios 中的价位/量能数值必须能从上方数据导出

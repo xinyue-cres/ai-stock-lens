@@ -1,7 +1,7 @@
 """牛熊辩论：Bull / Bear / Judge 三个 Agent。"""
 from __future__ import annotations
 
-from app.ai.prompts._common import _format_previous_block
+from app.ai.prompts._common import _format_previous_block, _format_recent_days
 
 BULL_SYSTEM = """你是一位专业的做多分析师（"牛派"）。你的任务：
 基于用户给出的交易数据与技术指标，尽最大可能找出**支持看多**的证据，
@@ -160,6 +160,9 @@ def _bs_prompt(stock_info: dict, indicators_bundle: dict, side: str) -> str:
     weekly = indicators_bundle.get("weekly") if isinstance(indicators_bundle, dict) else None
     market = indicators_bundle.get("market") if isinstance(indicators_bundle, dict) else None
     as_of = indicators_bundle.get("as_of_date") if isinstance(indicators_bundle, dict) else None
+    recent_days = indicators_bundle.get("recent_days") if isinstance(indicators_bundle, dict) else None
+
+    recent_block = _format_recent_days(recent_days)
 
     return f"""请为下面这只 A 股股票，构建**{side}**方向的紧凑论证。
 
@@ -175,8 +178,9 @@ def _bs_prompt(stock_info: dict, indicators_bundle: dict, side: str) -> str:
 
 【周线指标快照】
 {weekly}
-
-请严格按 system 中约定的 JSON schema 输出。论据数量控制在 3-6 条，每条务必包含具体数值。"""
+{recent_block}
+请严格按 system 中约定的 JSON schema 输出。论据数量控制在 3-6 条，每条务必包含具体数值。
+- 涨跌幅引用必须来自上方【近10个交易日逐日明细】的实际数据，禁止编造。"""
 
 
 def build_judge_prompt(

@@ -1,6 +1,8 @@
 """左侧机会（均值回归 + 支撑强度）视角 prompt。"""
 from __future__ import annotations
 
+from app.ai.prompts._common import _format_recent_days
+
 MEAN_REVERSION_SYSTEM = """你是一位专注左侧交易的技术分析师，擅长在市场恐慌/超跌时发现统计概率上的反弹机会。
 
 【任务】
@@ -101,8 +103,12 @@ def build_mean_reversion_prompt(stock_info: dict, mr_data: dict, indicators: dic
     support = mr_data.get("support_zones", [])
     ref_lows = mr_data.get("reference_lows", {})
     bounce = mr_data.get("bounce_probability", {})
-    latest = indicators.get("latest_price", {}) or {}
-    ma = indicators.get("ma", {}) or {}
+    daily = indicators.get("daily", {}) if isinstance(indicators, dict) else {}
+    latest = daily.get("latest_price", {}) or {}
+    ma = daily.get("ma", {}) or {}
+    recent_days = indicators.get("recent_days") if isinstance(indicators, dict) else None
+
+    recent_block = _format_recent_days(recent_days)
 
     support_lines = []
     for i, s in enumerate(support, 1):
@@ -148,5 +154,6 @@ def build_mean_reversion_prompt(stock_info: dict, mr_data: dict, indicators: dic
 
 【历史反弹概率（相同偏离度水平下）】
 {bounce_block}
-
-请严格按 system 约定的 JSON schema 输出。"""
+{recent_block}
+请严格按 system 约定的 JSON schema 输出。
+- 引用涨跌幅、价格必须来自上方输入数据，禁止编造。"""
