@@ -51,7 +51,7 @@ export default function App() {
           />
         </Tooltip>
       </Header>
-      <Content style={{ padding: 16 }}>
+      <Content style={{ padding: '16px 16px 80px' }}>
         <Routes>
           <Route path="/" element={<StockList />} />
           <Route path="/stock/:code" element={<StockDetail />} />
