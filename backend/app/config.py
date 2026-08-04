@@ -23,6 +23,11 @@ class Settings(BaseSettings):
     scan_concurrency: int = 8
     scan_kline_bars: int = 500
 
+    @property
+    def scan_kline_days(self) -> int:
+        """扫描拉取的自然日窗口：500 交易日 ≈ 1.4 倍自然日 ≈ 2 年。"""
+        return int(self.scan_kline_bars * 1.4)
+
     app_log_level: str = "INFO"
     db_path: str = "/app/data/app.db"
 

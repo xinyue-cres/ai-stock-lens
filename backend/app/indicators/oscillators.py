@@ -4,17 +4,16 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-
-def _ema(s: pd.Series, span: int) -> pd.Series:
-    return s.ewm(span=span, adjust=False).mean()
+from app.indicators.macd import macd_series
 
 
 def compute_macd(df: pd.DataFrame, fast: int = 12, slow: int = 26, signal: int = 9) -> dict:
     close = df["close"]
-    dif = _ema(close, fast) - _ema(close, slow)
-    dea = _ema(dif, signal)
+    # DIF/DEA 全序列复用 macd_series（同一指标只有一份实现）
+    dif, dea, _signals = macd_series(close, fast, slow, signal)
     hist = (dif - dea) * 2
 
+    # cross 只判断"最后两根是否刚好交叉"（快照，非历史上最近一次交叉）
     cross = None
     if len(dif) >= 2 and len(dea) >= 2:
         d0, d1 = dif.iloc[-2], dif.iloc[-1]
@@ -100,7 +99,15 @@ def compute_boll(df: pd.DataFrame, n: int = 20, k: float = 2.0) -> dict:
         elif m is not None:
             position = "above_middle" if latest_close >= m else "below_middle"
 
-    return {"upper": u, "middle": m, "lower": l, "position": position}
+    # %B + 带宽：价格在带内位置 + 波动空间（趋势判断衡量"上方空间"用）
+    pct_b = None
+    bandwidth = None
+    if u is not None and l is not None and m not in (None, 0):
+        if u != l:
+            pct_b = round((latest_close - l) / (u - l), 4)
+        bandwidth = round((u - l) / m, 4)
+
+    return {"upper": u, "middle": m, "lower": l, "position": position, "pct_b": pct_b, "bandwidth": bandwidth}
 
 
 def compute_oscillators(df: pd.DataFrame) -> dict:

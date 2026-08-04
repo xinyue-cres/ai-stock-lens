@@ -16,7 +16,6 @@ export interface ScoreItem {
   as_of_date: string | null
   total_score: number
   signal_score: number
-  lift_score: number | null // 已并入金叉延续性，历史数据保留字段
   band_score: number
   dividend_score: number
   close: number | null
@@ -34,8 +33,43 @@ export interface ScoreItem {
   current_state: string | null
 }
 
+// 各维度明细（components_json 解析后的结构，字段可能缺省）
+export interface SignalComponent {
+  post_golden_gain?: number | null
+  whipsaw_score?: number | null
+  adx?: number | null
+  signal_count?: number | null
+  current_golden?: boolean | null
+  current_state?: string | null
+  dif_slope?: number | null
+  dif_slope_dir?: 'up' | 'down' | 'flat' | null
+}
+
+export interface BandComponent {
+  amplitude_score?: number | null
+  rhythm_score?: number | null
+  sigma_20d?: number | null
+  ma5_stay_days?: number | null
+}
+
+export interface DividendComponent {
+  dividend_yield?: number | null
+}
+
+export interface TrendComponent {
+  key_prices?: Record<string, number | null>
+  indicators?: Record<string, number | string | null>
+}
+
+export interface ScoreComponents {
+  signal?: SignalComponent
+  band?: BandComponent
+  dividend?: DividendComponent
+  trend?: TrendComponent
+}
+
 export interface ScoreDetail extends ScoreItem {
-  components: Record<string, any>
+  components: ScoreComponents
 }
 
 export interface ScanStatus {

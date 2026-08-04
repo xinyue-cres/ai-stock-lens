@@ -14,8 +14,7 @@ class StockScore(SQLModel, table=True):
     as_of_date: date | None = Field(default=None, description="K 线最后交易日")
 
     total_score: float = Field(default=0.0, description="综合分 0-100")
-    signal_score: float = Field(default=0.0, description="金叉死叉置信度")
-    lift_score: float = Field(default=0.0, description="趋势质量")
+    signal_score: float = Field(default=0.0, description="金叉延续性")
     band_score: float = Field(default=0.0, description="波段适配")
     dividend_score: float = Field(default=0.0, description="股息")
 

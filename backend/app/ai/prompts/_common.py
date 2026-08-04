@@ -42,3 +42,16 @@ def _format_previous_block(previous: dict | None) -> str:
 {scen_block}
 {review_line}
 """
+
+
+# 趋势阶段 → 中文标签（选股打分 AI prompt 共用）。
+# 与 frontend/src/pages/Scoreboard/constants.ts 的 STAGE_PALETTE 是同一份映射的
+# 展示配色版（label 字段），改动 stage 文案时两边保持一致。
+STAGE_LABEL = {
+    "strong_uptrend": "上升趋势",
+    "pullback_entry": "回踩可入手",
+    "overheat": "过热",
+    "downtrend": "下跌趋势",
+    "range": "震荡",
+    "insufficient": "数据不足",
+}

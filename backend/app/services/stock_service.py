@@ -89,6 +89,18 @@ def list_watchlist(session: Session) -> list[Stock]:
     return list(session.exec(select(Stock).where(Stock.is_watchlist == True)))  # noqa: E712
 
 
+def watchlist_codes_in_groups(session: Session, group_ids: list[int] | None = None) -> set[str]:
+    """自选股代码集合，可选按自选分组过滤（命中任一分组即算，任意匹配）。
+
+    group_ids 为空/None 时返回全部自选代码。选股扫描候选池与打分列表的
+    group_ids 过滤共用，避免各写一套"加载自选 + get_group_ids 匹配"。
+    """
+    wl = session.exec(select(Stock).where(Stock.is_watchlist == True)).all()  # noqa: E712
+    if not group_ids:
+        return {s.code for s in wl}
+    return {s.code for s in wl if any(g in get_group_ids(s) for g in group_ids)}
+
+
 def add_to_watchlist(session: Session, code: str) -> Stock:
     stock = ensure_stock(session, code)
     stock.is_watchlist = True

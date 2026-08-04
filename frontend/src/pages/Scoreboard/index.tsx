@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Button, Card, Checkbox, Empty, Segmented, Select, Space, Spin, Switch, Tag, Typography, message } from 'antd'
-import { PlayCircleOutlined, QuestionCircleOutlined, RobotOutlined, StopOutlined } from '@ant-design/icons'
+import { Card, Empty, Spin, message } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   analyzeBatchScore,
@@ -18,13 +17,13 @@ import {
 import { getGroups } from '@/api/groups'
 import { addWatchlist } from '@/api/watchlist'
 import { useInvalidation } from '@/hooks/useInvalidation'
+import ScoreboardToolbar from './components/ScoreboardToolbar'
 import ScoreRow from './components/ScoreRow'
 import ScoreDetailView from './components/ScoreDetail'
 import ScoreCriteriaModal from './components/ScoreCriteriaModal'
 import ScoreSummaryModal from './components/ScoreSummaryModal'
 import ScoreCommentsModal from './components/ScoreCommentsModal'
-
-const { Text } = Typography
+import { useScoreboardState } from './useScoreboardState'
 
 export default function ScoreboardPage() {
   const qc = useQueryClient()
@@ -32,20 +31,13 @@ export default function ScoreboardPage() {
   const navigate = useNavigate()
   // 跳转到个股完整详情页
   const openDetail = (code: string) => navigate(`/stock/${code}`)
-  // 列表固定按综合分排序，只保留升降序切换
-  const [sortDir, setSortDir] = useState<'desc' | 'asc'>('desc')
-  const [onlyEntry, setOnlyEntry] = useState(false)
-  // 范围 + 自选分组选择持久化（localStorage），切页面回来不丢
-  const [scope, setScope] = useState<string>(() => localStorage.getItem('scoreboard-scope') || 'all')
-  const [groupIds, setGroupIds] = useState<number[]>(() => {
-    try {
-      const arr = JSON.parse(localStorage.getItem('scoreboard-group-ids') ?? '[]')
-      return Array.isArray(arr) ? arr.filter((x: unknown) => typeof x === 'number') : []
-    } catch {
-      return []
-    }
-  })
-  const [force, setForce] = useState(false)
+
+  // 工具栏/过滤状态（scope/groupIds 持久化到 localStorage）
+  const {
+    sortDir, setSortDir, onlyEntry, setOnlyEntry,
+    scope, setScope, groupIds, setGroupIds, force, setForce, aiParams,
+  } = useScoreboardState()
+
   const [selected, setSelected] = useState<string | null>(null)
   const [criteriaOpen, setCriteriaOpen] = useState(false)
   const [summaryOpen, setSummaryOpen] = useState(false)
@@ -81,6 +73,7 @@ export default function ScoreboardPage() {
     refetchInterval: (q: any) => (q.state.data?.running ? 2000 : 30_000),
   })
   const scan = statusQ.data
+  const running = !!scan?.running
 
   // 扫描结束 → 刷新列表与详情
   // 两个完成信号：running true→false（正常慢扫描）；finished_at null→有值（兜底，
@@ -88,15 +81,15 @@ export default function ScoreboardPage() {
   const prevRunning = useRef<boolean>(false)
   const prevFinishedNull = useRef<boolean>(false)
   useEffect(() => {
-    const running = !!scan?.running
+    const runningNow = !!scan?.running
     const finishedAtIsNull = scan?.finished_at == null
-    const justFinished = prevRunning.current && !running
-    const finishedAppeared = prevFinishedNull.current && !finishedAtIsNull && !running
+    const justFinished = prevRunning.current && !runningNow
+    const finishedAppeared = prevFinishedNull.current && !finishedAtIsNull && !runningNow
     if (justFinished || finishedAppeared) {
       qc.invalidateQueries({ queryKey: ['score-list'] })
       if (selected) qc.invalidateQueries({ queryKey: ['score-detail', selected] })
     }
-    prevRunning.current = running
+    prevRunning.current = runningNow
     prevFinishedNull.current = finishedAtIsNull
   }, [scan?.running, scan?.finished_at, qc, selected])
 
@@ -131,14 +124,7 @@ export default function ScoreboardPage() {
 
   // AI 逐股点评（独立按钮：对当前列表每只各自生成总结，不做组对比）
   const commentMut = useMutation({
-    mutationFn: () =>
-      analyzeBatchScore({
-        scope,
-        group_ids: scope === 'group' && groupIds.length ? groupIds.join(',') : undefined,
-        sort_by: 'total',
-        dir: sortDir,
-        limit: 10,
-      }),
+    mutationFn: () => analyzeBatchScore({ ...aiParams, limit: 10 }),
     onSuccess: () => setCommentsOpen(true),
     onError: () => message.error('AI 逐股点评失败，请稍后重试'),
   })
@@ -146,14 +132,7 @@ export default function ScoreboardPage() {
 
   // AI 整组汇总（独立按钮，复用当前列表的过滤/排序参数，不参与扫描）
   const summaryMut = useMutation({
-    mutationFn: () =>
-      summarizeScore({
-        scope,
-        group_ids: scope === 'group' && groupIds.length ? groupIds.join(',') : undefined,
-        sort_by: 'total',
-        dir: sortDir,
-        limit: 15,
-      }),
+    mutationFn: () => summarizeScore({ ...aiParams, limit: 15 }),
     onSuccess: () => setSummaryOpen(true),
     onError: () => message.error('AI 汇总失败，请稍后重试'),
   })
@@ -170,124 +149,31 @@ export default function ScoreboardPage() {
     onError: () => message.error('加入自选失败'),
   })
 
-  const running = !!scan?.running
-  const progress = scan && scan.total > 0 ? Math.round((scan.done / scan.total) * 100) : 0
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12, height: 'calc(100vh - 96px)' }}>
-      {/* 顶部工具栏：扫描操作 | AI 分析 | 排序过滤 三组 */}
-      <Card size="small" styles={{ body: { padding: '10px 16px' } }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-          <Space size={8} align="center" wrap>
-            <span style={{ fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap' }}>选股扫描</span>
-            <Button
-              type="link"
-              size="small"
-              icon={<QuestionCircleOutlined />}
-              onClick={() => setCriteriaOpen(true)}
-              style={{ padding: 0 }}
-            >
-              选股标准
-            </Button>
-            <Select
-              size="small"
-              value={scope}
-              onChange={(v) => {
-                setScope(v)
-                localStorage.setItem('scoreboard-scope', v)
-                if (v !== 'group') {
-                  setGroupIds([])
-                  localStorage.setItem('scoreboard-group-ids', '[]')
-                }
-              }}
-              style={{ width: 130 }}
-              options={[
-                { value: 'all', label: '全 A 股 + ETF' },
-                { value: 'watchlist', label: '全部自选' },
-                { value: 'group', label: '自选分组' },
-              ]}
-            />
-            {scope === 'group' && (
-              <Select
-                size="small"
-                mode="multiple"
-                value={groupIds}
-                onChange={(v) => {
-                  const ids = v as number[]
-                  setGroupIds(ids)
-                  localStorage.setItem('scoreboard-group-ids', JSON.stringify(ids))
-                }}
-                placeholder="多选分组，列表只显示这些组"
-                style={{ minWidth: 220, maxWidth: 440 }}
-                options={groups.map((g) => ({ value: g.id, label: `${g.name} (${g.stock_count})` }))}
-              />
-            )}
-            <Checkbox checked={force} onChange={(e) => setForce(e.target.checked)}>
-              强制重扫
-            </Checkbox>
-            <Button
-              size="small"
-              type="primary"
-              icon={<PlayCircleOutlined />}
-              loading={scanMut.isPending}
-              disabled={running}
-              onClick={() => scanMut.mutate()}
-            >
-              {running ? '扫描中' : '开始扫描'}
-            </Button>
-            {running && (
-              <Button size="small" icon={<StopOutlined />} onClick={() => cancelMut.mutate()}>
-                取消
-              </Button>
-            )}
-            {running && (
-              <Tag color="blue" style={{ marginInlineEnd: 0 }}>
-                {scan?.done ?? 0}/{scan?.total ?? 0} · {progress}%
-                {scan?.failed ? ` · 失败 ${scan.failed}` : ''}
-              </Tag>
-            )}
-          </Space>
-
-          <div style={{ flex: 1 }} />
-
-          <Space size={8} align="center" wrap>
-            <Button
-              size="small"
-              type="primary"
-              ghost
-              icon={<RobotOutlined />}
-              loading={commentMut.isPending}
-              onClick={() => commentMut.mutate()}
-            >
-              AI 点评
-            </Button>
-            <Button
-              size="small"
-              icon={<RobotOutlined />}
-              loading={summaryMut.isPending}
-              onClick={() => summaryMut.mutate()}
-            >
-              AI 汇总
-            </Button>
-          </Space>
-
-          <Space size={8} align="center" wrap>
-            <Segmented
-              size="small"
-              value={sortDir}
-              onChange={(v) => setSortDir(v as 'desc' | 'asc')}
-              options={[
-                { value: 'desc', label: '综合降' },
-                { value: 'asc', label: '综合升' },
-              ]}
-            />
-            <Switch size="small" checked={onlyEntry} onChange={setOnlyEntry} />
-            <Text type="secondary" style={{ fontSize: 12 }}>
-              只看可入手
-            </Text>
-          </Space>
-        </div>
-      </Card>
+      <ScoreboardToolbar
+        scope={scope}
+        setScope={setScope}
+        groupIds={groupIds}
+        setGroupIds={setGroupIds}
+        groups={groups}
+        force={force}
+        setForce={setForce}
+        sortDir={sortDir}
+        setSortDir={setSortDir}
+        onlyEntry={onlyEntry}
+        setOnlyEntry={setOnlyEntry}
+        scan={scan}
+        running={running}
+        scanPending={scanMut.isPending}
+        commentPending={commentMut.isPending}
+        summaryPending={summaryMut.isPending}
+        onStartScan={() => scanMut.mutate()}
+        onCancelScan={() => cancelMut.mutate()}
+        onAIComment={() => commentMut.mutate()}
+        onAISummary={() => summaryMut.mutate()}
+        onOpenCriteria={() => setCriteriaOpen(true)}
+      />
 
       {/* 内容区：master-detail，左右栏等高各自滚动 */}
       <div style={{ display: 'flex', gap: 16, flex: 1, minHeight: 0 }}>

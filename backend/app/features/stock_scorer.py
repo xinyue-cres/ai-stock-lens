@@ -17,6 +17,8 @@ import pandas as pd
 
 from app.features.quant_factors import compute_quant_features
 from app.indicators.adx import compute_adx
+from app.indicators.macd import dif_slope as compute_dif_slope
+from app.indicators.macd import is_golden, macd_series
 from app.indicators.risk import compute_risk
 
 # 综合分权重
@@ -50,28 +52,6 @@ def _tri(x: float | None, lo: float, mid: float, hi: float) -> float:
 # ---------------------------------------------------------------------------
 # 金叉延续性（核心维度）
 # ---------------------------------------------------------------------------
-
-def _macd_cross_series(close: pd.Series, fast: int = 12, slow: int = 26, signal: int = 9):
-    """日线 MACD DIF/DEA 金叉死叉信号（用户指定：金叉死叉判断改用 MACD）。
-
-    DIF = EMA(fast) − EMA(slow)；DEA = EMA(DIF, signal)；
-    金叉 = DIF 上穿 DEA；死叉 = DIF 下穿 DEA。
-    返回 (dif, dea, [(idx,'golden'|'death'),...])。
-    """
-    dif = close.ewm(span=fast, adjust=False).mean() - close.ewm(span=slow, adjust=False).mean()
-    dea = dif.ewm(span=signal, adjust=False).mean()
-    signals: list[tuple[int, str]] = []
-    for i in range(1, len(close)):
-        d0, d1 = dif.iloc[i - 1], dif.iloc[i]
-        e0, e1 = dea.iloc[i - 1], dea.iloc[i]
-        if any(pd.isna(v) for v in (d0, d1, e0, e1)):
-            continue
-        if d0 <= e0 and d1 > e1:
-            signals.append((i, "golden"))
-        elif d0 >= e0 and d1 < e1:
-            signals.append((i, "death"))
-    return dif, dea, signals
-
 
 def _post_golden_gain(close: pd.Series, signals: list[tuple[int, str]]) -> float:
     """历史金叉后大段上涨：后 20 日累计涨幅均值 + 胜率合成。
@@ -172,7 +152,7 @@ def _golden_continuation(df: pd.DataFrame) -> dict:
     ADX、DIF 斜率与当前金叉/死叉态（含斜率方向）仅作展示参考，不参与评分。
     """
     close = df["close"].astype(float)
-    dif, dea, signals = _macd_cross_series(close)
+    dif, dea, signals = macd_series(close)
 
     post_gain = _post_golden_gain(close, signals)
     life = _golden_life_score(signals)
@@ -183,21 +163,15 @@ def _golden_continuation(df: pd.DataFrame) -> dict:
 
     adx = compute_adx(df)["adx"]
 
-    # DIF 当前斜率：当日 DIF −（昨日 + 前日）/2（偏离近两日均值）。
-    # 用户方案：比单日差分平滑（过滤"整体上升中的单日回调"噪声，方向不频繁翻转），
-    # 又比 3/5 日窗口即时（参考窗口仅 2 天，宏桥 DIF 0.91→0.80 的回落能正确捕捉）。
-    # 数据验证：与单日方向一致率 93%、与 3 日一致率 97%。仅作展示参考，不参与评分。
-    dif_slope: float | None = None
+    # DIF 当前斜率：当日 DIF −（昨日 + 前日）/2（indicators/macd 统一实现，
+    # 与趋势判断共用）。仅作展示参考，不参与评分。
+    dif_slope = compute_dif_slope(dif)
     dif_slope_dir: str | None = None
-    if len(dif) >= 3 and pd.notna(dif.iloc[-1]) and pd.notna(dif.iloc[-2]) and pd.notna(dif.iloc[-3]):
-        dif_slope = round(float(dif.iloc[-1] - (dif.iloc[-2] + dif.iloc[-3]) / 2), 6)
+    if dif_slope is not None:
         dif_slope_dir = "up" if dif_slope > 0 else ("down" if dif_slope < 0 else "flat")
 
     # 当前状态：DIF 在 DEA 上方 = 金叉态，下方 = 死叉态；再结合斜率描述强弱
-    if len(dif) > 0 and pd.notna(dif.iloc[-1]) and pd.notna(dea.iloc[-1]):
-        current_golden = bool(dif.iloc[-1] > dea.iloc[-1])
-    else:
-        current_golden = False
+    current_golden = is_golden(dif, dea)
     if dif_slope is None:
         current_state = "金叉" if current_golden else "死叉"
     elif current_golden:
@@ -317,7 +291,6 @@ def score_stock(df: pd.DataFrame, dividend_yield: float | None = None,
     return {
         "total_score": round(total, 2),
         "signal_score": round(golden["score"], 2),  # 复用字段名：金叉延续性分
-        "lift_score": None,  # 趋势质量已并入金叉延续，不再单列
         "band_score": round(band["score"], 2),
         "dividend_score": round(dividend["score"], 2),
         "close": round(close, 3),

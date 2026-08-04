@@ -15,9 +15,11 @@ from __future__ import annotations
 
 import pandas as pd
 
-from app.features.stock_scorer import _macd_cross_series
 from app.indicators.adx import compute_adx
 from app.indicators.ma import compute_ma
+from app.indicators.macd import dif_slope as compute_dif_slope
+from app.indicators.macd import is_golden, macd_series
+from app.indicators.oscillators import compute_boll
 from app.indicators.risk import compute_risk
 
 _MIN_ROWS = 60  # MACD EMA26 预热需要 ~60 根
@@ -32,24 +34,6 @@ _REASONS = {
     "range": "观望（等金叉或信号不明）",
     "insufficient": "历史数据不足（需 ≥60 根日线）",
 }
-
-
-def _boll(close: pd.Series, window: int = 20, k: float = 2.0) -> dict:
-    """布林带：%B（价格在带内位置）+ 带宽（波动空间）。"""
-    mid = close.rolling(window).mean()
-    std = close.rolling(window).std()
-    upper = mid + k * std
-    lower = mid - k * std
-    mid_v = float(mid.iloc[-1]) if pd.notna(mid.iloc[-1]) else None
-    upper_v = float(upper.iloc[-1]) if pd.notna(upper.iloc[-1]) else None
-    lower_v = float(lower.iloc[-1]) if pd.notna(lower.iloc[-1]) else None
-    close_v = float(close.iloc[-1])
-    pct_b = None
-    bandwidth = None
-    if mid_v and upper_v is not None and lower_v is not None and upper_v != lower_v:
-        pct_b = (close_v - lower_v) / (upper_v - lower_v)
-        bandwidth = (upper_v - lower_v) / mid_v if mid_v else None
-    return {"mid": mid_v, "upper": upper_v, "lower": lower_v, "pct_b": pct_b, "bandwidth": bandwidth}
 
 
 def judge_trend(df: pd.DataFrame, signal_score: float | None = None) -> dict:
@@ -73,17 +57,13 @@ def judge_trend(df: pd.DataFrame, signal_score: float | None = None) -> dict:
     close_s = df["close"].astype(float)
     close = float(close_s.iloc[-1])
 
-    # MACD 金叉状态 + DIF 斜率（当日 −（昨日+前日）/2）
-    dif, dea, signals = _macd_cross_series(close_s)
-    golden = False
-    if pd.notna(dif.iloc[-1]) and pd.notna(dea.iloc[-1]):
-        golden = bool(dif.iloc[-1] > dea.iloc[-1])
-    dif_slope = None
-    if len(dif) >= 3 and pd.notna(dif.iloc[-1]) and pd.notna(dif.iloc[-2]) and pd.notna(dif.iloc[-3]):
-        dif_slope = round(float(dif.iloc[-1] - (dif.iloc[-2] + dif.iloc[-3]) / 2), 6)
+    # MACD 金叉状态 + DIF 斜率（indicators/macd 统一实现，与打分引擎共用）
+    dif, dea, _signals = macd_series(close_s)
+    golden = is_golden(dif, dea)
+    dif_slope = compute_dif_slope(dif)
 
     # 潜在空间：BOLL %B/带宽 + 距 60 日高点回撤
-    boll = _boll(close_s)
+    boll = compute_boll(df)
     pct_b = boll["pct_b"]
     bandwidth = boll["bandwidth"]
     high_60 = float(df["high"].tail(60).max()) if len(df) >= 60 else float(df["high"].max())
@@ -112,7 +92,7 @@ def judge_trend(df: pd.DataFrame, signal_score: float | None = None) -> dict:
     arrangement = compute_ma(df).get("arrangement")
     stop_loss = compute_risk(df).get("stop_loss_hint")
 
-    ma20 = boll["mid"]
+    ma20 = boll["middle"]
     ma60 = float(close_s.rolling(60).mean().iloc[-1]) if len(df) >= 60 else None
     ma120 = float(close_s.rolling(120).mean().iloc[-1]) if len(df) >= 120 else None
 

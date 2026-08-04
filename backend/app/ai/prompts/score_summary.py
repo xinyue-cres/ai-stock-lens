@@ -5,6 +5,8 @@
 """
 from __future__ import annotations
 
+from app.ai.prompts._common import STAGE_LABEL
+
 SCORE_SUMMARY_SYSTEM = """你是一位股票选股分析助手，擅长解读量化打分结果，帮用户快速抓住重点。
 
 【任务】
@@ -38,17 +40,6 @@ SCORE_SUMMARY_SYSTEM = """你是一位股票选股分析助手，擅长解读量
 }
 """
 
-# 趋势阶段 → 中文标签
-_STAGE_LABEL = {
-    "strong_uptrend": "上升趋势",
-    "pullback_entry": "回踩可入手",
-    "overheat": "过热",
-    "downtrend": "下跌趋势",
-    "range": "震荡",
-    "insufficient": "数据不足",
-}
-
-
 def build_score_summary_prompt(items: list[dict], context: str = "") -> str:
     """拼接打分结果列表为 user prompt。
 
@@ -65,7 +56,7 @@ def build_score_summary_prompt(items: list[dict], context: str = "") -> str:
     blocks = []
     for i, it in enumerate(items, 1):
         stage = it.get("trend_stage")
-        stage_label = _STAGE_LABEL.get(stage, stage or "?")
+        stage_label = STAGE_LABEL.get(stage, stage or "?")
         entry = "可入手" if it.get("can_entry") else "不可入"
         reason = it.get("entry_reason")
         reason_line = f" · {reason}" if reason else ""

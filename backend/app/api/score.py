@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import logging
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -10,20 +11,22 @@ from pydantic import BaseModel
 from sqlalchemy import func
 from sqlmodel import Session, select
 
+from app.ai.analyzer import AIAnalysisError, analyze_score_summary, analyze_stock_comment
 from app.config import get_settings
 from app.datasource.router import get_data_router
 from app.db import get_session
 from app.features.trend_judge import judge_trend
-from app.models.stock import Stock
+from app.models.stock_group import StockGroup
 from app.models.stock_score import StockScore
 from app.services import scoring_service
-from app.services.stock_service import get_group_ids
+from app.services.analysis_service import load_kline_df
+from app.services.stock_service import watchlist_codes_in_groups
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/score", tags=["score"])
 
-_SORTABLE = {"total", "signal", "lift", "band", "dividend", "close", "pct_chg"}
+_SORTABLE = {"total", "signal", "band", "dividend", "close", "pct_chg"}
 
 
 class ScanRequest(BaseModel):
@@ -61,7 +64,6 @@ def _serialize(r: StockScore) -> dict:
         "as_of_date": str(r.as_of_date) if r.as_of_date else None,
         "total_score": r.total_score,
         "signal_score": r.signal_score,
-        "lift_score": r.lift_score,
         "band_score": r.band_score,
         "dividend_score": r.dividend_score,
         "close": r.close,
@@ -122,8 +124,7 @@ def _query_scores(
     if group_ids:
         gids = [int(g) for g in group_ids.split(",") if g.strip().isdigit()]
         if gids:
-            wl = session.exec(select(Stock).where(Stock.is_watchlist == True)).all()  # noqa: E712
-            codes = {s.code for s in wl if any(g in get_group_ids(s) for g in gids)}
+            codes = watchlist_codes_in_groups(session, gids)
             if not codes:
                 return []
             stmt = stmt.where(StockScore.code.in_(codes))
@@ -173,8 +174,6 @@ def _scope_desc(session: Session, scope: str, group_ids: str | None) -> str:
     """把查看范围转成给 AI 的一句话描述。"""
     if scope == "group" and group_ids:
         gids = [int(g) for g in group_ids.split(",") if g.strip().isdigit()]
-        from app.models.stock_group import StockGroup
-
         names = [g.name for g in session.exec(
             select(StockGroup).where(StockGroup.id.in_(gids))
         ).all()]
@@ -190,8 +189,6 @@ def summarize_scores(payload: SummarizeRequest, session: Session = Depends(get_s
 
     复用与列表一致的过滤/排序，取 top N 标的交给 AI 二次解读。
     """
-    from app.ai.analyzer import AIAnalysisError, analyze_score_summary
-
     rows = _query_scores(
         session, payload.sort_by, payload.dir, payload.limit,
         can_entry=payload.can_entry, group_ids=payload.group_ids,
@@ -213,10 +210,6 @@ def analyze_batch(payload: AnalyzeBatchRequest, session: Session = Depends(get_s
 
     并发逐只调用 AI，limit 上限 10，避免单次请求耗时过长。
     """
-    from concurrent.futures import ThreadPoolExecutor
-
-    from app.ai.analyzer import AIAnalysisError, analyze_stock_comment
-
     limit = min(payload.limit, 10)
     rows = _query_scores(
         session, payload.sort_by, payload.dir, limit,
@@ -264,13 +257,11 @@ def score_detail(code: str, session: Session = Depends(get_session)):
 @router.post("/trend/{code}")
 def trend_detail(code: str, session: Session = Depends(get_session)):
     """对单只标的重新跑一次趋势判断（详情页手动触发）。"""
-    from app.services.analysis_service import load_kline_df
-
     df = load_kline_df(session, code)
     if df.empty:
         settings = get_settings()
         end = date.today()
-        start = end - timedelta(days=int(settings.scan_kline_bars * 1.4))
+        start = end - timedelta(days=settings.scan_kline_days)
         df = get_data_router().fetch_stock_daily(code, start, end)
     if df.empty:
         raise HTTPException(404, "无法获取该标的 K 线")

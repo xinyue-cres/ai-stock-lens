@@ -5,6 +5,8 @@
 """
 from __future__ import annotations
 
+from app.ai.prompts._common import STAGE_LABEL
+
 SCORE_STOCK_SYSTEM = """你是一位 A 股个股分析助手，只针对单只股票的打分数据做通俗解读。
 
 【输入】一只标的的"选股打分"结果：综合分 + 四个维度分 + 趋势判断 + 关键指标。
@@ -35,16 +37,6 @@ SCORE_STOCK_SYSTEM = """你是一位 A 股个股分析助手，只针对单只�
 }
 """
 
-_STAGE_LABEL = {
-    "strong_uptrend": "上升趋势",
-    "pullback_entry": "回踩可入手",
-    "overheat": "过热",
-    "downtrend": "下跌趋势",
-    "range": "震荡",
-    "insufficient": "数据不足",
-}
-
-
 def build_score_stock_prompt(item: dict) -> str:
     """拼接单只打分数据为 user prompt。
 
@@ -53,7 +45,7 @@ def build_score_stock_prompt(item: dict) -> str:
      trend_stage, can_entry, entry_reason, close, pct_chg, turnover, hist_vol, adx, dividend_yield}
     """
     stage = item.get("trend_stage")
-    stage_label = _STAGE_LABEL.get(stage, stage or "?")
+    stage_label = STAGE_LABEL.get(stage, stage or "?")
     entry = "可入手" if item.get("can_entry") else "不可入"
     reason = item.get("entry_reason")
     reason_line = f"（{reason}）" if reason else ""
