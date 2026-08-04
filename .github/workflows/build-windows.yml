@@ -9,6 +9,8 @@ on:
 jobs:
   build:
     runs-on: windows-latest
+    permissions:
+      contents: write   # 创建 GitHub Release 需要（GITHUB_TOKEN 默认只读）
     steps:
       - uses: actions/checkout@v4
 
