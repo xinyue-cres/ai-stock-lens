@@ -29,9 +29,9 @@ class EastmoneyProvider(BaseProvider):
 
     def __init__(self) -> None:
         super().__init__()
-        import akshare as ak
+        from app.datasource.akshare_guard import get_ak
 
-        self._ak = ak
+        self._ak = get_ak()
 
     @lru_cache(maxsize=1)
     def get_stock_list(self) -> list[StockInfo]:

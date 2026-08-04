@@ -35,6 +35,14 @@ from app.ai.prompts.mean_reversion import (
 from app.ai.prompts.chat import (
     CHAT_SYSTEM,
 )
+from app.ai.prompts.score_summary import (
+    SCORE_SUMMARY_SYSTEM,
+    build_score_summary_prompt,
+)
+from app.ai.prompts.score_stock_comment import (
+    SCORE_STOCK_SYSTEM,
+    build_score_stock_prompt,
+)
 
 __all__ = [
     "BULL_SYSTEM",
@@ -56,4 +64,8 @@ __all__ = [
     "MEAN_REVERSION_SYSTEM",
     "build_mean_reversion_prompt",
     "CHAT_SYSTEM",
+    "SCORE_SUMMARY_SYSTEM",
+    "build_score_summary_prompt",
+    "SCORE_STOCK_SYSTEM",
+    "build_score_stock_prompt",
 ]

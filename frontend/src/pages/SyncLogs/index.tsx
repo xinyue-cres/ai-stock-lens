@@ -43,12 +43,13 @@ export default function SyncLogs() {
     mutationKey: SYNC_ALL_KEY,
     mutationFn: runSync,
     onSuccess: (d) => {
-      message.success(`同步完成 · ${d.status} · ${d.stocks_synced} 只`)
+      if (d?.started === false) message.warning(d?.reason || '已有同步进行中')
+      else message.success('已在后台开始同步')
       qc.invalidateQueries({ queryKey: ['sync-status'] })
       qc.invalidateQueries({ queryKey: ['sync-logs'] })
       globalInv.afterSync()
     },
-    onError: () => message.error('同步失败'),
+    onError: () => message.error('触发同步失败'),
   })
 
   const sched = statusQ.data?.scheduler

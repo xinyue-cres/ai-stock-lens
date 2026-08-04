@@ -46,7 +46,8 @@ export function useWatchlistData() {
   const syncMut = useMutation({
     mutationFn: runSync,
     onSuccess: (d) => {
-      message.success(`同步完成 · ${d.stocks_synced} 只`)
+      if (d?.started === false) message.warning(d?.reason || '已有同步进行中')
+      else message.success('已在后台开始同步')
       qc.invalidateQueries({ queryKey: ['signals-today'] })
     },
   })

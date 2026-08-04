@@ -3,15 +3,20 @@ from __future__ import annotations
 
 import logging
 import math
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 from sqlmodel import Session, delete, select
 
 from app.datasource.router import get_data_router
+from app.db import engine
 from app.models.kline import KlineDaily
 from app.models.stock import Stock
 from app.models.sync_log import SyncLog
+
+# 并发同步 worker 数（瓶颈是网络拉取；SQLite 已配 WAL + busy_timeout=30s 容忍并发写）
+_SYNC_WORKERS = 8
 
 logger = logging.getLogger(__name__)
 
@@ -116,6 +121,8 @@ def sync_one_stock(session: Session, code: str, full: bool = False) -> int:
             start = end
 
     if start > end:
+        # K 线已最新（无新数据可拉）：快照仍可能落后，用库最新行刷新
+        _refresh_score_snapshot(session, code)
         return 0
 
     df = router.fetch_stock_daily(code, start, end)
@@ -126,6 +133,7 @@ def sync_one_stock(session: Session, code: str, full: bool = False) -> int:
         start = end - timedelta(days=365 * 2)
         df = router.fetch_stock_daily(code, start, end)
     if df is None or df.empty:
+        _refresh_score_snapshot(session, code)
         return 0
 
     inserted = 0
@@ -168,11 +176,39 @@ def sync_one_stock(session: Session, code: str, full: bool = False) -> int:
     if rejected:
         logger.warning("[%s] 同步中丢弃 %d 行异常数据", code, rejected)
     session.commit()
+    # 用 K 线库最新行（此时已含本次新拉数据）刷新打分快照行情字段
+    _refresh_score_snapshot(session, code)
     # 注意：analysis_service 缓存指纹是最近 5 行内容 hash，K 线一改自动失效，无需手动 invalidate
 
     # 补算缺失的 turnover：从历史记录反推流通股本
     _fill_missing_turnover(session, code)
     return inserted
+
+
+def _refresh_score_snapshot(session: Session, code: str) -> None:
+    """用 K 线库最新行刷新打分快照行情字段（当日波动/收盘/换手/as_of_date）。
+
+    排行页 pct_chg 来自 StockScore 快照，而扫描时 as_of 常停在前一天（扫描在同步前）。
+    同步后即使 K 线已最新（start>end 无新数据可拉），快照也须追上 K 线库，故这里
+    查 K 线库最新行刷新。评分字段（total_score/各维度分）不动，那需要重扫。
+    """
+    from app.models.stock_score import StockScore
+
+    latest_row = session.exec(
+        select(KlineDaily).where(KlineDaily.code == code)
+        .order_by(KlineDaily.trade_date.desc()).limit(1)
+    ).first()
+    if latest_row is None:
+        return
+    score = session.get(StockScore, code)
+    if score is None:
+        return
+    score.close = float(latest_row.close) if latest_row.close is not None else None
+    score.pct_chg = _safe_float(latest_row.pct_chg)
+    score.turnover = _safe_float(latest_row.turnover)
+    score.as_of_date = latest_row.trade_date
+    session.add(score)
+    session.commit()
 
 
 def _fill_missing_turnover(session: Session, code: str) -> None:
@@ -217,6 +253,22 @@ def _sync_indices_if_due(session: Session) -> None:
         logger.exception("同步大盘指数失败（不影响自选股同步）")
 
 
+def _sync_one_isolated(code: str) -> tuple[str, int, str | None]:
+    """并发同步单只：每个 worker 用独立 session（主 session 不能跨线程共享）。
+
+    异常时 with 上下文自动 rollback；已 commit 的部分保留。返回 (code, 插入行数, 错误消息|None)。
+    """
+    from sqlmodel import Session as S
+
+    try:
+        with S(engine) as s:
+            inserted = sync_one_stock(s, code)
+            return code, inserted, None
+    except Exception as e:  # noqa: BLE001
+        logger.exception("同步 %s 失败", code)
+        return code, 0, str(e)
+
+
 def sync_watchlist(session: Session) -> SyncLog:
     log = SyncLog(started_at=datetime.now(), status="running")
     session.add(log)
@@ -227,21 +279,15 @@ def sync_watchlist(session: Session) -> SyncLog:
     _sync_indices_if_due(session)
 
     stocks = list(session.exec(select(Stock).where(Stock.is_watchlist == True)))  # noqa: E712
+    codes = [s.code for s in stocks]
     total = 0
     errors: list[str] = []
-    for stock in stocks:
-        # 提前抓出 code：session 若在 sync_one_stock 内 flush 失败会进入 pending-rollback，
-        # 之后再读 stock.code 会触发 lazy load → PendingRollbackError 覆盖真实异常
-        code = stock.code
-        try:
-            total += sync_one_stock(session, code)
-        except Exception as e:  # noqa: BLE001
-            logger.exception("同步 %s 失败", code)
-            errors.append(f"{code}: {e}")
-            try:
-                session.rollback()
-            except Exception:  # noqa: BLE001
-                pass
+    with ThreadPoolExecutor(max_workers=_SYNC_WORKERS) as pool:
+        for code, inserted, err in pool.map(_sync_one_isolated, codes):
+            if err:
+                errors.append(f"{code}: {err}")
+            else:
+                total += inserted
 
     log.finished_at = datetime.now()
     log.stocks_synced = len(stocks) - len(errors)
@@ -251,7 +297,7 @@ def sync_watchlist(session: Session) -> SyncLog:
     session.commit()
     session.refresh(log)
     logger.info(
-        "同步完成 status=%s success=%d/%d rows=%d",
-        log.status, log.stocks_synced, len(stocks), total,
+        "同步完成 status=%s success=%d/%d rows=%d (并发%d)",
+        log.status, log.stocks_synced, len(stocks), total, _SYNC_WORKERS,
     )
     return log, total, len(stocks)

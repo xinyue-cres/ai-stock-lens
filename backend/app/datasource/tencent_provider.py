@@ -33,8 +33,9 @@ class TencentProvider(BaseProvider):
 
     def __init__(self) -> None:
         super().__init__()
-        import akshare as ak
-        self._ak = ak
+        from app.datasource.akshare_guard import get_ak
+
+        self._ak = get_ak()
         self._spot_cache: pd.DataFrame | None = None
         self._spot_cache_ts: float = 0
 

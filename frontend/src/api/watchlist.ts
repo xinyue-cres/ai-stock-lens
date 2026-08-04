@@ -5,8 +5,8 @@ export async function getWatchlist() {
   return data as { code: string; name: string; market: string; pinned: boolean }[]
 }
 
-export async function addWatchlist(code: string) {
-  const { data } = await api.post('/watchlist', { code })
+export async function addWatchlist(code: string, groupIds?: number[]) {
+  const { data } = await api.post('/watchlist', { code, group_ids: groupIds })
   return data
 }
 

@@ -1,6 +1,6 @@
 from collections.abc import Generator
 
-from sqlalchemy import text
+from sqlalchemy import event, text
 from sqlmodel import Session, SQLModel, create_engine
 
 from app.config import get_settings
@@ -12,6 +12,18 @@ engine = create_engine(
     echo=False,
     connect_args={"check_same_thread": False},
 )
+
+
+@event.listens_for(engine, "connect")
+def _set_sqlite_pragma(dbapi_conn, _connection_record) -> None:
+    """SQLite 并发优化：
+    - WAL：读写可并发（选股扫描 8 worker 并发写 K 线/打分，前端同时读列表不互斥）
+    - busy_timeout=30s：写锁冲突时等待而非立刻抛 "database is locked"（默认 5s 太短）
+    """
+    cur = dbapi_conn.cursor()
+    cur.execute("PRAGMA journal_mode=WAL")
+    cur.execute("PRAGMA busy_timeout=30000")
+    cur.close()
 
 
 def _migrate_add_column(table: str, column: str, ddl: str) -> None:
@@ -37,7 +49,9 @@ def init_db() -> None:
         position,
         setting,
         stock,
+        stock_dividend,
         stock_group,
+        stock_score,
         sync_log,
     )
 

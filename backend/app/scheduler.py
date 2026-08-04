@@ -44,40 +44,42 @@ def start_scheduler() -> None:
     global _scheduler
     settings = get_settings()
     if not settings.sync_enabled:
-        logger.info("SYNC_ENABLED=false，跳过调度器启动")
+        logger.info("SYNC_ENABLED 为 false，跳过调度器启动")
         return
 
     _scheduler = BackgroundScheduler(timezone="Asia/Shanghai")
-    _scheduler.add_job(
-        _job_sync_watchlist,
-        trigger=CronTrigger(
-            hour=settings.sync_cron_hour,
-            minute=settings.sync_cron_minute,
-            day_of_week="mon-fri",
-        ),
-        id="sync_watchlist",
-        replace_existing=True,
-    )
-    # 同步完约 10 分钟后跑复盘（此时新的日线已入库）
-    review_minute = (settings.sync_cron_minute + 10) % 60
-    review_hour = settings.sync_cron_hour + ((settings.sync_cron_minute + 10) // 60)
-    _scheduler.add_job(
-        _job_review_all,
-        trigger=CronTrigger(
-            hour=review_hour,
-            minute=review_minute,
-            day_of_week="mon-fri",
-        ),
-        id="review_all",
-        replace_existing=True,
-    )
+
+    if settings.sync_enabled:
+        _scheduler.add_job(
+            _job_sync_watchlist,
+            trigger=CronTrigger(
+                hour=settings.sync_cron_hour,
+                minute=settings.sync_cron_minute,
+                day_of_week="mon-fri",
+            ),
+            id="sync_watchlist",
+            replace_existing=True,
+        )
+        # 同步完约 10 分钟后跑复盘（此时新的日线已入库）
+        review_minute = (settings.sync_cron_minute + 10) % 60
+        review_hour = settings.sync_cron_hour + ((settings.sync_cron_minute + 10) // 60)
+        _scheduler.add_job(
+            _job_review_all,
+            trigger=CronTrigger(
+                hour=review_hour,
+                minute=review_minute,
+                day_of_week="mon-fri",
+            ),
+            id="review_all",
+            replace_existing=True,
+        )
+
     _scheduler.start()
     logger.info(
-        "调度器已启动 · 同步 %02d:%02d · 复盘 %02d:%02d",
-        settings.sync_cron_hour,
-        settings.sync_cron_minute,
-        review_hour,
-        review_minute,
+        "调度器已启动 · 同步 %02d:%02d · 复盘 %02d:%02d（选股扫描仅手动触发）",
+        settings.sync_cron_hour, settings.sync_cron_minute,
+        review_hour if settings.sync_enabled else 0,
+        review_minute if settings.sync_enabled else 0,
     )
 
 

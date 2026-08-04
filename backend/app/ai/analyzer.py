@@ -24,6 +24,8 @@ from app.ai.prompts import (
     MEAN_REVERSION_SYSTEM,
     QUANT_SIMULATOR_SYSTEM,
     REFLEXIVITY_SYSTEM,
+    SCORE_STOCK_SYSTEM,
+    SCORE_SUMMARY_SYSTEM,
     TRADER_SYSTEM,
     build_anti_quant_prompt,
     build_bear_prompt,
@@ -33,6 +35,8 @@ from app.ai.prompts import (
     build_mean_reversion_prompt,
     build_quant_prompt,
     build_reflexivity_prompt,
+    build_score_stock_prompt,
+    build_score_summary_prompt,
     build_trader_prompt,
 )
 
@@ -293,6 +297,40 @@ def analyze_compare(stocks_data: list[dict], cross_metrics: dict | None = None) 
     raw.setdefault("correlation_note", "")
     raw.setdefault("risk_note", "")
     raw.setdefault("summary", "")
+    raw.setdefault("report_md", "")
+
+    return raw
+
+
+def analyze_stock_comment(item: dict) -> dict[str, Any]:
+    """单只股票的选股打分点评：单次调用，供批量逐股解读。"""
+    logger.info("个股点评 · %s", item.get("code"))
+    raw = _chat_json(
+        SCORE_STOCK_SYSTEM,
+        build_score_stock_prompt(item),
+        temperature=0.4,
+    )
+
+    raw.setdefault("verdict", "观望")
+    raw.setdefault("score_comment", "")
+    raw.setdefault("summary", "")
+    raw.setdefault("key_point", "")
+    return raw
+
+
+def analyze_score_summary(items: list[dict], context: str = "") -> dict[str, Any]:
+    """选股打分结果 AI 汇总：单次调用，独立于扫描流程。"""
+    logger.info("选股汇总 · %d 只标的", len(items))
+    raw = _chat_json(
+        SCORE_SUMMARY_SYSTEM,
+        build_score_summary_prompt(items, context),
+        temperature=0.4,
+    )
+
+    raw.setdefault("summary", "")
+    raw.setdefault("highlights", [])
+    raw.setdefault("watch", [])
+    raw.setdefault("risk_note", "")
     raw.setdefault("report_md", "")
 
     return raw

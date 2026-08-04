@@ -19,47 +19,40 @@ export function GlobalStatusBar() {
   const statusQ = useQuery({
     queryKey: ['sync-status'],
     queryFn: getSyncStatus,
-    refetchInterval: 60_000,
+    // 同步进行中 3s 轮询看进度；空闲 60s
+    refetchInterval: (q: any) => (q.state.data?.last_sync?.status === 'running' ? 3_000 : 60_000),
   })
+
+  const syncRunning = statusQ.data?.last_sync?.status === 'running'
 
   const afterSync = () => {
     qc.invalidateQueries({ queryKey: ['sync-status'] })
     inv.afterSync()
   }
 
-  const toastResult = (r: any, label: string) => {
-    const status = r?.status
-    const rows = r?.rows_inserted ?? 0
-    const done = r?.stocks_synced ?? 0
-    const total = r?.stocks_total ?? done
-    if (status === 'success' || status === 'partial') {
-      const suffix = rows === 0 ? '（无新交易日数据 · 稍后再试）' : `· 新增 ${rows} 行`
-      const level = rows === 0 ? 'warning' : 'success'
-      message[level](`${label} · ${done}/${total} 只 ${suffix}`)
-    } else {
-      message.error(`${label} ${status}${r?.error_msg ? ' · ' + r.error_msg : ''}`)
-    }
-  }
-
   const syncMut = useMutation({
     mutationKey: SYNC_ALL_KEY,
     mutationFn: runSync,
     onSuccess: (r: any) => {
-      toastResult(r, '同步完成')
+      if (r?.started === false) message.warning(r?.reason || '已有同步进行中')
+      else message.success('已在后台开始同步，完成后自动更新')
       afterSync()
     },
-    onError: () => message.warning('同步超时，后台仍在运行，稍后刷新即可'),
+    onError: () => message.error('触发同步失败'),
   })
 
   const refreshTodayMut = useMutation({
     mutationKey: SYNC_ALL_KEY,
     mutationFn: refreshToday,
     onSuccess: (r: any) => {
-      const deleted = r?.rows_deleted ?? 0
-      toastResult(r, `强制重拉完成 · 清除 ${deleted} 行`)
+      if (r?.started === false) message.warning(r?.reason || '已有同步进行中')
+      else
+        message.success(
+          r?.rows_deleted ? `已在后台重拉今日 · 清除 ${r.rows_deleted} 行` : '已在后台重拉今日数据',
+        )
       afterSync()
     },
-    onError: () => message.warning('同步超时，后台仍在运行，稍后刷新即可'),
+    onError: () => message.error('触发同步失败'),
   })
 
   const lastSyncText = useMemo(() => {
@@ -68,7 +61,7 @@ export function GlobalStatusBar() {
     return relativeTime(s.finished_at)
   }, [statusQ.data])
 
-  const busy = syncMut.isPending || refreshTodayMut.isPending || syncingElsewhere
+  const busy = syncMut.isPending || refreshTodayMut.isPending || syncingElsewhere || syncRunning
 
   return (
     <Space size={12} style={{ color: '#e5e7eb', fontSize: 13 }}>
@@ -84,7 +77,7 @@ export function GlobalStatusBar() {
           disabled={busy}
           onClick={() => syncMut.mutate()}
         >
-          {syncMut.isPending ? '同步中…' : '立即同步'}
+          {syncRunning || syncMut.isPending ? '同步中…' : '立即同步'}
         </Button>
       </Tooltip>
       <Popconfirm
@@ -102,7 +95,7 @@ export function GlobalStatusBar() {
             loading={refreshTodayMut.isPending}
             disabled={busy}
           >
-            {refreshTodayMut.isPending ? '同步中…' : '强制同步'}
+            {syncRunning || refreshTodayMut.isPending ? '同步中…' : '强制同步'}
           </Button>
         </Tooltip>
       </Popconfirm>

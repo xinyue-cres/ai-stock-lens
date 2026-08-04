@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import analysis, action_plan, chat, compare, groups, market, positions, review, settings, signals, stocks, sync, watchlist
+from app.api import analysis, action_plan, chat, compare, groups, market, positions, review, score, settings, signals, stocks, sync, watchlist
 from app.config import get_settings
 from app.db import init_db
 from app.scheduler import start_scheduler, stop_scheduler
@@ -55,3 +55,4 @@ app.include_router(sync.router)
 app.include_router(settings.router)
 app.include_router(review.router)
 app.include_router(positions.router)
+app.include_router(score.router)

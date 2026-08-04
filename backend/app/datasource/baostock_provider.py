@@ -74,8 +74,10 @@ class BaostockProvider(BaseProvider):
         with _bs_lock:
             lg = self._bs.login()
             if lg.error_code != "0":
-                logger.warning("baostock login failed: %s", lg.error_msg)
-                return self._empty_kline()
+                # 登录失败抛异常 → router record_failure 触发熔断（连续 3 次冷却 300s）。
+                # 若返回空会让 router 当成"无数据"而不熔断，黑名单期间每只股票都
+                # 重复登录卡 10s+ 进度条，同步会极慢。
+                raise RuntimeError(f"baostock login failed: {lg.error_msg}")
 
             try:
                 rs = self._bs.query_history_k_data_plus(
@@ -87,8 +89,7 @@ class BaostockProvider(BaseProvider):
                     adjustflag=flag,
                 )
                 if rs.error_code != "0":
-                    logger.warning("baostock query failed %s: %s", symbol, rs.error_msg)
-                    return self._empty_kline()
+                    raise RuntimeError(f"baostock query failed {symbol}: {rs.error_msg}")
 
                 rows: list[list[str]] = []
                 while rs.next():

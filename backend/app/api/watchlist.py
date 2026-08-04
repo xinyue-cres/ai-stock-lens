@@ -18,6 +18,7 @@ router = APIRouter(prefix="/api/watchlist", tags=["watchlist"])
 class WatchlistAdd(BaseModel):
     code: str
     note: str | None = None
+    group_ids: list[int] | None = None  # 加入自选时直接放进这些分组（选股页按当前分组加）
 
 
 @router.get("")
@@ -69,11 +70,14 @@ def add_watch(
     session: Session = Depends(get_session),
 ):
     stock = stock_service.add_to_watchlist(session, payload.code)
+    # 加入自选时如果带了分组，直接放进对应分组（set_group_ids 内部会 commit+refresh）
+    if payload.group_ids:
+        stock = stock_service.set_group_ids(session, stock.code, payload.group_ids)
     if payload.note is not None:
         stock.note = payload.note
-    session.add(stock)
-    session.commit()
-    session.refresh(stock)
+        session.add(stock)
+        session.commit()
+        session.refresh(stock)
     background_tasks.add_task(_background_sync, stock.code)
     return {"code": stock.code, "name": stock.name, "syncing": True}
 

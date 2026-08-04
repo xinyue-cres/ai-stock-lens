@@ -4,6 +4,7 @@ import { SettingOutlined } from '@ant-design/icons'
 import { Link, Route, Routes, useLocation } from 'react-router-dom'
 import Compare from './pages/Compare'
 import Positions from './pages/Positions'
+import Scoreboard from './pages/Scoreboard'
 import StockDetail from './pages/StockDetail'
 import StockList from './pages/StockList'
 import SyncLogs from './pages/SyncLogs'
@@ -14,6 +15,7 @@ const { Header, Content } = Layout
 
 function selectedKey(pathname: string): string {
   if (pathname.startsWith('/compare')) return 'compare'
+  if (pathname.startsWith('/scoreboard')) return 'scoreboard'
   if (pathname.startsWith('/positions')) return 'positions'
   if (pathname.startsWith('/sync')) return 'sync'
   return 'workbench'
@@ -35,6 +37,7 @@ export default function App() {
           selectedKeys={[selectedKey(location.pathname)]}
           items={[
             { key: 'workbench', label: <Link to="/">工作台</Link> },
+            { key: 'scoreboard', label: <Link to="/scoreboard">选股</Link> },
             { key: 'compare', label: <Link to="/compare">对比</Link> },
             { key: 'positions', label: <Link to="/positions">持仓</Link> },
             { key: 'sync', label: <Link to="/sync">任务状态</Link> },
@@ -56,6 +59,7 @@ export default function App() {
           <Route path="/" element={<StockList />} />
           <Route path="/stock/:code" element={<StockDetail />} />
           <Route path="/compare" element={<Compare />} />
+          <Route path="/scoreboard" element={<Scoreboard />} />
           <Route path="/positions" element={<Positions />} />
           <Route path="/sync" element={<SyncLogs />} />
         </Routes>

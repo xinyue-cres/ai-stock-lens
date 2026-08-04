@@ -54,7 +54,8 @@ def mk_router():
         em_p = MockProvider("eastmoney", em)
         bs_p = MockProvider("baostock", bs)
         sn_p = MockProvider("sina", sn)
-        r = DataRouter(eastmoney=em_p, baostock=bs_p, sina=sn_p)  # type: ignore[arg-type]
+        tc_p = MockProvider("tencent", sn)  # 复用 sina 行为
+        r = DataRouter(eastmoney=em_p, baostock=bs_p, sina=sn_p, tencent=tc_p)
         return r, em_p, bs_p, sn_p
     return _make
 
