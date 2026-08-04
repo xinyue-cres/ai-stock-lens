@@ -31,6 +31,8 @@ dist/
 .vite/
 *.local
 *.tsbuildinfo
+# npm 残留 lockfile（项目用 pnpm；防止本地镜像 URL 污染）
+package-lock.json
 
 # PyInstaller 构建产物
 build/
