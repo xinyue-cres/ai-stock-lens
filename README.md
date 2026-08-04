@@ -21,6 +21,11 @@
 - SSE 流式输出，Markdown 渲染
 - sessionStorage 持久化（刷新保留，关浏览器清空）
 
+### 选股打分
+- 全 A 股 + ETF 打分排行，核心维度「金叉延续性」：MACD DIF/DEA 金叉后能否涨一大段、不反复横跳
+- 趋势/可入手判断：金叉驱动决策树（可入手 / 过热 / 震荡 / 下跌），辅助波段适配、股息
+- 扫描进度实时展示，高分股一键加入自选，AI 逐股点评 + 整组汇总
+
 ### 数据源
 - DataRouter fallback 链：东财 → BaoStock → 新浪 → 腾讯
 - 支持 A 股 + 场内基金（ETF/LOF），基金走 fund_etf_hist_sina 独立通道
@@ -96,38 +101,31 @@ pnpm dev
 | 数据源 | AKShare（东财/新浪/腾讯）· BaoStock |
 | AI | OpenAI 兼容协议（默认 DeepSeek） |
 | 前端 | React 18 · Vite · TypeScript · Ant Design · TanStack Query |
-| 部署 | Docker Compose · Nginx |
+| 部署 | Windows 可执行版（双击即用）· Docker Compose · Nginx |
 
 ## 项目结构
 
 ```
 ai-stock-lens/
 ├── backend/
+│   ├── run.py               # Windows 可执行版入口（自动开浏览器）
 │   └── app/
 │       ├── ai/              # prompts/ + normalizers + analyzer + client
-│       ├── api/             # FastAPI 路由 (signals, analysis, action_plan, ...)
+│       ├── api/             # FastAPI 路由 (signals, analysis, score, ...)
 │       ├── datasource/      # 多源 provider + fallback router
-│       ├── features/        # 量化因子计算
+│       ├── features/        # 选股打分引擎 + 趋势判断
 │       ├── indicators/      # 技术指标引擎
 │       ├── models/          # SQLModel 数据模型
 │       └── services/        # 业务逻辑层
-│           ├── analysis_service   (K线 + 指标 + AI输入)
-│           ├── signals_service    (列表聚合 + 状态查询)
-│           ├── trader_service     (操作指示)
-│           ├── sync_service       (数据同步)
-│           └── ...
 ├── frontend/
 │   └── src/
 │       ├── api/             # HTTP 层 (一文件一领域)
-│       ├── hooks/           # 全局共享 hooks (useSignalsQuery)
-│       ├── shared/          # 工具 (theme, timeAgo)
 │       ├── pages/
-│       │   ├── StockList/   # 首页列表 (index + 6 子组件)
-│       │   └── StockDetail/ # 详情页
-│       └── features/
-│           ├── analysis/    # 分析功能 (hooks + panels + ai + action-plan)
-│           ├── stock-context/  # 当前股票 context
-│           ├── watchlist/   # 详情页左栏 sidebar
-│           └── settings/    # 设置
+│       │   ├── StockList/   # 首页列表
+│       │   ├── StockDetail/ # 详情页
+│       │   └── Scoreboard/  # 选股打分页
+│       └── features/        # 分析 / 对话 / 自选 / 设置
+├── packaging/               # PyInstaller 打包 spec（Windows 可执行版）
+├── .github/workflows/       # GitHub Actions（Windows 自动构建 + Release）
 └── docker-compose.yaml
 ```
