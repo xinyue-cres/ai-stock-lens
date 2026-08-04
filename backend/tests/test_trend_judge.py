@@ -11,7 +11,7 @@ from datetime import date, timedelta
 import numpy as np
 import pandas as pd
 
-from app.features.trend_judge import judge_trend
+from app.features.trend_judge import _decide_stage, judge_trend
 
 
 def _mk_df(closes: list[float]) -> pd.DataFrame:
@@ -62,3 +62,39 @@ def test_overheat_golden_touches_upper():
     assert r["trend_stage"] == "overheat"
     assert r["indicators"]["pct_b"] is not None
     assert r["indicators"]["pct_b"] > 0.85
+
+
+# ---------------------------------------------------------------------------
+# _decide_stage 纯逻辑单测：不依赖合成 K 线，直接覆盖决策树全部分支
+# ---------------------------------------------------------------------------
+
+def test_decide_stage_overheat():
+    assert _decide_stage(golden=True, pct_b=0.9, dist_high=-0.1, signal_score=85) == "overheat"
+
+
+def test_decide_stage_golden_deep_drawdown_unreliable():
+    # 深跌中刚金叉 + 历史金叉延续不可靠 → 下跌
+    assert _decide_stage(golden=True, pct_b=0.5, dist_high=-0.5, signal_score=50) == "downtrend"
+
+
+def test_decide_stage_golden_reliable():
+    # 历史金叉延续可靠 → 可入手（优先于"有空间"）
+    assert _decide_stage(golden=True, pct_b=0.5, dist_high=-0.2, signal_score=70) == "pullback_entry"
+
+
+def test_decide_stage_golden_space():
+    # 未过热、有上方空间 → 可入手；%B None（无带）也视为有空间
+    assert _decide_stage(golden=True, pct_b=0.5, dist_high=-0.2, signal_score=50) == "pullback_entry"
+    assert _decide_stage(golden=True, pct_b=None, dist_high=-0.1, signal_score=50) == "pullback_entry"
+
+
+def test_decide_stage_golden_weak_lower_band():
+    # 金叉但贴下轨（%B<0.2 弱势）→ 震荡观望
+    assert _decide_stage(golden=True, pct_b=0.1, dist_high=-0.1, signal_score=50) == "range"
+
+
+def test_decide_stage_deadcross():
+    # 死叉态：历史可靠→观望；否则→下跌
+    assert _decide_stage(golden=False, pct_b=0.5, dist_high=-0.1, signal_score=85) == "range"
+    assert _decide_stage(golden=False, pct_b=0.5, dist_high=-0.1, signal_score=50) == "downtrend"
+    assert _decide_stage(golden=False, pct_b=0.5, dist_high=-0.1, signal_score=None) == "downtrend"

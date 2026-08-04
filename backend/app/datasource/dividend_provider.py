@@ -29,6 +29,19 @@ def _recent_year_ends() -> list[str]:
     return [f"{year - i}1231" for i in range(_YEARS)]
 
 
+def _row_yield(row) -> float | None:
+    """从一行分红记录提取有效股息率（>0 的浮点数），无效返回 None。"""
+    y = row.get("现金分红-股息率")
+    if pd.notna(y):
+        try:
+            v = float(y)
+        except (TypeError, ValueError):
+            return None
+        if v > 0:
+            return v
+    return None
+
+
 def _fetch_year_table(ak, year_end: str) -> dict[str, list[float]]:
     """拉单个年度的全市场分红表，返回 {code: [该年度股息率...]}（小数）。"""
     df = ak.stock_fhps_em(date=year_end)
@@ -37,14 +50,9 @@ def _fetch_year_table(ak, year_end: str) -> dict[str, list[float]]:
     result: dict[str, list[float]] = {}
     for _, row in df.iterrows():
         code = str(row["代码"])
-        y = row.get("现金分红-股息率")
-        if pd.notna(y):
-            try:
-                v = float(y)
-            except (TypeError, ValueError):
-                continue
-            if v > 0:
-                result.setdefault(code, []).append(v)
+        v = _row_yield(row)
+        if v is not None:
+            result.setdefault(code, []).append(v)
     return result
 
 
@@ -55,14 +63,9 @@ def _fetch_single(ak, code: str) -> list[float]:
         return []
     yields_ = []
     for _, row in df.iterrows():
-        y = row.get("现金分红-股息率")
-        if pd.notna(y):
-            try:
-                v = float(y)
-            except (TypeError, ValueError):
-                continue
-            if v > 0:
-                yields_.append(v)
+        v = _row_yield(row)
+        if v is not None:
+            yields_.append(v)
     return yields_[:_YEARS]
 
 

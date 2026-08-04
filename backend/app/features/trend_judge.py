@@ -36,6 +36,29 @@ _REASONS = {
 }
 
 
+def _decide_stage(golden: bool, pct_b: float | None, dist_high: float,
+                  signal_score: float | None) -> str:
+    """金叉驱动的阶段决策（纯逻辑，无 I/O，可直接单测）。
+
+    - 金叉态 = 上升候选：贴上轨→过热；深跌且历史差→下跌；历史可靠→可入手；
+      未过热有空间→可入手；否则贴下轨（%B<0.2 弱势）→震荡
+    - 死叉态：历史可靠→观望等下次金叉；否则→下跌回避
+    """
+    if golden:
+        if pct_b is not None and pct_b > 0.85:
+            return "overheat"  # 贴上轨，短期涨过头
+        if dist_high < -0.4 and (signal_score is None or signal_score < _SIGNAL_RELIABLE):
+            return "downtrend"  # 深跌中刚金叉且历史不可靠
+        if signal_score is not None and signal_score >= _SIGNAL_RELIABLE:
+            return "pullback_entry"  # 金叉 + 历史可靠 → 可入手
+        if pct_b is None or pct_b >= 0.2:
+            return "pullback_entry"  # 金叉、未过热、有上方空间
+        return "range"  # 金叉但贴下轨（弱势）
+    if signal_score is not None and signal_score >= _SIGNAL_RELIABLE:
+        return "range"  # 历史金叉可靠，等下次金叉
+    return "downtrend"  # 死叉 + 历史差 → 回避
+
+
 def judge_trend(df: pd.DataFrame, signal_score: float | None = None) -> dict:
     """对单只标的做金叉驱动的趋势/可入手判断。
 
@@ -69,23 +92,8 @@ def judge_trend(df: pd.DataFrame, signal_score: float | None = None) -> dict:
     high_60 = float(df["high"].tail(60).max()) if len(df) >= 60 else float(df["high"].max())
     dist_high = close / high_60 - 1 if high_60 else 0.0
 
-    # 决策：金叉死叉为主导
-    if golden:
-        if pct_b is not None and pct_b > 0.85:
-            stage = "overheat"  # 贴上轨，短期涨过头
-        elif dist_high < -0.4 and (signal_score is None or signal_score < _SIGNAL_RELIABLE):
-            stage = "downtrend"  # 深跌中刚金叉且历史不可靠
-        elif signal_score is not None and signal_score >= _SIGNAL_RELIABLE:
-            stage = "pullback_entry"  # 金叉 + 历史可靠 → 可入手
-        elif pct_b is None or pct_b >= 0.2:
-            stage = "pullback_entry"  # 金叉、未过热、有上方空间
-        else:
-            stage = "range"  # 金叉但贴下轨（弱势）
-    else:
-        if signal_score is not None and signal_score >= _SIGNAL_RELIABLE:
-            stage = "range"  # 历史金叉可靠，等下次金叉
-        else:
-            stage = "downtrend"  # 死叉 + 历史差 → 回避
+    # 决策：金叉死叉为主导（纯逻辑，见 _decide_stage）
+    stage = _decide_stage(golden, pct_b, dist_high, signal_score)
 
     # 辅助参考（不参与决策）
     adx_info = compute_adx(df)
