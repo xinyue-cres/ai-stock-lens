@@ -30,6 +30,10 @@ node_modules/
 dist/
 .vite/
 *.local
+*.tsbuildinfo
+
+# PyInstaller 构建产物
+build/
 
 # IDE
 .vscode/

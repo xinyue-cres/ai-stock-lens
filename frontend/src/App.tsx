@@ -8,7 +8,7 @@ import Scoreboard from './pages/Scoreboard'
 import StockDetail from './pages/StockDetail'
 import StockList from './pages/StockList'
 import SyncLogs from './pages/SyncLogs'
-import { SettingsDrawer } from './features/settings'
+import { AiKeyBanner, SettingsDrawer } from './features/settings'
 import { GlobalStatusBar } from './features/status-bar'
 
 const { Header, Content } = Layout
@@ -55,6 +55,7 @@ export default function App() {
         </Tooltip>
       </Header>
       <Content style={{ padding: '16px 16px 80px' }}>
+        <AiKeyBanner onOpenSettings={() => setSettingsOpen(true)} />
         <Routes>
           <Route path="/" element={<StockList />} />
           <Route path="/stock/:code" element={<StockDetail />} />

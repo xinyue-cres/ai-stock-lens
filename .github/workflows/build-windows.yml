@@ -1,0 +1,58 @@
+name: build-windows
+
+on:
+  push:
+    tags:
+      - 'v*'          # 打 tag（如 v1.0.0）自动构建并发 Release
+  workflow_dispatch:  # 也支持手动触发（只产 artifact，不打 Release）
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install backend deps + PyInstaller
+        run: |
+          cd backend
+          python -m pip install -e .
+          pip install pyinstaller
+
+      - name: Set up Node + pnpm
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Build frontend
+        shell: bash
+        run: |
+          cd frontend
+          corepack enable
+          pnpm install
+          pnpm build
+
+      - name: PyInstaller package
+        run: pyinstaller packaging/AI-Stock-Lens.spec
+
+      - name: Zip bundle
+        shell: pwsh
+        run: |
+          Compress-Archive -Path dist/AI-Stock-Lens -DestinationPath dist/AI-Stock-Lens-win.zip -Force
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AI-Stock-Lens-win
+          path: dist/AI-Stock-Lens-win.zip
+
+      - name: Create Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/AI-Stock-Lens-win.zip
+          generate_release_notes: true

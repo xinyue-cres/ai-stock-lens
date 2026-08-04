@@ -1,7 +1,21 @@
+import os
+import sys
 from functools import lru_cache
 from pathlib import Path
 
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+def _default_db_path() -> str:
+    """数据库默认位置。
+
+    - 打包态（PyInstaller）：exe 旁 data/app.db（便携，绿色软件体验）
+    - 源码态：backend/data/app.db
+    """
+    if getattr(sys, "frozen", False):
+        return os.path.join(os.path.dirname(sys.executable), "data", "app.db")
+    return "data/app.db"
 
 
 class Settings(BaseSettings):
@@ -29,7 +43,16 @@ class Settings(BaseSettings):
         return int(self.scan_kline_bars * 1.4)
 
     app_log_level: str = "INFO"
-    db_path: str = "/app/data/app.db"
+    # 默认随运行环境：打包态 exe 旁 data/，源码态 backend/data/；可被 .env 覆盖
+    db_path: str = Field(default_factory=_default_db_path)
+
+    @field_validator("db_path", mode="before")
+    @classmethod
+    def _empty_db_path_fallback(cls, v: object) -> object:
+        """.env 里 DB_PATH 留空时回退默认位置（避免空串覆盖成内存库）。"""
+        if v is None or v == "":
+            return _default_db_path()
+        return v
 
     @property
     def db_url(self) -> str:
