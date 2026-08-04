@@ -26,7 +26,8 @@ jobs:
       - name: Set up Node + pnpm
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
+          # corepack 通过 packageManager 字段固定 pnpm 版本（与本地一致）
 
       - name: Build frontend
         shell: bash
