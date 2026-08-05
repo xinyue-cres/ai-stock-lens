@@ -43,6 +43,12 @@ export interface SignalComponent {
   current_state?: string | null
   dif_slope?: number | null
   dif_slope_dir?: 'up' | 'down' | 'flat' | null
+  // 信号汇总（趋势判断卡展示用）
+  current_signal?: 'golden' | 'death' | null
+  signal_days?: number | null
+  signal_gain_pct?: number | null
+  hist_golden_avg_gain_pct?: number | null
+  hist_death_avg_change_pct?: number | null
 }
 
 export interface BandComponent {

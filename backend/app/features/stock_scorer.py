@@ -143,6 +143,38 @@ def _golden_life_score(signals: list[tuple[int, str]]) -> float:
     return round(score, 1)
 
 
+def _signal_summary(close: pd.Series, signals: list[tuple[int, str]]) -> dict:
+    """当前信号状态与历史金叉/死叉后平均涨跌（详情页汇总展示用）。
+
+    - current_signal / signal_days：最近一次是金叉还是死叉、已持续几个交易日
+    - signal_gain_pct：当前信号期间累计涨跌幅 %
+    - hist_golden_avg_gain_pct：历史金叉后 20 日平均涨幅 %（样本≥3）
+    - hist_death_avg_change_pct：历史死叉后 20 日平均涨跌幅 %（样本≥3）
+    """
+    info: dict = {}
+    n = len(close)
+    if signals:
+        last_idx, last_dir = signals[-1]
+        info["current_signal"] = last_dir  # golden / death
+        info["signal_days"] = max(0, n - 1 - last_idx)
+        if 0 <= last_idx < n and close.iloc[last_idx] > 0:
+            info["signal_gain_pct"] = round((close.iloc[-1] / close.iloc[last_idx] - 1) * 100, 2)
+        else:
+            info["signal_gain_pct"] = None
+
+    golden_gains: list[float] = []
+    death_changes: list[float] = []
+    for idx, direction in signals:
+        end = idx + 20
+        if end >= n or close.iloc[idx] <= 0:
+            continue
+        chg = (close.iloc[end] / close.iloc[idx] - 1) * 100
+        (golden_gains if direction == "golden" else death_changes).append(chg)
+    info["hist_golden_avg_gain_pct"] = round(statistics.mean(golden_gains), 2) if len(golden_gains) >= 3 else None
+    info["hist_death_avg_change_pct"] = round(statistics.mean(death_changes), 2) if len(death_changes) >= 3 else None
+    return info
+
+
 def _golden_continuation(df: pd.DataFrame) -> dict:
     """金叉延续性：出现金叉（MACD DIF 上穿 DEA）后能否成功上涨一大段、不反复横跳。
 
@@ -190,6 +222,7 @@ def _golden_continuation(df: pd.DataFrame) -> dict:
         "current_state": current_state,
         "dif_slope": dif_slope,
         "dif_slope_dir": dif_slope_dir,
+        **_signal_summary(close, signals),
     }
 
 
@@ -310,6 +343,11 @@ def score_stock(df: pd.DataFrame, dividend_yield: float | None = None,
                 "current_state": golden["current_state"],
                 "dif_slope": golden["dif_slope"],
                 "dif_slope_dir": golden["dif_slope_dir"],
+                "current_signal": golden.get("current_signal"),
+                "signal_days": golden.get("signal_days"),
+                "signal_gain_pct": golden.get("signal_gain_pct"),
+                "hist_golden_avg_gain_pct": golden.get("hist_golden_avg_gain_pct"),
+                "hist_death_avg_change_pct": golden.get("hist_death_avg_change_pct"),
             },
             "band": band,
             "dividend": {"dividend_yield": dividend_yield},

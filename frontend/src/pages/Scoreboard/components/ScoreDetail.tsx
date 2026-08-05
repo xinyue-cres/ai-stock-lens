@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { Button, Card, Descriptions, Empty, Progress, Space, Tag, Typography } from 'antd'
 import { LineChartOutlined, PlusOutlined } from '@ant-design/icons'
 import type { ScoreDetail } from '@/api/score'
@@ -8,6 +9,25 @@ const { Text } = Typography
 function pct(v: number | null | undefined): string {
   if (v == null) return '-'
   return `${v >= 0 ? '+' : ''}${v.toFixed(2)}%`
+}
+
+/** 「标签：值」紧凑行：值紧跟标签，天然对齐，不依赖列宽 */
+function Field({ label, children, full }: { label: ReactNode; children: ReactNode; full?: boolean }) {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexWrap: 'wrap',
+        alignItems: 'baseline',
+        columnGap: 4,
+        lineHeight: '22px',
+        gridColumn: full ? '1 / -1' : undefined,
+      }}
+    >
+      <span style={{ color: 'rgba(0, 0, 0, 0.45)', whiteSpace: 'nowrap' }}>{label}:</span>
+      <span style={{ fontWeight: 500 }}>{children}</span>
+    </div>
+  )
 }
 
 interface ScoreDetailProps {
@@ -131,16 +151,36 @@ export default function ScoreDetail({ detail, onAddWatchlist, onOpenDetail }: Sc
         </Text>
       </Card>
 
-      {/* 趋势判断明细 */}
-      <Card size="small" title="趋势判断">
-        <Descriptions column={2} size="small">
-          <Descriptions.Item label="阶段">{stage?.label ?? '-'}</Descriptions.Item>
-          <Descriptions.Item label="可入手">{detail.can_entry ? '是' : '否'}</Descriptions.Item>
-          <Descriptions.Item label="均线结构">{trendInd.arrangement ?? '-'}</Descriptions.Item>
-          <Descriptions.Item label="RSI(14)">{trendInd.rsi14 ?? '-'}</Descriptions.Item>
-          <Descriptions.Item label="ADX">{trendInd.adx ?? '-'}</Descriptions.Item>
-          <Descriptions.Item label="偏离MA60">{trendInd.dist_ma60_pct != null ? `${trendInd.dist_ma60_pct}%` : '-'}</Descriptions.Item>
-        </Descriptions>
+      {/* 趋势判断明细：金叉/死叉信号汇总 */}
+      <Card size="small" title="趋势判断 · 信号汇总">
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '2px 24px' }}>
+          <Field label="阶段">{stage?.label ?? '-'}</Field>
+          <Field label="可入手">{detail.can_entry ? '是' : '否'}</Field>
+          <Field label="当前信号">
+            {sig.current_state ?? (sig.current_signal ? (sig.current_signal === 'golden' ? '金叉' : '死叉') : '-')}
+          </Field>
+          <Field label="信号持续">{sig.signal_days != null ? `${sig.signal_days} 天` : '-'}</Field>
+          <Field label="信号期间涨跌">{sig.signal_gain_pct != null ? pct(sig.signal_gain_pct) : '-'}</Field>
+          <Field label="当日涨跌">{pct(detail.pct_chg)}</Field>
+          <Field label="历史金叉后20日均涨幅">
+            {sig.hist_golden_avg_gain_pct != null ? pct(sig.hist_golden_avg_gain_pct) : '-'}
+          </Field>
+          <Field label="历史死叉后20日均涨跌">
+            {sig.hist_death_avg_change_pct != null ? pct(sig.hist_death_avg_change_pct) : '-'}
+          </Field>
+          <Field label="DIF 斜率">
+            {sig.dif_slope != null
+              ? `${sig.dif_slope > 0 ? '+' : ''}${sig.dif_slope}${sig.dif_slope_dir === 'up' ? ' ↗' : sig.dif_slope_dir === 'down' ? ' ↘' : ''}`
+              : '-'}
+          </Field>
+          <Field label="ADX">{sig.adx ?? trendInd.adx ?? '-'}</Field>
+          <Field label="均线结构" full>{trendInd.arrangement ?? '-'}</Field>
+        </div>
+        {detail.entry_reason && (
+          <div style={{ marginTop: 8, fontSize: 12, color: '#6b7280', background: '#f3f4f6', borderRadius: 6, padding: '8px 10px' }}>
+            判断依据：{detail.entry_reason}
+          </div>
+        )}
       </Card>
 
       {/* 趋势关键价位 */}
