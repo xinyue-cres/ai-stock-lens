@@ -124,14 +124,14 @@ export default function ScoreDetail({ detail, onAddWatchlist, onOpenDetail }: Sc
           </Field>
           <Field label="信号期间涨跌">{sig.signal_gain_pct != null ? pct(sig.signal_gain_pct) : '-'}</Field>
           <Field label="当日涨跌">{pct(detail.pct_chg)}</Field>
-          <Field label="历史金叉后20日均涨幅">
-            {sig.hist_golden_avg_gain_pct != null
-              ? `${pct(sig.hist_golden_avg_gain_pct)}${sig.hist_golden_samples != null ? `（${sig.hist_golden_samples}次）` : ''}`
+          <Field label="历史金叉周期峰值涨幅">
+            {sig.hist_golden_peak_pct != null
+              ? `${pct(sig.hist_golden_peak_pct)}${sig.hist_golden_samples != null ? `（${sig.hist_golden_samples}次）` : ''}`
               : '-'}
           </Field>
-          <Field label="历史死叉后20日均涨跌">
-            {sig.hist_death_avg_change_pct != null
-              ? `${pct(sig.hist_death_avg_change_pct)}${sig.hist_death_samples != null ? `（${sig.hist_death_samples}次）` : ''}`
+          <Field label="历史死叉周期谷值跌幅">
+            {sig.hist_death_trough_pct != null
+              ? `${pct(sig.hist_death_trough_pct)}${sig.hist_death_samples != null ? `（${sig.hist_death_samples}次）` : ''}`
               : '-'}
           </Field>
           <Field label="DIF 斜率">

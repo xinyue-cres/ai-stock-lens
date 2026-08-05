@@ -50,9 +50,9 @@ export interface SignalComponent {
   signal_gain_pct?: number | null
   hist_golden_days?: number | null
   hist_golden_samples?: number | null
-  hist_golden_avg_gain_pct?: number | null
+  hist_golden_peak_pct?: number | null
   hist_death_samples?: number | null
-  hist_death_avg_change_pct?: number | null
+  hist_death_trough_pct?: number | null
 }
 
 export interface BandComponent {

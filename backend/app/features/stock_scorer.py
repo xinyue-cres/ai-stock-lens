@@ -54,29 +54,34 @@ def _tri(x: float | None, lo: float, mid: float, hi: float) -> float:
 # ---------------------------------------------------------------------------
 
 def _post_golden_gain(close: pd.Series, signals: list[tuple[int, str]]) -> float:
-    """历史金叉后大段上涨：后 20 日累计涨幅均值 + 胜率合成。
+    """历史金叉后涨幅分：每次金叉→死叉周期内到峰值（区间最高收盘）的最大涨幅 + 胜率合成。
 
-    优先用 20 日（"一大段"），样本 <5 逐级降级到 10/5 日；仍不足中性 50。
+    用"周期内峰值涨幅"而非固定 20 日窗口——金叉长度不一（5~40 天），固定窗口
+    测不准"这次金叉能涨到多高"；峰值涨幅衡量上涨潜力。锚点 18%（采样：峰值涨幅
+    中位 ~9%、p90 ~17%）。
     """
-    gains: dict[int, list[float]] = {h: [] for h in _GOLDEN_HORIZONS}
-    for idx, direction in signals:
-        if direction != "golden":
+    n = len(close)
+    peak_gains: list[float] = []
+    for i in range(len(signals)):
+        if signals[i][1] != "golden":
             continue
-        for h in _GOLDEN_HORIZONS:
-            end = idx + h
-            if end < len(close) and close.iloc[idx] > 0:
-                gains[h].append(close.iloc[end] / close.iloc[idx] - 1)
+        gidx = signals[i][0]
+        end_idx = n - 1
+        for j in range(i + 1, len(signals)):
+            if signals[j][1] == "death":
+                end_idx = signals[j][0]
+                break
+        if end_idx <= gidx or close.iloc[gidx] <= 0:
+            continue
+        seg = close.iloc[gidx:end_idx + 1]
+        peak_gains.append(seg.max() / close.iloc[gidx] - 1)
 
-    for h in (20, 10, 5):
-        arr = gains[h]
-        if len(arr) >= 5:
-            avg = statistics.mean(arr)
-            wr = sum(1 for g in arr if g > 0) / len(arr)
-            # 锚点 10%：A 股金叉后 20 日平均涨幅 2~5% 是常态，8~10% 已属很强，
-            # 旧锚点 15% 让高分物理上不可达（实测分布验证），贴近真实上沿
-            gain_score = _norm(avg, 0.0, 0.10) * 100
-            wr_score = _norm(wr, 0.5, 0.80) * 100
-            return round(0.6 * gain_score + 0.4 * wr_score, 1)
+    if len(peak_gains) >= 5:
+        avg = statistics.mean(peak_gains)
+        wr = sum(1 for g in peak_gains if g > 0) / len(peak_gains)
+        gain_score = _norm(avg, 0.0, 0.18) * 100
+        wr_score = _norm(wr, 0.5, 0.80) * 100
+        return round(0.6 * gain_score + 0.4 * wr_score, 1)
     return 50.0  # 金叉样本不足，中性
 
 
@@ -162,18 +167,27 @@ def _signal_summary(close: pd.Series, signals: list[tuple[int, str]]) -> dict:
         else:
             info["signal_gain_pct"] = None
 
-    golden_gains: list[float] = []
-    death_changes: list[float] = []
-    for idx, direction in signals:
-        end = idx + 20
-        if end >= n or close.iloc[idx] <= 0:
+    # 历史金叉周期内峰值涨幅、死叉周期内谷值跌幅（相对固定 20 日窗口更能反映涨/跌潜力）
+    golden_peaks: list[float] = []
+    death_valleys: list[float] = []
+    for i in range(len(signals)):
+        s_idx, s_dir = signals[i]
+        end_idx = n - 1
+        for j in range(i + 1, len(signals)):
+            if signals[j][1] != s_dir:
+                end_idx = signals[j][0]
+                break
+        if end_idx <= s_idx or close.iloc[s_idx] <= 0:
             continue
-        chg = (close.iloc[end] / close.iloc[idx] - 1) * 100
-        (golden_gains if direction == "golden" else death_changes).append(chg)
-    info["hist_golden_samples"] = len(golden_gains)
-    info["hist_golden_avg_gain_pct"] = round(statistics.mean(golden_gains), 2) if len(golden_gains) >= 3 else None
-    info["hist_death_samples"] = len(death_changes)
-    info["hist_death_avg_change_pct"] = round(statistics.mean(death_changes), 2) if len(death_changes) >= 3 else None
+        seg = close.iloc[s_idx:end_idx + 1]
+        if s_dir == "golden":
+            golden_peaks.append((seg.max() / close.iloc[s_idx] - 1) * 100)
+        else:
+            death_valleys.append((seg.min() / close.iloc[s_idx] - 1) * 100)
+    info["hist_golden_samples"] = len(golden_peaks)
+    info["hist_golden_peak_pct"] = round(statistics.mean(golden_peaks), 2) if len(golden_peaks) >= 3 else None
+    info["hist_death_samples"] = len(death_valleys)
+    info["hist_death_trough_pct"] = round(statistics.mean(death_valleys), 2) if len(death_valleys) >= 3 else None
 
     # 历史金叉平均持续天数（金叉→死叉间隔，截尾均值，与"不横跳分"同口径）
     lives: list[int] = []
@@ -386,9 +400,9 @@ def score_stock(df: pd.DataFrame, dividend_yield: float | None = None,
                 "signal_gain_pct": golden.get("signal_gain_pct"),
                 "hist_golden_days": golden.get("hist_golden_days"),
                 "hist_golden_samples": golden.get("hist_golden_samples"),
-                "hist_golden_avg_gain_pct": golden.get("hist_golden_avg_gain_pct"),
+                "hist_golden_peak_pct": golden.get("hist_golden_peak_pct"),
                 "hist_death_samples": golden.get("hist_death_samples"),
-                "hist_death_avg_change_pct": golden.get("hist_death_avg_change_pct"),
+                "hist_death_trough_pct": golden.get("hist_death_trough_pct"),
             },
             "band": band,
             "dividend": {"dividend_yield": dividend_yield},
