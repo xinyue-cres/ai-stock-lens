@@ -115,7 +115,9 @@ def _fetch_kline(code: str, settings) -> object | None:
         end = date.today()
         start = end - timedelta(days=settings.scan_kline_days)  # 约 2 自然年 ≈ 500 交易日
         df = get_data_router().fetch_stock_daily(code, start, end)
-        time.sleep(0.08)
+        # 请求间限流，防数据源封禁；当前东财不可用走新浪兜底，可更激进。
+        # 若东财恢复后被限流，可回调到 0.05~0.08
+        time.sleep(0.02)
         return df
     except Exception:  # noqa: BLE001
         logger.warning("拉取 %s K 线失败", code)
@@ -123,13 +125,14 @@ def _fetch_kline(code: str, settings) -> object | None:
 
 
 def _upsert(session: Session, code: str, name: str, scored: dict, trend: dict,
-            scan_date: date, as_of_date: date | None) -> None:
+            scan_date: date, as_of_date: date | None, scope: str) -> None:
     row = session.get(StockScore, code)
     if row is None:
         row = StockScore(code=code)
     row.name = name
     row.is_fund = is_fund_code(code)
     row.scan_date = scan_date
+    row.scan_scope = scope
     row.as_of_date = as_of_date
     row.total_score = scored["total_score"]
     row.signal_score = scored["signal_score"]
@@ -184,7 +187,7 @@ def _build_plan(session: Session, scope: str, codes: list[str] | None,
         raise
 
 
-def _run_scan(todo: list[str], name_map: dict[str, str], settings, today: date) -> None:
+def _run_scan(todo: list[str], name_map: dict[str, str], settings, today: date, scope: str) -> None:
     """后台线程执行实际打分（启动后立即返回，不阻塞 POST）。
 
     股息 map 在后台线程内用独立 Session 拉取：
@@ -211,7 +214,7 @@ def _run_scan(todo: list[str], name_map: dict[str, str], settings, today: date) 
                         trend = judge_trend(df, signal_score=scored["signal_score"])
                         as_of_date = _parse_as_of(df["trade_date"].iloc[-1])
                         with Session(engine) as s:
-                            _upsert(s, code, name_map.get(code, code), scored, trend, today, as_of_date)
+                            _upsert(s, code, name_map.get(code, code), scored, trend, today, as_of_date, scope)
                         failed = False
             except Exception:  # noqa: BLE001
                 logger.exception("打分失败 %s", code)
@@ -254,6 +257,6 @@ def scan_market(session: Session, scope: str = "all", codes: list[str] | None = 
         return {"started": True, "total": 0, "skipped": plan["skipped"], "reason": "全部已扫描"}
 
     threading.Thread(
-        target=_run_scan, args=(plan["todo"], plan["name_map"], settings, today), daemon=True
+        target=_run_scan, args=(plan["todo"], plan["name_map"], settings, today, scope), daemon=True
     ).start()
     return {"started": True, "total": plan["total"], "pending": True}

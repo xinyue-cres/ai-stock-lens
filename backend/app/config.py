@@ -34,7 +34,7 @@ class Settings(BaseSettings):
     sync_cron_minute: int = 10
 
     # 选股打分扫描（仅手动触发；scan_enabled/scan_cron_* 已移除，不再定时自动扫全 A）
-    scan_concurrency: int = 8
+    scan_concurrency: int = 12
     scan_kline_bars: int = 500
 
     @property

@@ -52,9 +52,10 @@ export default function ScoreboardPage() {
   const groups = groupsQ.data ?? []
 
   // 打分排行（选了自选分组范围时，按所选分组过滤显示）
+  // scope 进 queryKey：切全 A/自选/分组时强制重查对应范围的最近批次，避免显示上次范围的数据
   const activeGroupIds = scope === 'group' && groupIds.length ? groupIds.join(',') : undefined
   const listQ = useQuery({
-    queryKey: ['score-list', sortDir, onlyEntry, activeGroupIds],
+    queryKey: ['score-list', scope, sortDir, onlyEntry, activeGroupIds],
     queryFn: () =>
       getScoreList({
         sort_by: 'total',
@@ -62,6 +63,7 @@ export default function ScoreboardPage() {
         limit: 200,
         can_entry: onlyEntry ? true : undefined,
         group_ids: activeGroupIds,
+        scope,
       }),
   })
   const items = listQ.data ?? []

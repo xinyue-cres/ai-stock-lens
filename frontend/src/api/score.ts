@@ -92,6 +92,7 @@ export interface ScoreListParams {
   can_entry?: boolean
   stage?: string
   group_ids?: string // 逗号分隔的自选分组 id，如 "9,10"
+  scope?: string // all/watchlist/group，决定取哪个范围的最近扫描批次
 }
 
 export async function getScoreList(params: ScoreListParams = {}): Promise<ScoreItem[]> {

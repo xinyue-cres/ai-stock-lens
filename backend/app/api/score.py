@@ -94,6 +94,21 @@ def _sig(r: StockScore) -> dict:
     return sig if isinstance(sig, dict) else {}
 
 
+def _latest_scan_date(session: Session, scope: str | None) -> date | None:
+    """当前范围对应的最近扫描批次日期。
+
+    按 scan_scope 精确匹配（全 A/自选/分组各自的最新批次，互不串——修复
+    "切全 A 却显示上次分组扫描批次"）；该范围无记录（如旧数据未标 scope）时回退全局最新。
+    """
+    if scope and scope in ("all", "watchlist", "group"):
+        latest = session.exec(
+            select(func.max(StockScore.scan_date)).where(StockScore.scan_scope == scope)
+        ).first()
+        if latest:
+            return latest
+    return session.exec(select(func.max(StockScore.scan_date))).first()
+
+
 def _query_scores(
     session: Session,
     sort_by: str = "total",
@@ -103,16 +118,18 @@ def _query_scores(
     can_entry: bool | None = None,
     stage: str | None = None,
     group_ids: str | None = None,
+    scope: str | None = None,
 ) -> list[StockScore]:
     """打分查询（list 与 summarize 共用同一套过滤/排序）。
 
     group_ids：逗号分隔的自选分组 id（任意匹配），传了只显示这些分组内的标的打分。
+    scope：当前查看范围（all/watchlist/group），决定取哪个范围的最近扫描批次。
     """
     sort_col = sort_by if sort_by in _SORTABLE else "total"
     col = getattr(StockScore, sort_col, StockScore.total_score)
     stmt = select(StockScore)
-    # 只显示最近一次扫描批次，避免混入过期/旧算法残留行（scan_date 跨天时尤为关键）
-    latest = session.exec(select(func.max(StockScore.scan_date))).first()
+    # 只显示当前范围最近一次扫描批次，避免混入过期/旧算法残留行（scan_date 跨天时尤为关键）
+    latest = _latest_scan_date(session, scope)
     if latest:
         stmt = stmt.where(StockScore.scan_date == latest)
     if min_score is not None:
@@ -142,12 +159,13 @@ def list_scores(
     can_entry: bool | None = None,
     stage: str | None = None,
     group_ids: str | None = None,  # 逗号分隔的自选分组 id，如 "9,10"（任意匹配）
+    scope: str | None = None,  # all/watchlist/group，决定取哪个范围的最近扫描批次
 ):
     """打分排行列表。按综合分或任意子维度排序，支持过滤。
 
     group_ids 传了则只显示这些自选分组内的标的打分（多选，命中任一即显示）。
     """
-    rows = _query_scores(session, sort_by, dir, limit, min_score, can_entry, stage, group_ids)
+    rows = _query_scores(session, sort_by, dir, limit, min_score, can_entry, stage, group_ids, scope)
     return [_serialize(r) for r in rows]
 
 
@@ -192,6 +210,7 @@ def summarize_scores(payload: SummarizeRequest, session: Session = Depends(get_s
     rows = _query_scores(
         session, payload.sort_by, payload.dir, payload.limit,
         can_entry=payload.can_entry, group_ids=payload.group_ids,
+        scope=payload.scope,
     )
     if not rows:
         raise HTTPException(404, "当前范围还没有打分数据，请先触发扫描")
@@ -214,6 +233,7 @@ def analyze_batch(payload: AnalyzeBatchRequest, session: Session = Depends(get_s
     rows = _query_scores(
         session, payload.sort_by, payload.dir, limit,
         can_entry=payload.can_entry, group_ids=payload.group_ids,
+        scope=payload.scope,
     )
     if not rows:
         raise HTTPException(404, "当前范围还没有打分数据，请先触发扫描")

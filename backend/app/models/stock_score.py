@@ -11,6 +11,7 @@ class StockScore(SQLModel, table=True):
     name: str = Field(default="")
     is_fund: bool = Field(default=False, description="ETF/LOF 标记（股息走中性）")
     scan_date: date = Field(index=True, description="扫描日期")
+    scan_scope: str | None = Field(default=None, index=True, description="扫描范围 all/watchlist/group")
     as_of_date: date | None = Field(default=None, description="K 线最后交易日")
 
     total_score: float = Field(default=0.0, description="综合分 0-100")

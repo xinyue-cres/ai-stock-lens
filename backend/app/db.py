@@ -78,6 +78,25 @@ def init_db() -> None:
     # 迁移：删除 stock_score 残留的 lift_score 列（模型已移除；NOT NULL 导致首次新建快照失败）
     _migrate_drop_column("stock_score", "lift_score")
 
+    # 迁移：stock_score.scan_scope——记录每次扫描范围，避免不同 scope 扫描混在同一天
+    # 导致列表按全局最新 scan_date 显示时串范围（切全 A 却显示上次分组扫描的批次）
+    _migrate_add_column("stock_score", "scan_scope", "TEXT")
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                UPDATE stock_score SET scan_scope = 'all'
+                WHERE scan_scope IS NULL AND scan_date IN (
+                    SELECT scan_date FROM stock_score WHERE scan_scope IS NULL
+                    GROUP BY scan_date HAVING COUNT(*) > 500
+                )
+                """
+            )
+        )
+        conn.execute(
+            text("UPDATE stock_score SET scan_scope = 'watchlist' WHERE scan_scope IS NULL")
+        )
+
     # 增量迁移：ai_report.extras_json（老 DB 无此列）
     _migrate_add_column("ai_report", "extras_json", "TEXT")
 
