@@ -86,9 +86,6 @@ export default function ScoreRow({ item, active, onClick, onAddWatchlist, onOpen
         ))}
       </div>
 
-      {/* 弹性空隙：拉开金息波与右侧趋势/状态的距离 */}
-      <div style={{ flex: 1, minWidth: 8 }} />
-
       {/* 当前 MACD 状态（新增显示，详情页仍保留） */}
       {item.current_state && (
         <span
@@ -123,12 +120,15 @@ export default function ScoreRow({ item, active, onClick, onAddWatchlist, onOpen
         </Tooltip>
       )}
 
-      {/* 趋势徽章（可入手 / 震荡 / 下跌等，放最右） */}
+      {/* 趋势徽章（可入手 / 震荡 / 下跌等） */}
       {stage && (
         <Tag style={{ margin: 0, marginLeft: 6, color: stage.color, borderColor: stage.border, background: stage.bg, fontSize: 11, flexShrink: 0 }}>
           {stage.label}
         </Tag>
       )}
+
+      {/* 弹性空隙：把 hover 操作推到最右，状态/斜率/徽章保持靠左 */}
+      <div style={{ flex: 1, minWidth: 8 }} />
 
       {/* hover 操作：查看详情 + 加自选 */}
       <div style={{ width: 70, flexShrink: 0, display: 'flex', justifyContent: 'flex-end', visibility: hovered ? 'visible' : 'hidden' }}>

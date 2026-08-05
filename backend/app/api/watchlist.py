@@ -57,8 +57,11 @@ def _background_sync(code: str) -> None:
     from sqlmodel import Session as S
     try:
         with S(engine) as s:
-            sync_service.sync_one_stock(s, code, full=True)
-        logger.info("自选股 %s 首次同步完成", code)
+            inserted = sync_service.sync_one_stock(s, code, full=True)
+        if inserted == 0:
+            logger.warning("自选股 %s 首次同步 0 行：数据源不可用或无该代码行情", code)
+        else:
+            logger.info("自选股 %s 首次同步完成，%d 行", code, inserted)
     except Exception:  # noqa: BLE001
         logger.exception("自选股 %s 首次同步失败", code)
 

@@ -70,11 +70,14 @@ def _validate_row(row: dict, code: str) -> bool:
     if amount > 0 and volume > 0:
         expected = close * volume
         if expected > 0:
-            deviation = abs(amount / expected - 1)
-            if deviation > 0.3:
+            ratio = amount / expected
+            # 各源成交量单位不一：新浪/baostock=股（amount≈close×volume，即 ratio≈1），
+            # 东财/腾讯=手（100 股，amount≈close×volume×100，即 ratio≈100）。
+            # 命中任一量级即视为一致，都不中才判为脏数据——避免东财数据被整批误拒。
+            if not (0.3 < ratio < 3) and not (30 < ratio < 300):
                 logger.warning(
-                    "[%s %s] 量额不一致：volume=%.0f amount=%.2f close=%.2f 偏差 %.1f%%",
-                    code, row.get("trade_date"), volume, amount, close, deviation * 100,
+                    "[%s %s] 量额不一致：volume=%.0f amount=%.2f close=%.2f ratio=%.1f",
+                    code, row.get("trade_date"), volume, amount, close, ratio,
                 )
                 return False
     return True
@@ -133,6 +136,7 @@ def sync_one_stock(session: Session, code: str, full: bool = False) -> int:
         start = end - timedelta(days=365 * 2)
         df = router.fetch_stock_daily(code, start, end)
     if df is None or df.empty:
+        logger.warning("[%s] 同步无 K 线：数据源全部不可用或无该代码行情（%s~%s）", code, start, end)
         _refresh_score_snapshot(session, code)
         return 0
 

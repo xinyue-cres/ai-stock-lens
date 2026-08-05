@@ -74,7 +74,7 @@ class EastmoneyProvider(BaseProvider):
         )
         if raw is None or raw.empty:
             return _empty_kline()
-        return raw.rename(
+        df = raw.rename(
             columns={
                 "日期": "trade_date",
                 "开盘": "open",
@@ -86,7 +86,10 @@ class EastmoneyProvider(BaseProvider):
                 "换手率": "turnover",
                 "涨跌幅": "pct_chg",
             }
-        )[["trade_date", "open", "high", "low", "close", "volume", "amount", "turnover", "pct_chg"]]
+        )
+        # 东财"成交量"单位是手（100 股），统一为股，与新浪/baostock 等其他源对齐
+        df["volume"] = pd.to_numeric(df["volume"], errors="coerce") * 100
+        return df[["trade_date", "open", "high", "low", "close", "volume", "amount", "turnover", "pct_chg"]]
 
     def _get_fund_kline(self, code: str, start: date, end: date) -> pd.DataFrame:
         """场内基金日线：使用 fund_etf_hist_sina 接口。"""

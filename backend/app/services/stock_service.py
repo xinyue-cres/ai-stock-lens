@@ -3,9 +3,11 @@ from __future__ import annotations
 
 import json
 import logging
+from datetime import date, timedelta
 
 from sqlmodel import Session, select
 
+from app.datasource.base_provider import infer_market
 from app.datasource.router import get_data_router
 from app.models.stock import Stock
 
@@ -13,20 +15,42 @@ logger = logging.getLogger(__name__)
 
 
 def ensure_stock(session: Session, code: str) -> Stock:
-    """从库中取或从数据源查一次并入库。"""
+    """从库中取或从数据源查一次并入库。
+
+    匹配顺序：
+    1. 库里已有 → 直接返回
+    2. 全量列表（进程内缓存）匹配 → 拿到真实名称入库
+    3. 列表接口失败 / 列表未收录该代码 → 用 K 线拉取验证代码有效性
+       （数据源 fallback 链能拉到即视为有效），以推断市场建行（name 先用代码占位）
+    避免依赖单一东财列表接口：列表挂了或新上市代码不在列表时，添加不再直接 500。
+    """
     stock = session.get(Stock, code)
     if stock:
         return stock
 
-    for info in get_data_router().get_stock_list():
-        if info.code == code:
-            stock = Stock(code=info.code, name=info.name, market=info.market)
-            session.add(stock)
-            session.commit()
-            session.refresh(stock)
-            return stock
+    try:
+        for info in get_data_router().get_stock_list():
+            if info.code == code:
+                stock = Stock(code=info.code, name=info.name, market=info.market)
+                session.add(stock)
+                session.commit()
+                session.refresh(stock)
+                return stock
+    except Exception:  # noqa: BLE001
+        # 列表接口失败（如东财不可用）不阻断添加，降级到 K 线验证
+        logger.warning("[%s] 股票列表获取失败，降级为 K 线验证", code)
 
-    raise ValueError(f"股票代码 {code} 不存在")
+    df = get_data_router().fetch_stock_daily(
+        code, date.today() - timedelta(days=30), date.today()
+    )
+    if df is not None and not df.empty:
+        stock = Stock(code=code, name=code, market=infer_market(code))
+        session.add(stock)
+        session.commit()
+        session.refresh(stock)
+        return stock
+
+    raise ValueError(f"股票代码 {code} 不存在或暂时无法获取行情")
 
 
 def refresh_stock_index(session: Session) -> int:

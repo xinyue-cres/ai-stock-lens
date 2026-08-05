@@ -1,9 +1,12 @@
+import logging
 from collections.abc import Generator
 
 from sqlalchemy import event, text
 from sqlmodel import Session, SQLModel, create_engine
 
 from app.config import get_settings
+
+logger = logging.getLogger(__name__)
 
 _settings = get_settings()
 
@@ -36,6 +39,21 @@ def _migrate_add_column(table: str, column: str, ddl: str) -> None:
             conn.commit()
 
 
+def _migrate_drop_column(table: str, column: str) -> None:
+    """删除模型已移除的表冗余列（SQLite 3.35+ 支持 DROP COLUMN）。
+
+    例：stock_score.lift_score 是旧算法遗留列，模型已删除但表结构没迁移，
+    NOT NULL 约束导致"首次新建快照"的股票 INSERT 必然失败（老股票 UPDATE 不受影响）。
+    """
+    with engine.connect() as conn:
+        rows = conn.execute(text(f"PRAGMA table_info({table})")).all()
+        existing = {r[1] for r in rows}
+        if column in existing:
+            conn.execute(text(f"ALTER TABLE {table} DROP COLUMN {column}"))
+            conn.commit()
+            logger.info("迁移：删除 %s.%s 残留列", table, column)
+
+
 def init_db() -> None:
     # 先做迁移，因为 create_all 不会修改老表的约束
     _migrate_ai_report_horizon()
@@ -56,6 +74,9 @@ def init_db() -> None:
     )
 
     SQLModel.metadata.create_all(engine)
+
+    # 迁移：删除 stock_score 残留的 lift_score 列（模型已移除；NOT NULL 导致首次新建快照失败）
+    _migrate_drop_column("stock_score", "lift_score")
 
     # 增量迁移：ai_report.extras_json（老 DB 无此列）
     _migrate_add_column("ai_report", "extras_json", "TEXT")
