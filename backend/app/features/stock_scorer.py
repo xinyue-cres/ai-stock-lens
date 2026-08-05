@@ -258,11 +258,11 @@ def _golden_continuation(df: pd.DataFrame) -> dict:
 
     score = 0.40 * life + 0.60 * post_eff
 
-    # MACD 柱（DIF−DEA）连续两日缩小（今<昨<前）= 动能持续掉头（比 DIF 斜率更早预警）
-    # 用连续两日而非单日，过滤单日噪声（单日触发率 ~39%，两日 ~33%）
+    # MACD 柱（DIF−DEA）当日 vs 昨前均值：柱体缩小 = 动能掉头（比 DIF 斜率更早预警）
+    # 用单日判定：用户实测多股，第一天缩小往往就是真拐点
     bar = dif - dea
-    if len(bar) >= 4:
-        bar_shrinking = bool(bar.iloc[-1] < bar.iloc[-2] < bar.iloc[-3])
+    if len(bar) >= 3:
+        bar_shrinking = bool(bar.iloc[-1] < (bar.iloc[-2] + bar.iloc[-3]) / 2)
     else:
         bar_shrinking = None
 
