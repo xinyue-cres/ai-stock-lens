@@ -37,19 +37,26 @@ _REASONS = {
 
 
 def _decide_stage(golden: bool, pct_b: float | None, dist_high: float,
-                  signal_score: float | None) -> str:
+                  signal_score: float | None, peak_winrate: float | None = None,
+                  bar_shrinking: bool | None = None) -> str:
     """金叉驱动的阶段决策（纯逻辑，无 I/O，可直接单测）。
 
-    - 金叉态 = 上升候选：贴上轨→过热；深跌且历史差→下跌；历史可靠→可入手；
+    - 金叉态 = 上升候选：贴上轨→过热；深跌且历史差→下跌；
+      MACD 柱掉头（上涨过峰预警）→震荡观望；历史可靠→可入手；
       未过热有空间→可入手；否则贴下轨（%B<0.2 弱势）→震荡
     - 死叉态：历史可靠→观望等下次金叉；否则→下跌回避
+    peak_winrate：历史金叉冲过 +5% 的占比；bar_shrinking：MACD 柱当日 < 昨前均值
     """
     if golden:
         if pct_b is not None and pct_b > 0.85:
             return "overheat"  # 贴上轨，短期涨过头
         if dist_high < -0.4 and (signal_score is None or signal_score < _SIGNAL_RELIABLE):
             return "downtrend"  # 深跌中刚金叉且历史不可靠
+        if bar_shrinking is True:
+            return "range"  # 金叉态但动能掉头（上涨过峰），见顶预警观望
         if signal_score is not None and signal_score >= _SIGNAL_RELIABLE:
+            if peak_winrate is not None and peak_winrate < 50:
+                return "range"  # 历史分高但胜率不足（过半金叉没冲过 +5%），可靠性打折
             return "pullback_entry"  # 金叉 + 历史可靠 → 可入手
         if pct_b is None or pct_b >= 0.2:
             return "pullback_entry"  # 金叉、未过热、有上方空间
@@ -57,6 +64,17 @@ def _decide_stage(golden: bool, pct_b: float | None, dist_high: float,
     if signal_score is not None and signal_score >= _SIGNAL_RELIABLE:
         return "range"  # 历史金叉可靠，等下次金叉
     return "downtrend"  # 死叉 + 历史差 → 回避
+
+
+def _entry_reason(stage: str, golden: bool, bar_shrinking: bool | None,
+                  signal_score: float | None, peak_winrate: float | None) -> str:
+    """细化 entry_reason：覆盖决策树降级的具体原因。"""
+    if golden and bar_shrinking:
+        return "金叉态·MACD柱掉头（上涨过峰预警），观望"
+    if golden and signal_score is not None and signal_score >= _SIGNAL_RELIABLE \
+            and peak_winrate is not None and peak_winrate < 50:
+        return "金叉态·历史峰值胜率低（<50%），观望"
+    return _REASONS.get(stage, "")
 
 
 def judge_trend(df: pd.DataFrame, signal_score: float | None = None) -> dict:
@@ -81,9 +99,36 @@ def judge_trend(df: pd.DataFrame, signal_score: float | None = None) -> dict:
     close = float(close_s.iloc[-1])
 
     # MACD 金叉状态 + DIF 斜率（indicators/macd 统一实现，与打分引擎共用）
-    dif, dea, _signals = macd_series(close_s)
+    dif, dea, signals = macd_series(close_s)
     golden = is_golden(dif, dea)
     dif_slope = compute_dif_slope(dif)
+
+    # MACD 柱（DIF−DEA）连续两日缩小（今<昨<前）= 动能持续掉头（上涨过峰预警）
+    # 用连续两日而非单日，过滤单日噪声（单日触发率 ~39%，两日 ~33%）
+    bar = dif - dea
+    bar_shrinking: bool | None = None
+    if len(bar) >= 4:
+        bar_shrinking = bool(bar.iloc[-1] < bar.iloc[-2] < bar.iloc[-3])
+
+    # 历史金叉冲过 +5% 的占比（峰值胜率），供决策树可靠性补充
+    peak_gains: list[float] = []
+    n_bar = len(close_s)
+    for i in range(len(signals)):
+        if signals[i][1] != "golden":
+            continue
+        gidx = signals[i][0]
+        e = n_bar - 1
+        for j in range(i + 1, len(signals)):
+            if signals[j][1] == "death":
+                e = signals[j][0]
+                break
+        if e <= gidx or close_s.iloc[gidx] <= 0:
+            continue
+        peak_gains.append(close_s.iloc[gidx:e + 1].max() / close_s.iloc[gidx] - 1)
+    peak_winrate: float | None = (
+        sum(1 for g in peak_gains if g > 0.05) / len(peak_gains) * 100
+        if len(peak_gains) >= 3 else None
+    )
 
     # 潜在空间：BOLL %B/带宽 + 距 60 日高点回撤
     boll = compute_boll(df)
@@ -93,7 +138,7 @@ def judge_trend(df: pd.DataFrame, signal_score: float | None = None) -> dict:
     dist_high = close / high_60 - 1 if high_60 else 0.0
 
     # 决策：金叉死叉为主导（纯逻辑，见 _decide_stage）
-    stage = _decide_stage(golden, pct_b, dist_high, signal_score)
+    stage = _decide_stage(golden, pct_b, dist_high, signal_score, peak_winrate, bar_shrinking)
 
     # 辅助参考（不参与决策）
     adx_info = compute_adx(df)
@@ -107,7 +152,7 @@ def judge_trend(df: pd.DataFrame, signal_score: float | None = None) -> dict:
     return {
         "trend_stage": stage,
         "can_entry": stage == "pullback_entry",
-        "entry_reason": _REASONS.get(stage, ""),
+        "entry_reason": _entry_reason(stage, golden, bar_shrinking, signal_score, peak_winrate),
         "key_prices": {
             "close": round(close, 3),
             "ma20": round(ma20, 3) if ma20 is not None else None,
