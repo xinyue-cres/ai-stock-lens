@@ -12,13 +12,16 @@ export default function GroupNav({ groups, totalCount, activeGroup, onGroupChang
   return (
     <div style={{
       position: 'fixed',
-      top: '35%',
+      top: '12%',
       left: 'max(8px, calc(50% - 450px - 154px))',
-      transform: 'translateY(-50%)',
       width: 132,
       zIndex: 50,
     }}>
-      <div style={{ background: '#fff', borderRadius: 8, border: '1px solid #f0f0f0', padding: '10px 0', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
+      <div style={{
+        background: '#fff', borderRadius: 8, border: '1px solid #f0f0f0',
+        padding: '10px 0', boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+        maxHeight: '72vh', overflowY: 'auto',
+      }}>
         <GroupNavItem
           label={`全部 (${totalCount})`}
           active={activeGroup === 'all'}
