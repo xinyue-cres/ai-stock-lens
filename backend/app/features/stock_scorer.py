@@ -77,9 +77,11 @@ def _post_golden_gain(close: pd.Series, signals: list[tuple[int, str]]) -> float
         peak_gains.append(seg.max() / close.iloc[gidx] - 1)
 
     if len(peak_gains) >= 5:
-        avg = statistics.mean(peak_gains)
+        # 均值易被极端暴涨拉偏（少数 +50% 周期抬高整体，如 000066 均值22.9% vs 中位1.8%），
+        # 与中位数各取一半更公允
+        robust_avg = 0.5 * statistics.mean(peak_gains) + 0.5 * statistics.median(peak_gains)
         wr = sum(1 for g in peak_gains if g > 0) / len(peak_gains)
-        gain_score = _norm(avg, 0.0, 0.18) * 100
+        gain_score = _norm(robust_avg, 0.0, 0.18) * 100
         wr_score = _norm(wr, 0.5, 0.80) * 100
         return round(0.6 * gain_score + 0.4 * wr_score, 1)
     return 50.0  # 金叉样本不足，中性
