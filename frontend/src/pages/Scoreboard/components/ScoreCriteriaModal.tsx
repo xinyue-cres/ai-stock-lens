@@ -111,6 +111,21 @@ export default function ScoreCriteriaModal({
           打分看「长期是否适合做」，趋势徽章看「现在能否买」。
         </Text>
       </div>
+
+      <div style={{ padding: '12px', background: '#f0f5ff', borderRadius: 8, marginTop: 8 }}>
+        <b>右侧详情卡「趋势判断 · 信号汇总」怎么看</b>
+        <Text type="secondary" style={{ fontSize: 13, display: 'block', marginTop: 4 }}>
+          点击排行里的股票，右侧卡片展示这只票的 MACD 信号历史汇总：
+        </Text>
+        <ul style={{ margin: '6px 0 0', paddingLeft: 20, color: '#666', fontSize: 12, lineHeight: 2 }}>
+          <li><b>当前信号 / 信号持续</b>：现在是金叉还是死叉，已持续几个交易日</li>
+          <li><b>历史金叉平均持续</b>：历史上每次金叉平均延续几天（对照当前，超出=强势延续）</li>
+          <li><b>历史金叉周期峰值涨幅</b>：每次金叉冲到的最高涨幅，展示<Text type="secondary">均值 · 中位 · 胜率（冲过 +5% 的占比）</Text></li>
+          <li><b>历史死叉周期谷值跌幅</b>：每次死叉砸到的最深跌幅（负值=真跌），展示<Text type="secondary">均值 · 中位 · 胜率（跌破 -5% 的占比）</Text></li>
+          <li><b>过峰信号</b>：MACD 柱（DIF−DEA）当日 vs 昨前均值——上涨中柱体缩小=<Text type="secondary">上涨见顶</Text>，下跌中柱体回升=<Text type="secondary">下跌见底</Text>（比 DIF 斜率更早预警）</li>
+          <li><b>DIF 斜率 / ADX / 均线结构</b>：动能方向、趋势强度、均线排列（多头/空头/纠缠）</li>
+        </ul>
+      </div>
     </Modal>
   )
 }

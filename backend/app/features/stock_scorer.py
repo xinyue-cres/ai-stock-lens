@@ -186,8 +186,20 @@ def _signal_summary(close: pd.Series, signals: list[tuple[int, str]]) -> dict:
             death_valleys.append((seg.min() / close.iloc[s_idx] - 1) * 100)
     info["hist_golden_samples"] = len(golden_peaks)
     info["hist_golden_peak_pct"] = round(statistics.mean(golden_peaks), 2) if len(golden_peaks) >= 3 else None
+    info["hist_golden_peak_median"] = round(statistics.median(golden_peaks), 2) if len(golden_peaks) >= 3 else None
+    # 胜率（有效阈值）：金叉后冲过 +5% 才算有效——峰值几乎恒正，设阈值才有区分度
+    info["hist_golden_peak_winrate"] = (
+        round(sum(1 for g in golden_peaks if g > 5) / len(golden_peaks) * 100, 1)
+        if len(golden_peaks) >= 3 else None
+    )
     info["hist_death_samples"] = len(death_valleys)
     info["hist_death_trough_pct"] = round(statistics.mean(death_valleys), 2) if len(death_valleys) >= 3 else None
+    info["hist_death_trough_median"] = round(statistics.median(death_valleys), 2) if len(death_valleys) >= 3 else None
+    # 胜率（有效阈值）：死叉后跌破 -5% 才算有效
+    info["hist_death_trough_winrate"] = (
+        round(sum(1 for d in death_valleys if d < -5) / len(death_valleys) * 100, 1)
+        if len(death_valleys) >= 3 else None
+    )
 
     # 历史金叉平均持续天数（金叉→死叉间隔，截尾均值，与"不横跳分"同口径）
     lives: list[int] = []
@@ -401,8 +413,12 @@ def score_stock(df: pd.DataFrame, dividend_yield: float | None = None,
                 "hist_golden_days": golden.get("hist_golden_days"),
                 "hist_golden_samples": golden.get("hist_golden_samples"),
                 "hist_golden_peak_pct": golden.get("hist_golden_peak_pct"),
+                "hist_golden_peak_median": golden.get("hist_golden_peak_median"),
+                "hist_golden_peak_winrate": golden.get("hist_golden_peak_winrate"),
                 "hist_death_samples": golden.get("hist_death_samples"),
                 "hist_death_trough_pct": golden.get("hist_death_trough_pct"),
+                "hist_death_trough_median": golden.get("hist_death_trough_median"),
+                "hist_death_trough_winrate": golden.get("hist_death_trough_winrate"),
             },
             "band": band,
             "dividend": {"dividend_yield": dividend_yield},

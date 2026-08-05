@@ -51,8 +51,12 @@ export interface SignalComponent {
   hist_golden_days?: number | null
   hist_golden_samples?: number | null
   hist_golden_peak_pct?: number | null
+  hist_golden_peak_median?: number | null
+  hist_golden_peak_winrate?: number | null
   hist_death_samples?: number | null
   hist_death_trough_pct?: number | null
+  hist_death_trough_median?: number | null
+  hist_death_trough_winrate?: number | null
 }
 
 export interface BandComponent {
