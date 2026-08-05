@@ -170,8 +170,27 @@ def _signal_summary(close: pd.Series, signals: list[tuple[int, str]]) -> dict:
             continue
         chg = (close.iloc[end] / close.iloc[idx] - 1) * 100
         (golden_gains if direction == "golden" else death_changes).append(chg)
+    info["hist_golden_samples"] = len(golden_gains)
     info["hist_golden_avg_gain_pct"] = round(statistics.mean(golden_gains), 2) if len(golden_gains) >= 3 else None
+    info["hist_death_samples"] = len(death_changes)
     info["hist_death_avg_change_pct"] = round(statistics.mean(death_changes), 2) if len(death_changes) >= 3 else None
+
+    # 历史金叉平均持续天数（金叉→死叉间隔，截尾均值，与"不横跳分"同口径）
+    lives: list[int] = []
+    for i in range(len(signals)):
+        if signals[i][1] != "golden":
+            continue
+        for j in range(i + 1, len(signals)):
+            if signals[j][1] == "death":
+                lives.append(signals[j][0] - signals[i][0])
+                break
+    if lives:
+        sorted_lives = sorted(lives)
+        trim = max(1, int(len(sorted_lives) * 0.1))
+        kept = sorted_lives[trim:-trim] if len(sorted_lives) > 2 * trim else sorted_lives
+        info["hist_golden_days"] = round(statistics.mean(kept), 1)
+    else:
+        info["hist_golden_days"] = None
     return info
 
 
@@ -212,6 +231,23 @@ def _golden_continuation(df: pd.DataFrame) -> dict:
         current_state = "死叉·修复" if dif_slope > 0 else "死叉·走弱"
 
     score = 0.40 * life + 0.60 * post_eff
+
+    # MACD 柱（DIF−DEA）当日 vs (昨日+前日)/2：柱体缩小 = 动能掉头（比 DIF 斜率更早预警）
+    bar = dif - dea
+    if len(bar) >= 3:
+        prev_bar_avg = (bar.iloc[-2] + bar.iloc[-3]) / 2
+        bar_shrinking = bar.iloc[-1] < prev_bar_avg
+    else:
+        bar_shrinking = None
+
+    # 过峰信号：上涨中柱体缩小 → 见顶；下跌中柱体回升（绿柱由负变大）→ 见底
+    if bar_shrinking is None:
+        peak_signal = None
+    elif current_golden:
+        peak_signal = "上涨过峰" if bar_shrinking else "涨势延续"
+    else:
+        peak_signal = "下跌过峰" if not bar_shrinking else "跌势延续"
+
     return {
         "score": round(score, 1),
         "post_golden_gain": round(post_gain, 1),
@@ -222,6 +258,7 @@ def _golden_continuation(df: pd.DataFrame) -> dict:
         "current_state": current_state,
         "dif_slope": dif_slope,
         "dif_slope_dir": dif_slope_dir,
+        "peak_signal": peak_signal,
         **_signal_summary(close, signals),
     }
 
@@ -343,10 +380,14 @@ def score_stock(df: pd.DataFrame, dividend_yield: float | None = None,
                 "current_state": golden["current_state"],
                 "dif_slope": golden["dif_slope"],
                 "dif_slope_dir": golden["dif_slope_dir"],
+                "peak_signal": golden.get("peak_signal"),
                 "current_signal": golden.get("current_signal"),
                 "signal_days": golden.get("signal_days"),
                 "signal_gain_pct": golden.get("signal_gain_pct"),
+                "hist_golden_days": golden.get("hist_golden_days"),
+                "hist_golden_samples": golden.get("hist_golden_samples"),
                 "hist_golden_avg_gain_pct": golden.get("hist_golden_avg_gain_pct"),
+                "hist_death_samples": golden.get("hist_death_samples"),
                 "hist_death_avg_change_pct": golden.get("hist_death_avg_change_pct"),
             },
             "band": band,

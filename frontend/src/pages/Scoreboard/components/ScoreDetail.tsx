@@ -1,10 +1,18 @@
 import type { ReactNode } from 'react'
-import { Button, Card, Descriptions, Empty, Progress, Space, Tag, Typography } from 'antd'
+import { Button, Card, Descriptions, Empty, Space, Tag, Typography } from 'antd'
 import { LineChartOutlined, PlusOutlined } from '@ant-design/icons'
 import type { ScoreDetail } from '@/api/score'
 import { STAGE_PALETTE } from '../constants'
 
 const { Text } = Typography
+
+/** 均线结构英文值 → 中文 */
+const ARRANGEMENT_LABEL: Record<string, string> = {
+  bullish: '多头排列',
+  bearish: '空头排列',
+  tangled: '均线纠缠（方向不明）',
+  insufficient: '数据不足',
+}
 
 function pct(v: number | null | undefined): string {
   if (v == null) return '-'
@@ -34,19 +42,6 @@ interface ScoreDetailProps {
   detail: ScoreDetail
   onAddWatchlist: (code: string) => void
   onOpenDetail: (code: string) => void
-}
-
-function DimensionBar({ label, score }: { label: string; score: number }) {
-  const color = score >= 70 ? '#16a34a' : score >= 50 ? '#2563eb' : '#f59e0b'
-  return (
-    <div style={{ marginBottom: 10 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 4 }}>
-        <span>{label}</span>
-        <b style={{ color }}>{score.toFixed(1)}</b>
-      </div>
-      <Progress percent={score} showInfo={false} strokeColor={color} size="small" />
-    </div>
-  )
 }
 
 export default function ScoreDetail({ detail, onAddWatchlist, onOpenDetail }: ScoreDetailProps) {
@@ -89,30 +84,71 @@ export default function ScoreDetail({ detail, onAddWatchlist, onOpenDetail }: Sc
         )}
       </Card>
 
-      {/* 综合分 + 各维度 */}
+      {/* 综合分 + 各维度（全部横向紧凑排：综合分大字 + 维度一行，指标快照一行） */}
       <Card size="small" title="打分构成">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 12 }}>
-          <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: 34, fontWeight: 700, color: detail.total_score >= 70 ? '#16a34a' : detail.total_score >= 50 ? '#2563eb' : '#9ca3af' }}>
-              {detail.total_score.toFixed(1)}
-            </div>
-            <Text type="secondary" style={{ fontSize: 11 }}>综合分</Text>
-          </div>
-          <div style={{ flex: 1 }}>
-            <DimensionBar label="金叉延续性 (70%)" score={detail.signal_score} />
-            <DimensionBar label="波段适配 (20%)" score={detail.band_score} />
-            <DimensionBar label="股息 (10%)" score={detail.dividend_score} />
-          </div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '6px 20px' }}>
+          <span style={{ fontSize: 34, fontWeight: 700, lineHeight: 1, color: detail.total_score >= 70 ? '#16a34a' : detail.total_score >= 50 ? '#2563eb' : '#9ca3af' }}>
+            {detail.total_score.toFixed(1)}
+          </span>
+          <Text type="secondary" style={{ fontSize: 11 }}>综合</Text>
+          <Field label="金叉延续性 (70%)">{detail.signal_score.toFixed(1)}</Field>
+          <Field label="波段适配 (20%)">{detail.band_score.toFixed(1)}</Field>
+          <Field label="股息 (10%)">{detail.dividend_score.toFixed(1)}</Field>
         </div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', columnGap: 18, rowGap: 2, marginTop: 8 }}>
+          <Field label="收盘">{detail.close ?? '-'}</Field>
+          <Field label="涨跌幅">{pct(detail.pct_chg)}</Field>
+          <Field label="换手率">{detail.turnover != null ? `${detail.turnover}%` : '-'}</Field>
+          <Field label="年化波动率">{detail.hist_vol != null ? `${detail.hist_vol}%` : '-'}</Field>
+          <Field label="ADX">{detail.adx ?? '-'}</Field>
+          <Field label="股息率">{detail.dividend_yield != null ? `${detail.dividend_yield}%` : '-'}</Field>
+        </div>
+      </Card>
 
-        <Descriptions column={2} size="small" title="指标快照">
-          <Descriptions.Item label="收盘">{detail.close ?? '-'}</Descriptions.Item>
-          <Descriptions.Item label="涨跌幅">{pct(detail.pct_chg)}</Descriptions.Item>
-          <Descriptions.Item label="换手率">{detail.turnover != null ? `${detail.turnover}%` : '-'}</Descriptions.Item>
-          <Descriptions.Item label="年化波动率">{detail.hist_vol != null ? `${detail.hist_vol}%` : '-'}</Descriptions.Item>
-          <Descriptions.Item label="ADX">{detail.adx ?? '-'}</Descriptions.Item>
-          <Descriptions.Item label="股息率">{detail.dividend_yield != null ? `${detail.dividend_yield}%` : '-'}</Descriptions.Item>
-        </Descriptions>
+      {/* 趋势判断明细：金叉/死叉信号汇总（阶段/可入手在头部卡已展示，不重复） */}
+      <Card size="small" title="趋势判断 · 信号汇总">
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '2px 24px' }}>
+          <Field label="当前信号">
+            {sig.current_state ?? (sig.current_signal ? (sig.current_signal === 'golden' ? '金叉' : '死叉') : '-')}
+          </Field>
+          <Field label="过峰信号">
+            {sig.peak_signal ? (
+              <span style={{ color: sig.peak_signal === '上涨过峰' ? '#d97706' : sig.peak_signal === '下跌过峰' ? '#2563eb' : undefined }}>
+                {sig.peak_signal}
+              </span>
+            ) : '-'}
+          </Field>
+          <Field label="信号持续">{sig.signal_days != null ? `${sig.signal_days} 天` : '-'}</Field>
+          <Field label="历史金叉平均持续">
+            {sig.hist_golden_days != null ? `${sig.hist_golden_days} 天` : '-'}
+          </Field>
+          <Field label="信号期间涨跌">{sig.signal_gain_pct != null ? pct(sig.signal_gain_pct) : '-'}</Field>
+          <Field label="当日涨跌">{pct(detail.pct_chg)}</Field>
+          <Field label="历史金叉后20日均涨幅">
+            {sig.hist_golden_avg_gain_pct != null
+              ? `${pct(sig.hist_golden_avg_gain_pct)}${sig.hist_golden_samples != null ? `（${sig.hist_golden_samples}次）` : ''}`
+              : '-'}
+          </Field>
+          <Field label="历史死叉后20日均涨跌">
+            {sig.hist_death_avg_change_pct != null
+              ? `${pct(sig.hist_death_avg_change_pct)}${sig.hist_death_samples != null ? `（${sig.hist_death_samples}次）` : ''}`
+              : '-'}
+          </Field>
+          <Field label="DIF 斜率">
+            {sig.dif_slope != null
+              ? `${sig.dif_slope > 0 ? '+' : ''}${sig.dif_slope}${sig.dif_slope_dir === 'up' ? ' ↗' : sig.dif_slope_dir === 'down' ? ' ↘' : ''}`
+              : '-'}
+          </Field>
+          <Field label="ADX">{sig.adx ?? trendInd.adx ?? '-'}</Field>
+          <Field label="均线结构" full>
+            {trendInd.arrangement ? ARRANGEMENT_LABEL[trendInd.arrangement] ?? trendInd.arrangement : '-'}
+          </Field>
+        </div>
+        {detail.entry_reason && (
+          <div style={{ marginTop: 8, fontSize: 12, color: '#6b7280', background: '#f3f4f6', borderRadius: 6, padding: '8px 10px' }}>
+            判断依据：{detail.entry_reason}
+          </div>
+        )}
       </Card>
 
       {/* 金叉延续性明细 */}
@@ -149,38 +185,6 @@ export default function ScoreDetail({ detail, onAddWatchlist, onOpenDetail }: Sc
         <Text type="secondary" style={{ fontSize: 11 }}>
           band = 0.60·幅度（波动适中最佳）+ 0.40·节奏（MA5下方停留越从容越好，太短=快探快弹赌博）。
         </Text>
-      </Card>
-
-      {/* 趋势判断明细：金叉/死叉信号汇总 */}
-      <Card size="small" title="趋势判断 · 信号汇总">
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '2px 24px' }}>
-          <Field label="阶段">{stage?.label ?? '-'}</Field>
-          <Field label="可入手">{detail.can_entry ? '是' : '否'}</Field>
-          <Field label="当前信号">
-            {sig.current_state ?? (sig.current_signal ? (sig.current_signal === 'golden' ? '金叉' : '死叉') : '-')}
-          </Field>
-          <Field label="信号持续">{sig.signal_days != null ? `${sig.signal_days} 天` : '-'}</Field>
-          <Field label="信号期间涨跌">{sig.signal_gain_pct != null ? pct(sig.signal_gain_pct) : '-'}</Field>
-          <Field label="当日涨跌">{pct(detail.pct_chg)}</Field>
-          <Field label="历史金叉后20日均涨幅">
-            {sig.hist_golden_avg_gain_pct != null ? pct(sig.hist_golden_avg_gain_pct) : '-'}
-          </Field>
-          <Field label="历史死叉后20日均涨跌">
-            {sig.hist_death_avg_change_pct != null ? pct(sig.hist_death_avg_change_pct) : '-'}
-          </Field>
-          <Field label="DIF 斜率">
-            {sig.dif_slope != null
-              ? `${sig.dif_slope > 0 ? '+' : ''}${sig.dif_slope}${sig.dif_slope_dir === 'up' ? ' ↗' : sig.dif_slope_dir === 'down' ? ' ↘' : ''}`
-              : '-'}
-          </Field>
-          <Field label="ADX">{sig.adx ?? trendInd.adx ?? '-'}</Field>
-          <Field label="均线结构" full>{trendInd.arrangement ?? '-'}</Field>
-        </div>
-        {detail.entry_reason && (
-          <div style={{ marginTop: 8, fontSize: 12, color: '#6b7280', background: '#f3f4f6', borderRadius: 6, padding: '8px 10px' }}>
-            判断依据：{detail.entry_reason}
-          </div>
-        )}
       </Card>
 
       {/* 趋势关键价位 */}
