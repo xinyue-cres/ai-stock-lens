@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Button, Input, Modal, Space, Typography } from 'antd'
 import { DeleteOutlined, EditOutlined } from '@ant-design/icons'
 import { createGroup, deleteGroup, updateGroup, StockGroup } from '@/api/groups'
@@ -16,11 +16,18 @@ export default function GroupManagerModal({ open, groups, onClose, onChange }: G
   const [newName, setNewName] = useState('')
   const [editingId, setEditingId] = useState<number | null>(null)
   const [editingName, setEditingName] = useState('')
+  // 本地排序列表（支持拖动），随外部 groups 同步
+  const [list, setList] = useState<StockGroup[]>(groups)
+  const dragIndex = useRef<number | null>(null)
+
+  useEffect(() => {
+    setList(groups)
+  }, [groups])
 
   const handleAdd = async () => {
     const name = newName.trim()
     if (!name) return
-    await createGroup(name, groups.length)
+    await createGroup(name, list.length)
     setNewName('')
     onChange()
   }
@@ -46,6 +53,21 @@ export default function GroupManagerModal({ open, groups, onClose, onChange }: G
     })
   }
 
+  // 拖动排序：本地重排 + 按新顺序写回 sort_order（0,1,2...）
+  const handleDrop = async (targetIndex: number) => {
+    const from = dragIndex.current
+    dragIndex.current = null
+    if (from === null || from === targetIndex) return
+    const arr = [...list]
+    const [moved] = arr.splice(from, 1)
+    arr.splice(targetIndex, 0, moved)
+    setList(arr)
+    await Promise.all(
+      arr.map((g, i) => (g.sort_order !== i ? updateGroup(g.id, { sort_order: i }) : null)),
+    )
+    onChange()
+  }
+
   return (
     <Modal title="管理分组" open={open} onCancel={onClose} footer={null} width={360}>
       <div style={{ marginBottom: 12 }}>
@@ -59,9 +81,23 @@ export default function GroupManagerModal({ open, groups, onClose, onChange }: G
           <Button type="primary" onClick={handleAdd} disabled={!newName.trim()}>添加</Button>
         </Space.Compact>
       </div>
+      <Text type="secondary" style={{ fontSize: 11, display: 'block', marginBottom: 4 }}>
+        按住拖动分组可排序
+      </Text>
       <div>
-        {groups.map(g => (
-          <div key={g.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', borderBottom: '1px solid #f5f5f5' }}>
+        {list.map((g, i) => (
+          <div
+            key={g.id}
+            draggable
+            onDragStart={() => { dragIndex.current = i }}
+            onDragOver={e => e.preventDefault()}
+            onDrop={() => handleDrop(i)}
+            onDragEnd={() => { dragIndex.current = null }}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0',
+              borderBottom: '1px solid #f5f5f5', cursor: 'grab',
+            }}
+          >
             {editingId === g.id ? (
               <Input
                 size="small"
@@ -90,7 +126,7 @@ export default function GroupManagerModal({ open, groups, onClose, onChange }: G
             />
           </div>
         ))}
-        {groups.length === 0 && (
+        {list.length === 0 && (
           <Text type="secondary" style={{ display: 'block', textAlign: 'center', padding: '16px 0' }}>
             还没有分组
           </Text>

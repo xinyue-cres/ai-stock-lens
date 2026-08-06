@@ -52,6 +52,27 @@ def _group_name_map(session: Session) -> dict[int, str]:
     return {g.id: g.name for g in groups}
 
 
+_NEW_GROUP_NAME = "新增"
+
+
+def _ensure_new_group(session: Session) -> int:
+    """查或建"新增"分组：未显式指定分组的自选自动归入，避免新增股票无处可去。"""
+    from sqlalchemy import func
+    from sqlmodel import select
+
+    group = session.exec(select(StockGroup).where(StockGroup.name == _NEW_GROUP_NAME)).first()
+    if group:
+        return group.id
+    # "新增"分组初始排在列表最前（紧跟"全部"），之后可在管理窗口拖动调整
+    min_order = session.exec(select(func.min(StockGroup.sort_order))).first()
+    new_sort = (min_order - 1) if min_order is not None else 0
+    g = StockGroup(name=_NEW_GROUP_NAME, sort_order=new_sort)
+    session.add(g)
+    session.commit()
+    session.refresh(g)
+    return g.id
+
+
 def _background_sync(code: str) -> None:
     """加入自选股后，异步全量同步一次，避免用户还要手动点。"""
     from sqlmodel import Session as S
@@ -73,9 +94,12 @@ def add_watch(
     session: Session = Depends(get_session),
 ):
     stock = stock_service.add_to_watchlist(session, payload.code)
-    # 加入自选时如果带了分组，直接放进对应分组（set_group_ids 内部会 commit+refresh）
+    # 加入自选时如果带了分组，直接放进对应分组（选股页按当前分组加）；
+    # 没指定分组则自动放进"新增"分组，避免新增股票"无处可去"
     if payload.group_ids:
         stock = stock_service.set_group_ids(session, stock.code, payload.group_ids)
+    else:
+        stock = stock_service.set_group_ids(session, stock.code, [_ensure_new_group(session)])
     if payload.note is not None:
         stock.note = payload.note
         session.add(stock)
