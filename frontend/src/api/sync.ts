@@ -20,6 +20,17 @@ export async function getSyncLogs(limit = 20) {
   return data
 }
 
+export interface SyncProgress {
+  running: boolean
+  total: number
+  done: number
+  failed: number
+  current: string | null
+  errors: string[]
+  started_at: string | null
+  finished_at: string | null
+}
+
 export interface SyncStatus {
   scheduler: {
     running: boolean
@@ -36,6 +47,7 @@ export interface SyncStatus {
     stocks_synced: number
     error_msg: string | null
   } | null
+  progress: SyncProgress
 }
 
 export async function getSyncStatus(): Promise<SyncStatus> {

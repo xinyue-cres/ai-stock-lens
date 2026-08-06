@@ -1,6 +1,6 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient, useIsMutating } from '@tanstack/react-query'
-import { Button, Popconfirm, Space, Tooltip, Typography, message } from 'antd'
+import { Button, Modal, Popconfirm, Progress, Space, Tooltip, Typography, message } from 'antd'
 import { ReloadOutlined, ThunderboltOutlined } from '@ant-design/icons'
 import { getSyncStatus, refreshToday, runSync } from '@/api/sync'
 import { SYNC_ALL_KEY, useInvalidation } from '@/hooks/useInvalidation'
@@ -63,8 +63,22 @@ export function GlobalStatusBar() {
 
   const busy = syncMut.isPending || refreshTodayMut.isPending || syncingElsewhere || syncRunning
 
+  // 同步进度弹窗：进行中自动打开，完成后短暂展示结果再关闭
+  const progress = statusQ.data?.progress
+  const syncActive = !!progress?.running
+  const [syncOpen, setSyncOpen] = useState(false)
+  useEffect(() => {
+    if (syncActive) setSyncOpen(true)
+    else if (syncOpen) {
+      const t = setTimeout(() => setSyncOpen(false), 1500)
+      return () => clearTimeout(t)
+    }
+  }, [syncActive, syncOpen])
+  const pct = progress?.total ? Math.round((progress.done / progress.total) * 100) : 0
+
   return (
-    <Space size={12} style={{ color: '#e5e7eb', fontSize: 13 }}>
+    <>
+      <Space size={12} style={{ color: '#e5e7eb', fontSize: 13 }}>
       {lastSyncText && (
         <Text style={{ color: '#94a3b8', fontSize: 12 }}>上次同步 {lastSyncText}</Text>
       )}
@@ -99,7 +113,36 @@ export function GlobalStatusBar() {
           </Button>
         </Tooltip>
       </Popconfirm>
-    </Space>
+      </Space>
+
+      <Modal
+        title="同步自选股 K 线"
+        open={syncOpen}
+        footer={null}
+        closable={false}
+        maskClosable={false}
+        width={420}
+      >
+        <Progress percent={pct} status={syncActive ? 'active' : 'success'} />
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, fontSize: 12 }}>
+          <span>{progress?.done ?? 0}/{progress?.total ?? 0} 只</span>
+          <span style={{ color: progress?.failed ? '#dc2626' : undefined }}>失败 {progress?.failed ?? 0}</span>
+        </div>
+        {progress?.current && (
+          <div style={{ marginTop: 4, fontSize: 12, color: '#6b7280' }}>正在同步 {progress.current}…</div>
+        )}
+        {(progress?.errors?.length ?? 0) > 0 && (
+          <div style={{ marginTop: 8, maxHeight: 120, overflowY: 'auto', background: '#fef2f2', borderRadius: 6, padding: '8px 10px' }}>
+            {progress?.errors?.map((e, i) => (
+              <div key={i} style={{ fontSize: 11, color: '#b91c1c', lineHeight: 1.6 }}>{e}</div>
+            ))}
+          </div>
+        )}
+        {!syncActive && (
+          <div style={{ marginTop: 8, fontSize: 12, color: '#16a34a' }}>同步完成 ✓</div>
+        )}
+      </Modal>
+    </>
   )
 }
 

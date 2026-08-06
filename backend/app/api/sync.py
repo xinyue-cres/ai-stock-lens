@@ -86,6 +86,8 @@ def status(session: Session = Depends(get_session)):
             if last
             else None
         ),
+        # 实时进度（同步中：done/total + 当前 + 失败列表）
+        "progress": sync_service.get_sync_progress(),
     }
 
 

@@ -14,6 +14,7 @@
 from __future__ import annotations
 
 import logging
+import threading
 from datetime import date
 
 import pandas as pd
@@ -38,18 +39,25 @@ class TencentProvider(BaseProvider):
         self._ak = get_ak()
         self._spot_cache: pd.DataFrame | None = None
         self._spot_cache_ts: float = 0
+        self._spot_lock = threading.Lock()  # 并发下只拉一次全市场快照，其他线程等缓存
 
     def _get_spot(self) -> pd.DataFrame:
-        """全市场快照，60 秒内复用缓存。"""
+        """全市场快照，60 秒内复用缓存；加锁防并发重复拉取（8 worker 同步时尤其关键）。"""
         import time
+
         now = time.time()
         if self._spot_cache is not None and (now - self._spot_cache_ts) < 60:
             return self._spot_cache
-        df = self._ak.stock_zh_a_spot()
-        if df is not None and not df.empty:
-            self._spot_cache = df
-            self._spot_cache_ts = now
-            return df
+        with self._spot_lock:
+            # 双重检查：等锁期间可能已被其他线程更新
+            now = time.time()
+            if self._spot_cache is not None and (now - self._spot_cache_ts) < 60:
+                return self._spot_cache
+            df = self._ak.stock_zh_a_spot()
+            if df is not None and not df.empty:
+                self._spot_cache = df
+                self._spot_cache_ts = time.time()
+                return df
         return pd.DataFrame()
 
     def get_stock_list(self) -> list[StockInfo]:

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 import math
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
@@ -17,6 +18,19 @@ from app.models.sync_log import SyncLog
 
 # 并发同步 worker 数（瓶颈是网络拉取；SQLite 已配 WAL + busy_timeout=30s 容忍并发写）
 _SYNC_WORKERS = 8
+
+# 全量同步实时进度（前端弹窗轮询用；进程级单实例，用锁保护）
+_sync_lock = threading.Lock()
+_sync_progress: dict = {
+    "running": False, "total": 0, "done": 0, "failed": 0,
+    "current": None, "errors": [], "started_at": None, "finished_at": None,
+}
+
+
+def get_sync_progress() -> dict:
+    """当前全量同步进度快照（/api/sync/status 透传）。"""
+    with _sync_lock:
+        return dict(_sync_progress)
 
 logger = logging.getLogger(__name__)
 
@@ -279,20 +293,38 @@ def sync_watchlist(session: Session) -> SyncLog:
     session.commit()
     session.refresh(log)
 
+    # 初始化实时进度（前端弹窗轮询）
+    with _sync_lock:
+        _sync_progress.update(
+            running=True, total=0, done=0, failed=0,
+            current=None, errors=[], started_at=datetime.now(), finished_at=None,
+        )
+
     # 先同步大盘指数（供 AI 分析和大盘状态条使用），带冷却
     _sync_indices_if_due(session)
 
     stocks = list(session.exec(select(Stock).where(Stock.is_watchlist == True)))  # noqa: E712
     codes = [s.code for s in stocks]
+    with _sync_lock:
+        _sync_progress["total"] = len(codes)
     total = 0
     errors: list[str] = []
     with ThreadPoolExecutor(max_workers=_SYNC_WORKERS) as pool:
         for code, inserted, err in pool.map(_sync_one_isolated, codes):
+            with _sync_lock:
+                _sync_progress["done"] += 1
+                _sync_progress["current"] = code
             if err:
                 errors.append(f"{code}: {err}")
+                with _sync_lock:
+                    _sync_progress["failed"] += 1
+                    if len(_sync_progress["errors"]) < 20:
+                        _sync_progress["errors"].append(f"{code}: {err[:150]}")
             else:
                 total += inserted
 
+    with _sync_lock:
+        _sync_progress.update(running=False, finished_at=datetime.now())
     log.finished_at = datetime.now()
     log.stocks_synced = len(stocks) - len(errors)
     log.status = "success" if not errors else ("failed" if len(errors) == len(stocks) else "partial")
