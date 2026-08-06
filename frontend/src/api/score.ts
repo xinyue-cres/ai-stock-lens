@@ -49,6 +49,7 @@ export interface SignalComponent {
   signal_days?: number | null
   signal_gain_pct?: number | null
   hist_golden_days?: number | null
+  hist_golden_days_median?: number | null
   hist_golden_samples?: number | null
   hist_golden_peak_pct?: number | null
   hist_golden_peak_median?: number | null

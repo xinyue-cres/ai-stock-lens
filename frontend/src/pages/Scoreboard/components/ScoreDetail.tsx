@@ -118,9 +118,18 @@ export default function ScoreDetail({ detail, onAddWatchlist, onOpenDetail }: Sc
               </span>
             ) : '-'}
           </Field>
-          <Field label="信号持续">{sig.signal_days != null ? `${sig.signal_days} 天` : '-'}</Field>
-          <Field label="历史金叉平均持续">
-            {sig.hist_golden_days != null ? `${sig.hist_golden_days} 天` : '-'}
+          <Field label="信号持续">
+            {sig.signal_days === 0
+              ? (sig.current_signal === 'death' ? '今日死叉' : '今日金叉')
+              : sig.signal_days != null ? `${sig.signal_days} 天` : '-'}
+          </Field>
+          <Field label="历史金叉持续">
+            {sig.hist_golden_days != null ? (
+              <span>
+                均值 {sig.hist_golden_days} 天
+                {sig.hist_golden_days_median != null ? ` · 中位 ${sig.hist_golden_days_median} 天` : ''}
+              </span>
+            ) : '-'}
           </Field>
           <Field label="信号期间涨跌">{sig.signal_gain_pct != null ? pct(sig.signal_gain_pct) : '-'}</Field>
           <Field label="当日涨跌">{pct(detail.pct_chg)}</Field>
