@@ -132,7 +132,9 @@ export default function StockRow({ item, groups, selectMode, checked, batchStatu
           <Dropdown
             menu={{
               items: [
-                { key: 'group', label: '移动到分组', icon: <FolderOutlined />, children: groupMenu.length ? groupMenu : [{ key: 'empty', label: '暂无分组', disabled: true }] },
+                { key: 'group', label: '移动到分组', icon: <FolderOutlined />, children: groupMenu.length ? groupMenu : [{ key: 'empty', label: '暂无分组', disabled: true }],
+                  // 点击父级只展开/保持子菜单（hover 选择分组），阻止任何误触成分组操作或关闭
+                  onClick: (e: any) => { e?.domEvent?.preventDefault(); e?.domEvent?.stopPropagation() } },
                 { type: 'divider' as const },
                 { key: 'remove', label: '移除', icon: <DeleteOutlined />, danger: true, onClick: (e: any) => { e?.domEvent?.stopPropagation(); onRemove() } },
               ],
