@@ -106,8 +106,8 @@ class TencentProvider(BaseProvider):
             "high": high or close,
             "low": low or close,
             "close": close,
-            # 腾讯"成交量"单位是手（100 股），统一为股，与新浪/baostock 对齐
-            "volume": (volume or 0) * 100,
+            # 腾讯 spot"成交量"单位是股（实测 close×volume≈amount），与新浪/baostock 对齐，不需 ×100
+            "volume": volume or 0,
             "amount": amount or 0,
             "turnover": turnover if turnover and turnover > 0 else None,
             "pct_chg": pct_chg or 0,

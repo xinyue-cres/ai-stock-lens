@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient, useIsMutating } from '@tanstack/react-query'
 import { Button, Modal, Popconfirm, Progress, Space, Tooltip, Typography, message } from 'antd'
 import { ReloadOutlined, ThunderboltOutlined } from '@ant-design/icons'
@@ -75,6 +75,15 @@ export function GlobalStatusBar() {
     }
   }, [syncActive, syncOpen])
   const pct = progress?.total ? Math.round((progress.done / progress.total) * 100) : 0
+
+  // 同步完成 → 自动失效所有相关数据，页面即时刷新（不用手动刷新）
+  const prevSyncRunning = useRef(false)
+  useEffect(() => {
+    const running = !!progress?.running || statusQ.data?.last_sync?.status === 'running'
+    const justFinished = prevSyncRunning.current && !running
+    if (justFinished) inv.afterSync()
+    prevSyncRunning.current = running
+  }, [progress?.running, statusQ.data?.last_sync?.status])
 
   return (
     <>

@@ -11,6 +11,11 @@ export function useInvalidation() {
       qc.invalidateQueries({ queryKey: ['kline'] })
       qc.invalidateQueries({ queryKey: ['market-summary'] })
       qc.invalidateQueries({ queryKey: ['action-plan-deps'] })
+      // 选股打分（排行/详情/扫描状态）+ 自选列表，同步后一并刷新
+      qc.invalidateQueries({ queryKey: ['score-list'] })
+      qc.invalidateQueries({ queryKey: ['score-detail'] })
+      qc.invalidateQueries({ queryKey: ['score-scan-status'] })
+      qc.invalidateQueries({ queryKey: ['watchlist'] })
     },
     afterSyncSingle: (code: string) => {
       qc.invalidateQueries({ queryKey: ['signals-today'] })
