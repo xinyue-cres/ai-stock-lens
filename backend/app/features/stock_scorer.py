@@ -58,8 +58,8 @@ def _post_golden_gain(close: pd.Series, signals: list[tuple[int, str]]) -> float
     """历史金叉后涨幅分：每次金叉→死叉周期内到峰值（区间最高收盘）的最大涨幅 + 胜率合成。
 
     用"周期内峰值涨幅"而非固定 20 日窗口——金叉长度不一（5~40 天），固定窗口
-    测不准"这次金叉能涨到多高"；峰值涨幅衡量上涨潜力。锚点 18%（采样：峰值涨幅
-    中位 ~9%、p90 ~17%）。
+    测不准"这次金叉能涨到多高"；峰值涨幅衡量上涨潜力。
+    锚点 24%（含金叉确认日跳涨后重新采样：周期级 p90 ≈24.5%、股票级 robust_avg p90 ≈12%）。
     """
     n = len(close)
     peak_gains: list[float] = []
@@ -86,7 +86,7 @@ def _post_golden_gain(close: pd.Series, signals: list[tuple[int, str]]) -> float
         # 与中位数各取一半更公允
         robust_avg = 0.5 * statistics.mean(peak_gains) + 0.5 * statistics.median(peak_gains)
         wr = sum(1 for g in peak_gains if g > 0) / len(peak_gains)
-        gain_score = _norm(robust_avg, 0.0, 0.18) * 100
+        gain_score = _norm(robust_avg, 0.0, 0.24) * 100
         wr_score = _norm(wr, 0.5, 0.80) * 100
         return round(0.6 * gain_score + 0.4 * wr_score, 1)
     return 50.0  # 金叉样本不足，中性

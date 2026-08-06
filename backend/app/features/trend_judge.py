@@ -21,7 +21,8 @@ from app.indicators.ma import compute_ma
 _MIN_ROWS = 60  # MACD EMA26 预热需要 ~60 根
 
 # 金叉延续分阈值：>= 此值视为历史金叉可靠
-_SIGNAL_RELIABLE = 65
+# 含金叉日跳涨后评分整体上移（中位 ~72），原 65 已无区分度（95% 达标），上调到 72
+_SIGNAL_RELIABLE = 72
 
 _REASONS = {
     "pullback_entry": "金叉态·上方空间足，可入手",

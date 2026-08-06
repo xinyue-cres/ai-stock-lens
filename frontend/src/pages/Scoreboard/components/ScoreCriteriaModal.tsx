@@ -80,10 +80,10 @@ export default function ScoreCriteriaModal({
               贴上布林上轨（%B&gt;0.85，短期涨过头）→ <Tag style={stageTag('overheat')}>过热</Tag> 等回踩
             </li>
             <li>
-              距 60 日高点回撤 &gt;40% 且历史金叉分&lt;65 → <Tag style={stageTag('downtrend')}>下跌趋势</Tag> 回避
+              距 60 日高点回撤 &gt;40% 且历史金叉分&lt;72 → <Tag style={stageTag('downtrend')}>下跌趋势</Tag> 回避
             </li>
             <li>
-              历史金叉延续分 ≥65（可靠）→ <Tag style={stageTag('pullback_entry')}>可入手</Tag>
+              历史金叉延续分 ≥72（可靠）→ <Tag style={stageTag('pullback_entry')}>可入手</Tag>
             </li>
             <li>
               未过热、有上方空间（%B≥0.2）→ <Tag style={stageTag('pullback_entry')}>可入手</Tag>
@@ -98,10 +98,10 @@ export default function ScoreCriteriaModal({
           <b style={{ color: STAGE_PALETTE.downtrend.color }}>死叉态（DIF &lt; DEA）</b>
           <ul style={{ margin: '6px 0 0', paddingLeft: 20, color: '#666', fontSize: 12, lineHeight: 2 }}>
             <li>
-              历史金叉延续分 ≥65（可靠，金叉总会再来）→ <Tag style={stageTag('range')}>震荡</Tag> 等下次金叉
+              历史金叉延续分 ≥72（可靠，金叉总会再来）→ <Tag style={stageTag('range')}>震荡</Tag> 等下次金叉
             </li>
             <li>
-              历史金叉延续分 &lt;65 → <Tag style={stageTag('downtrend')}>下跌趋势</Tag> 回避
+              历史金叉延续分 &lt;72 → <Tag style={stageTag('downtrend')}>下跌趋势</Tag> 回避
             </li>
           </ul>
         </div>
