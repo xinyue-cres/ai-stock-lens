@@ -22,7 +22,7 @@ from app.config import get_settings
 from app.datasource.base_provider import is_fund_code
 from app.datasource.router import get_data_router
 from app.db import engine
-from app.features.stock_scorer import score_stock
+from app.features.stock_scorer import compute_indicator_cache, score_stock
 from app.features.trend_judge import judge_trend
 from app.models.stock import Stock
 from app.models.stock_score import StockScore
@@ -110,10 +110,13 @@ def _build_pool(session: Session, scope: str, codes: list[str] | None,
 
 
 def _fetch_kline(code: str, settings) -> object | None:
-    """直拉近 ~500 根日线（不落库）。带限流 sleep。"""
+    """拉近 ~500 根日线（优先用库内 K 线缓存，缺失才拉网络）。带限流 sleep。"""
     try:
         end = date.today()
         start = end - timedelta(days=settings.scan_kline_days)  # 约 2 自然年 ≈ 500 交易日
+        cached = _load_cached_kline(code, start)
+        if cached is not None:
+            return cached
         df = get_data_router().fetch_stock_daily(code, start, end)
         # 请求间限流，防数据源封禁；当前东财不可用走新浪兜底，可更激进。
         # 若东财恢复后被限流，可回调到 0.05~0.08
@@ -122,6 +125,32 @@ def _fetch_kline(code: str, settings) -> object | None:
     except Exception:  # noqa: BLE001
         logger.warning("拉取 %s K 线失败", code)
         return None
+
+
+def _load_cached_kline(code: str, start: date) -> object | None:
+    """从 KlineDaily 读 K 线缓存；覆盖扫描窗口（≥400 根）直接返回，否则 None 走网络拉取。
+
+    复权口径与扫描一致（KlineDaily 由 sync 用 qfq 写入，扫描也用 qfq），可安全复用；
+    已同步/自选过的股票扫描不再重复拉网络。
+    """
+    from app.models.kline import KlineDaily
+
+    with Session(engine) as s:
+        rows = list(s.exec(
+            select(KlineDaily)
+            .where(KlineDaily.code == code, KlineDaily.trade_date >= start)
+            .order_by(KlineDaily.trade_date.asc())
+        ))
+    if len(rows) < 400:
+        return None
+    return pd.DataFrame([
+        {
+            "trade_date": r.trade_date, "open": r.open, "high": r.high,
+            "low": r.low, "close": r.close, "volume": r.volume,
+            "amount": r.amount, "turnover": r.turnover, "pct_chg": r.pct_chg,
+        }
+        for r in rows
+    ])
 
 
 def _upsert(session: Session, code: str, name: str, scored: dict, trend: dict,
@@ -209,9 +238,11 @@ def _run_scan(todo: list[str], name_map: dict[str, str], settings, today: date, 
             try:
                 df = _fetch_kline(code, settings)
                 if df is not None and not df.empty:
-                    scored = score_stock(df, dividend_map.get(code), is_fund_code(code))
+                    # 指标只算一次，score_stock 与 judge_trend 复用（避免重复算 MACD/ADX/BOLL/Risk）
+                    cache = compute_indicator_cache(df)
+                    scored = score_stock(df, dividend_map.get(code), is_fund_code(code), cache=cache)
                     if scored is not None:
-                        trend = judge_trend(df, signal_score=scored["signal_score"])
+                        trend = judge_trend(df, signal_score=scored["signal_score"], cache=cache)
                         as_of_date = _parse_as_of(df["trade_date"].iloc[-1])
                         with Session(engine) as s:
                             _upsert(s, code, name_map.get(code, code), scored, trend, today, as_of_date, scope)

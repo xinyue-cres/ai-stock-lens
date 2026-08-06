@@ -15,12 +15,8 @@ from __future__ import annotations
 
 import pandas as pd
 
-from app.indicators.adx import compute_adx
+from app.features.stock_scorer import compute_indicator_cache
 from app.indicators.ma import compute_ma
-from app.indicators.macd import dif_slope as compute_dif_slope
-from app.indicators.macd import is_golden, macd_series
-from app.indicators.oscillators import compute_boll
-from app.indicators.risk import compute_risk
 
 _MIN_ROWS = 60  # MACD EMA26 预热需要 ~60 根
 
@@ -77,11 +73,14 @@ def _entry_reason(stage: str, golden: bool, bar_shrinking: bool | None,
     return _REASONS.get(stage, "")
 
 
-def judge_trend(df: pd.DataFrame, signal_score: float | None = None) -> dict:
+def judge_trend(df: pd.DataFrame, signal_score: float | None = None,
+                cache: dict | None = None) -> dict:
     """对单只标的做金叉驱动的趋势/可入手判断。
 
     df 需含 trade_date/open/high/low/close/volume/amount/turnover/pct_chg（升序）。
     signal_score 为金叉延续性分（0-100，历史可靠性），由打分引擎提供，可 None。
+    cache：compute_indicator_cache 预计算指标（扫描复用，避免同一 df 重复算
+    MACD/ADX/BOLL/Risk/峰值胜率）；独立调用（详情页）不传则内部自行计算一次。
     返回 {trend_stage, can_entry, entry_reason, key_prices, indicators}。
     """
     if df is None or df.empty or len(df) < _MIN_ROWS:
@@ -95,43 +94,22 @@ def judge_trend(df: pd.DataFrame, signal_score: float | None = None) -> dict:
     if "trade_date" in df.columns:
         df = df.sort_values("trade_date").reset_index(drop=True)
 
-    close_s = df["close"].astype(float)
+    # 复用打分引擎的指标缓存（无则自行计算一次），避免重复算 MACD/ADX/BOLL/Risk
+    if cache is None:
+        cache = compute_indicator_cache(df)
+    close_s = cache["close"]
+    dif = cache["dif"]
+    dea = cache["dea"]
     close = float(close_s.iloc[-1])
-
-    # MACD 金叉状态 + DIF 斜率（indicators/macd 统一实现，与打分引擎共用）
-    dif, dea, signals = macd_series(close_s)
-    golden = is_golden(dif, dea)
-    dif_slope = compute_dif_slope(dif)
-
-    # MACD 柱（DIF−DEA）当日 vs 昨前均值：柱体缩小 = 动能掉头（上涨过峰预警）
-    # 用单日判定：用户实测多股，第一天缩小往往就是真拐点
-    bar = dif - dea
-    bar_shrinking: bool | None = None
-    if len(bar) >= 3:
-        bar_shrinking = bool(bar.iloc[-1] < (bar.iloc[-2] + bar.iloc[-3]) / 2)
-
-    # 历史金叉冲过 +5% 的占比（峰值胜率），供决策树可靠性补充
-    peak_gains: list[float] = []
-    n_bar = len(close_s)
-    for i in range(len(signals)):
-        if signals[i][1] != "golden":
-            continue
-        gidx = signals[i][0]
-        e = n_bar - 1
-        for j in range(i + 1, len(signals)):
-            if signals[j][1] == "death":
-                e = signals[j][0]
-                break
-        if e <= gidx or close_s.iloc[gidx] <= 0:
-            continue
-        peak_gains.append(close_s.iloc[gidx:e + 1].max() / close_s.iloc[gidx] - 1)
-    peak_winrate: float | None = (
-        sum(1 for g in peak_gains if g > 0.05) / len(peak_gains) * 100
-        if len(peak_gains) >= 3 else None
-    )
+    golden = cache["golden"]
+    dif_slope = cache["dif_slope"]
+    bar_shrinking = cache["bar_shrinking"]
+    peak_winrate = cache["peak_winrate"]
+    boll = cache["boll"]
+    adx_info = cache["adx"]
+    stop_loss = cache["risk"].get("stop_loss_hint")
 
     # 潜在空间：BOLL %B/带宽 + 距 60 日高点回撤
-    boll = compute_boll(df)
     pct_b = boll["pct_b"]
     bandwidth = boll["bandwidth"]
     high_60 = float(df["high"].tail(60).max()) if len(df) >= 60 else float(df["high"].max())
@@ -141,9 +119,7 @@ def judge_trend(df: pd.DataFrame, signal_score: float | None = None) -> dict:
     stage = _decide_stage(golden, pct_b, dist_high, signal_score, peak_winrate, bar_shrinking)
 
     # 辅助参考（不参与决策）
-    adx_info = compute_adx(df)
     arrangement = compute_ma(df).get("arrangement")
-    stop_loss = compute_risk(df).get("stop_loss_hint")
 
     ma20 = boll["middle"]
     ma60 = float(close_s.rolling(60).mean().iloc[-1]) if len(df) >= 60 else None

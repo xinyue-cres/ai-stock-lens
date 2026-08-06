@@ -19,6 +19,7 @@ from app.features.quant_factors import compute_quant_features
 from app.indicators.adx import compute_adx
 from app.indicators.macd import dif_slope as compute_dif_slope
 from app.indicators.macd import is_golden, macd_series
+from app.indicators.oscillators import compute_boll
 from app.indicators.risk import compute_risk
 
 # 综合分权重
@@ -150,28 +151,22 @@ def _golden_life_score(signals: list[tuple[int, str]]) -> float:
     return round(score, 1)
 
 
-def _signal_summary(close: pd.Series, signals: list[tuple[int, str]]) -> dict:
-    """当前信号状态与历史金叉/死叉后平均涨跌（详情页汇总展示用）。
+def _bar_shrinking(bar: pd.Series) -> bool | None:
+    """MACD 柱（DIF−DEA）单日是否缩小：当日 < (昨日+前日)/2。"""
+    if len(bar) >= 3:
+        return bool(bar.iloc[-1] < (bar.iloc[-2] + bar.iloc[-3]) / 2)
+    return None
 
-    - current_signal / signal_days：最近一次是金叉还是死叉、已持续几个交易日
-    - signal_gain_pct：当前信号期间累计涨跌幅 %
-    - hist_golden_avg_gain_pct：历史金叉后 20 日平均涨幅 %（样本≥3）
-    - hist_death_avg_change_pct：历史死叉后 20 日平均涨跌幅 %（样本≥3）
+
+def _cycle_stats(close: pd.Series, signals: list[tuple[int, str]]) -> tuple[list[float], list[float], list[int]]:
+    """金叉/死叉周期统计：金叉峰值涨幅%、死叉谷值跌幅%、金叉寿命（天数）。
+
+    供评分、决策树、详情展示共用——避免同一 df 上多处重复循环遍历 signals。
     """
-    info: dict = {}
     n = len(close)
-    if signals:
-        last_idx, last_dir = signals[-1]
-        info["current_signal"] = last_dir  # golden / death
-        info["signal_days"] = max(0, n - 1 - last_idx)
-        if 0 <= last_idx < n and close.iloc[last_idx] > 0:
-            info["signal_gain_pct"] = round((close.iloc[-1] / close.iloc[last_idx] - 1) * 100, 2)
-        else:
-            info["signal_gain_pct"] = None
-
-    # 历史金叉周期内峰值涨幅、死叉周期内谷值跌幅（相对固定 20 日窗口更能反映涨/跌潜力）
     golden_peaks: list[float] = []
     death_valleys: list[float] = []
+    lives: list[int] = []
     for i in range(len(signals)):
         s_idx, s_dir = signals[i]
         end_idx = n - 1
@@ -186,6 +181,73 @@ def _signal_summary(close: pd.Series, signals: list[tuple[int, str]]) -> dict:
             golden_peaks.append((seg.max() / close.iloc[s_idx] - 1) * 100)
         else:
             death_valleys.append((seg.min() / close.iloc[s_idx] - 1) * 100)
+    for i in range(len(signals)):
+        if signals[i][1] != "golden":
+            continue
+        for j in range(i + 1, len(signals)):
+            if signals[j][1] == "death":
+                lives.append(signals[j][0] - signals[i][0])
+                break
+    return golden_peaks, death_valleys, lives
+
+
+def _peak_winrate(golden_peaks: list[float]) -> float | None:
+    """金叉峰值胜率：冲过 +5% 的周期占比（供决策树可靠性补充）。"""
+    if len(golden_peaks) >= 3:
+        return sum(1 for g in golden_peaks if g > 5) / len(golden_peaks) * 100
+    return None
+
+
+def compute_indicator_cache(df: pd.DataFrame) -> dict:
+    """扫描/判断公用的指标快照：score_stock 与 judge_trend 复用，避免同一 df 重复计算。
+
+    返回 close/dif/dea/signals/dif_slope/golden/adx/boll/risk/bar_shrinking/cycles。
+    独立调用（如详情页）可不传 cache，由各函数自行计算。
+    """
+    close = df["close"].astype(float)
+    dif, dea, signals = macd_series(close)
+    cycles = _cycle_stats(close, signals)
+    return {
+        "close": close,
+        "dif": dif,
+        "dea": dea,
+        "signals": signals,
+        "dif_slope": compute_dif_slope(dif),
+        "golden": is_golden(dif, dea),
+        "adx": compute_adx(df),
+        "boll": compute_boll(df),
+        "risk": compute_risk(df),
+        "bar_shrinking": _bar_shrinking(dif - dea),
+        "cycles": cycles,
+        "peak_winrate": _peak_winrate(cycles[0]),
+    }
+
+
+def _signal_summary(close: pd.Series, signals: list[tuple[int, str]],
+                    cycles: tuple[list[float], list[float], list[int]] | None = None) -> dict:
+    """当前信号状态与历史金叉/死叉周期涨跌（详情页汇总展示用）。
+
+    - current_signal / signal_days：最近一次是金叉还是死叉、已持续几个交易日
+    - signal_gain_pct：当前信号期间累计涨跌幅 %
+    - hist_golden_peak_pct / median / winrate：金叉周期峰值涨幅（均值/中位/胜率）
+    - hist_death_trough_pct / median / winrate：死叉周期谷值跌幅（均值/中位/胜率）
+    cycles：预计算的周期统计（复用避免重复循环），None 时自行计算
+    """
+    info: dict = {}
+    n = len(close)
+    if signals:
+        last_idx, last_dir = signals[-1]
+        info["current_signal"] = last_dir  # golden / death
+        info["signal_days"] = max(0, n - 1 - last_idx)
+        if 0 <= last_idx < n and close.iloc[last_idx] > 0:
+            info["signal_gain_pct"] = round((close.iloc[-1] / close.iloc[last_idx] - 1) * 100, 2)
+        else:
+            info["signal_gain_pct"] = None
+
+    # 历史金叉周期峰值涨幅、死叉周期谷值跌幅（周期统计复用，避免重复循环）
+    if cycles is None:
+        cycles = _cycle_stats(close, signals)
+    golden_peaks, death_valleys, lives = cycles
     info["hist_golden_samples"] = len(golden_peaks)
     info["hist_golden_peak_pct"] = round(statistics.mean(golden_peaks), 2) if len(golden_peaks) >= 3 else None
     info["hist_golden_peak_median"] = round(statistics.median(golden_peaks), 2) if len(golden_peaks) >= 3 else None
@@ -204,34 +266,43 @@ def _signal_summary(close: pd.Series, signals: list[tuple[int, str]]) -> dict:
     )
 
     # 历史金叉平均持续天数（金叉→死叉间隔，截尾均值，与"不横跳分"同口径）
-    lives: list[int] = []
-    for i in range(len(signals)):
-        if signals[i][1] != "golden":
-            continue
-        for j in range(i + 1, len(signals)):
-            if signals[j][1] == "death":
-                lives.append(signals[j][0] - signals[i][0])
-                break
     if lives:
         sorted_lives = sorted(lives)
         trim = max(1, int(len(sorted_lives) * 0.1))
         kept = sorted_lives[trim:-trim] if len(sorted_lives) > 2 * trim else sorted_lives
         info["hist_golden_days"] = round(statistics.mean(kept), 1)
+        info["hist_golden_days_median"] = round(statistics.median(kept), 1)
     else:
         info["hist_golden_days"] = None
+        info["hist_golden_days_median"] = None
     return info
 
 
-def _golden_continuation(df: pd.DataFrame) -> dict:
+def _golden_continuation(df: pd.DataFrame, cache: dict | None = None) -> dict:
     """金叉延续性：出现金叉（MACD DIF 上穿 DEA）后能否成功上涨一大段、不反复横跳。
 
     纯历史统计评估（用户确认：不看当前状态，而是历史数据对这只股票的总体评估）：
     = 0.60·金叉后大段上涨（涨幅分开方×10，放大低分区间的区分度）
       + 0.40·金叉寿命（有效延续达标 + 微横跳减分）
     ADX、DIF 斜率与当前金叉/死叉态（含斜率方向）仅作展示参考，不参与评分。
+    cache：compute_indicator_cache 预计算指标（扫描复用），None 时自行计算
     """
-    close = df["close"].astype(float)
-    dif, dea, signals = macd_series(close)
+    if cache:
+        close = cache["close"]
+        dif, dea, signals = cache["dif"], cache["dea"], cache["signals"]
+        adx = cache["adx"]["adx"]
+        dif_slope = cache["dif_slope"]
+        current_golden = cache["golden"]
+        bar_shrinking = cache["bar_shrinking"]
+        cycles = cache["cycles"]
+    else:
+        close = df["close"].astype(float)
+        dif, dea, signals = macd_series(close)
+        adx = compute_adx(df)["adx"]
+        dif_slope = compute_dif_slope(dif)
+        current_golden = is_golden(dif, dea)
+        bar_shrinking = _bar_shrinking(dif - dea)
+        cycles = None
 
     post_gain = _post_golden_gain(close, signals)
     life = _golden_life_score(signals)
@@ -240,17 +311,13 @@ def _golden_continuation(df: pd.DataFrame) -> dict:
     # 红利组金叉后涨幅普遍 <20，线性下低分区挤成一团；开方把 0-20 拉开到 0-45，区分度更好。
     post_eff = math.sqrt(max(post_gain, 0.0)) * 10
 
-    adx = compute_adx(df)["adx"]
-
     # DIF 当前斜率：当日 DIF −（昨日 + 前日）/2（indicators/macd 统一实现，
     # 与趋势判断共用）。仅作展示参考，不参与评分。
-    dif_slope = compute_dif_slope(dif)
     dif_slope_dir: str | None = None
     if dif_slope is not None:
         dif_slope_dir = "up" if dif_slope > 0 else ("down" if dif_slope < 0 else "flat")
 
     # 当前状态：DIF 在 DEA 上方 = 金叉态，下方 = 死叉态；再结合斜率描述强弱
-    current_golden = is_golden(dif, dea)
     if dif_slope is None:
         current_state = "金叉" if current_golden else "死叉"
     elif current_golden:
@@ -261,12 +328,7 @@ def _golden_continuation(df: pd.DataFrame) -> dict:
     score = 0.40 * life + 0.60 * post_eff
 
     # MACD 柱（DIF−DEA）当日 vs 昨前均值：柱体缩小 = 动能掉头（比 DIF 斜率更早预警）
-    # 用单日判定：用户实测多股，第一天缩小往往就是真拐点
-    bar = dif - dea
-    if len(bar) >= 3:
-        bar_shrinking = bool(bar.iloc[-1] < (bar.iloc[-2] + bar.iloc[-3]) / 2)
-    else:
-        bar_shrinking = None
+    # 用单日判定：用户实测多股，第一天缩小往往就是真拐点（bar_shrinking 已在开头复用）
 
     # 过峰信号：上涨中柱体缩小 → 见顶；下跌中柱体回升（绿柱由负变大）→ 见底
     if bar_shrinking is None:
@@ -287,7 +349,7 @@ def _golden_continuation(df: pd.DataFrame) -> dict:
         "dif_slope": dif_slope,
         "dif_slope_dir": dif_slope_dir,
         "peak_signal": peak_signal,
-        **_signal_summary(close, signals),
+        **_signal_summary(close, signals, cycles),
     }
 
 
@@ -362,17 +424,18 @@ def _dividend_score(dividend_yield: float | None, is_fund: bool) -> dict:
 # ---------------------------------------------------------------------------
 
 def score_stock(df: pd.DataFrame, dividend_yield: float | None = None,
-                is_fund: bool = False) -> dict | None:
+                is_fund: bool = False, cache: dict | None = None) -> dict | None:
     """对单只标的打分。df 需含 trade_date/open/high/low/close/volume/amount/turnover/pct_chg（升序）。
 
     返回完整打分 dict（含子维度明细 components）；数据不足返回 None。
+    cache：compute_indicator_cache 预计算指标（扫描复用），None 时自行计算。
     """
     if df is None or df.empty or len(df) < _MIN_ROWS:
         return None
     if "trade_date" in df.columns:
         df = df.sort_values("trade_date").reset_index(drop=True)
 
-    golden = _golden_continuation(df)
+    golden = _golden_continuation(df, cache=cache)
     band = _band_score(df)
     dividend = _dividend_score(dividend_yield, is_fund)
 
@@ -413,6 +476,7 @@ def score_stock(df: pd.DataFrame, dividend_yield: float | None = None,
                 "signal_days": golden.get("signal_days"),
                 "signal_gain_pct": golden.get("signal_gain_pct"),
                 "hist_golden_days": golden.get("hist_golden_days"),
+                "hist_golden_days_median": golden.get("hist_golden_days_median"),
                 "hist_golden_samples": golden.get("hist_golden_samples"),
                 "hist_golden_peak_pct": golden.get("hist_golden_peak_pct"),
                 "hist_golden_peak_median": golden.get("hist_golden_peak_median"),
