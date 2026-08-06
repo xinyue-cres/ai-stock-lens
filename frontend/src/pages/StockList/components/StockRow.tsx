@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Button, Checkbox, Dropdown, Tag, Tooltip, Typography } from 'antd'
-import { CheckCircleOutlined, CloseCircleOutlined, DeleteOutlined, FolderOutlined, LoadingOutlined, MoreOutlined, SyncOutlined } from '@ant-design/icons'
+import { CheckCircleOutlined, CloseCircleOutlined, DeleteOutlined, FolderOutlined, FundOutlined, LoadingOutlined, MoreOutlined, SyncOutlined } from '@ant-design/icons'
 import { SignalItem, ReportTimes } from '@/api/signals'
 import { StockGroup } from '@/api/groups'
 import { BatchItemStatus } from '@/api/batchTask'
@@ -28,9 +28,10 @@ interface StockRowProps {
   onRemove: () => void
   onGroupChange: (gids: number[]) => void
   onSync: () => void
+  onOpenScore: (code: string) => void
 }
 
-export default function StockRow({ item, groups, selectMode, checked, batchStatus, onToggle, onClick, onRemove, onGroupChange, onSync }: StockRowProps) {
+export default function StockRow({ item, groups, selectMode, checked, batchStatus, onToggle, onClick, onRemove, onGroupChange, onSync, onOpenScore }: StockRowProps) {
   const [hovered, setHovered] = useState(false)
   const heat = getHeatColor(item)
   const pct = item.pct_chg
@@ -125,7 +126,10 @@ export default function StockRow({ item, groups, selectMode, checked, batchStatu
           )
         })()}
 
-        <div style={{ width: 56, display: 'flex', gap: 2, visibility: hovered ? 'visible' : 'hidden' }}>
+        <div style={{ width: 80, display: 'flex', gap: 2, visibility: hovered ? 'visible' : 'hidden' }}>
+          <Tooltip title="看选股打分">
+            <Button type="text" size="small" icon={<FundOutlined style={{ fontSize: 12 }} />} onClick={e => { e.stopPropagation(); onOpenScore(item.code) }} />
+          </Tooltip>
           <Tooltip title="同步">
             <Button type="text" size="small" icon={<SyncOutlined style={{ fontSize: 12 }} />} onClick={e => { e.stopPropagation(); onSync() }} />
           </Tooltip>

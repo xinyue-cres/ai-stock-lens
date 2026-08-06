@@ -16,11 +16,12 @@ from app.config import get_settings
 from app.datasource.router import get_data_router
 from app.db import get_session
 from app.features.trend_judge import judge_trend
+from app.models.stock import Stock
 from app.models.stock_group import StockGroup
 from app.models.stock_score import StockScore
 from app.services import scoring_service
 from app.services.analysis_service import load_kline_df
-from app.services.stock_service import watchlist_codes_in_groups
+from app.services.stock_service import watchlist_codes_in_groups, get_group_ids
 
 logger = logging.getLogger(__name__)
 
@@ -92,6 +93,26 @@ def _sig(r: StockScore) -> dict:
         return {}
     sig = comp.get("signal") if isinstance(comp, dict) else None
     return sig if isinstance(sig, dict) else {}
+
+
+def _attach_watchlist_info(session: Session, items: list[dict]) -> None:
+    """给打分列表批量补 in_watchlist + group_ids（选股页跳工作台分组视图用）。
+
+    StockScore 表不含分组关系，需从 Stock 表按 code 批量反查；避免 N+1 逐条查询。
+    """
+    codes = [i["code"] for i in items]
+    if not codes:
+        return
+    stocks = session.exec(select(Stock).where(Stock.code.in_(codes))).all()  # type: ignore[attr-defined]
+    wl = {s.code: s for s in stocks if s.is_watchlist}
+    for i in items:
+        s = wl.get(i["code"])
+        if s:
+            i["in_watchlist"] = True
+            i["group_ids"] = get_group_ids(s)
+        else:
+            i["in_watchlist"] = False
+            i["group_ids"] = []
 
 
 def _latest_scan_date(session: Session, scope: str | None) -> date | None:
@@ -166,7 +187,9 @@ def list_scores(
     group_ids 传了则只显示这些自选分组内的标的打分（多选，命中任一即显示）。
     """
     rows = _query_scores(session, sort_by, dir, limit, min_score, can_entry, stage, group_ids, scope)
-    return [_serialize(r) for r in rows]
+    items = [_serialize(r) for r in rows]
+    _attach_watchlist_info(session, items)
+    return items
 
 
 @router.get("/scan/status")

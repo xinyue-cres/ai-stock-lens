@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Card, Empty, Spin, message } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
@@ -10,6 +10,7 @@ import {
   getScoreList,
   runScan,
   ScoreDetail as ScoreDetailType,
+  ScoreItem as ScoreItemType,
   StockComment as StockCommentType,
   ScoreSummary as ScoreSummaryType,
   summarizeScore,
@@ -31,14 +32,34 @@ export default function ScoreboardPage() {
   const navigate = useNavigate()
   // 跳转到个股完整详情页
   const openDetail = (code: string) => navigate(`/stock/${code}`)
+  // 跳转到工作台分组视图：已加自选且分到组 → 进该分组；未加自选 → 工作台全部
+  const openWorkbench = (item: ScoreItemType) => {
+    if (item.in_watchlist && item.group_ids && item.group_ids.length > 0) {
+      navigate(`/?group=${item.group_ids[0]}`)
+    } else {
+      navigate('/')
+    }
+  }
+
+  // 支持 URL 定位：/scoreboard?code=X 直接选中该票（工作台「看打分」跳过来）
+  // selected 变化写回 URL（replace 不堆历史），外部进入时也能定位
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [selected, setSelected] = useState<string | null>(() => searchParams.get('code'))
+  const selectStock = useCallback((code: string | null) => {
+    setSelected(code)
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev)
+      if (code) next.set('code', code)
+      else next.delete('code')
+      return next
+    }, { replace: true })
+  }, [setSearchParams])
 
   // 工具栏/过滤状态（scope/groupIds 持久化到 localStorage）
   const {
     sortDir, setSortDir, onlyEntry, setOnlyEntry,
     scope, setScope, groupIds, setGroupIds, force, setForce, aiParams,
   } = useScoreboardState()
-
-  const [selected, setSelected] = useState<string | null>(null)
   const [criteriaOpen, setCriteriaOpen] = useState(false)
   const [summaryOpen, setSummaryOpen] = useState(false)
   const [commentsOpen, setCommentsOpen] = useState(false)
@@ -201,9 +222,10 @@ export default function ScoreboardPage() {
               key={item.code}
               item={item}
               active={selected === item.code}
-              onClick={() => setSelected(item.code)}
+              onClick={() => selectStock(item.code)}
               onAddWatchlist={(code) => addMut.mutate(code)}
               onOpenDetail={openDetail}
+              onOpenWorkbench={openWorkbench}
             />
           ))}
         </Card>

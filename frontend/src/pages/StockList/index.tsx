@@ -253,6 +253,7 @@ export default function StockListPage() {
                   globalInv.afterSyncSingle(item.code)
                 }).catch(() => message.error(`${item.name} 同步失败`))
               }}
+              onOpenScore={(code) => navigate(`/scoreboard?code=${code}`)}
             />
           ))}
           {filtered.length === 0 && (

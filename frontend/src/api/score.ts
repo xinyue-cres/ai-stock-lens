@@ -31,6 +31,9 @@ export interface ScoreItem {
   dif_slope: number | null
   dif_slope_dir: 'up' | 'down' | 'flat' | null
   current_state: string | null
+  // 是否在自选 + 所属分组（选股页跳工作台分组视图用，由 list 接口批量注入）
+  in_watchlist?: boolean
+  group_ids?: number[]
 }
 
 // 各维度明细（components_json 解析后的结构，字段可能缺省）

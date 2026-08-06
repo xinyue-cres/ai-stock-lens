@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Button, Tag, Tooltip, Typography } from 'antd'
-import { LineChartOutlined, PlusOutlined } from '@ant-design/icons'
+import { FolderOpenOutlined, LineChartOutlined, PlusOutlined } from '@ant-design/icons'
 import type { ScoreItem } from '@/api/score'
 import { priceColor } from '@/shared/theme'
 import { STAGE_PALETTE } from '../constants'
@@ -28,9 +28,10 @@ interface ScoreRowProps {
   onClick: () => void
   onAddWatchlist: (code: string) => void
   onOpenDetail: (code: string) => void
+  onOpenWorkbench: (item: ScoreItem) => void
 }
 
-export default function ScoreRow({ item, active, onClick, onAddWatchlist, onOpenDetail }: ScoreRowProps) {
+export default function ScoreRow({ item, active, onClick, onAddWatchlist, onOpenDetail, onOpenWorkbench }: ScoreRowProps) {
   const [hovered, setHovered] = useState(false)
   const pct = item.pct_chg
   const stage = item.trend_stage ? STAGE_PALETTE[item.trend_stage] : null
@@ -130,8 +131,19 @@ export default function ScoreRow({ item, active, onClick, onAddWatchlist, onOpen
       {/* 弹性空隙：把 hover 操作推到最右，状态/斜率/徽章保持靠左 */}
       <div style={{ flex: 1, minWidth: 8 }} />
 
-      {/* hover 操作：查看详情 + 加自选 */}
-      <div style={{ width: 70, flexShrink: 0, display: 'flex', justifyContent: 'flex-end', visibility: hovered ? 'visible' : 'hidden' }}>
+      {/* hover 操作：去工作台 + 查看详情 + 加自选 */}
+      <div style={{ width: 96, flexShrink: 0, display: 'flex', justifyContent: 'flex-end', visibility: hovered ? 'visible' : 'hidden' }}>
+        <Tooltip title={item.in_watchlist && item.group_ids?.length ? '在工作台对应分组查看' : '去工作台查看'}>
+          <Button
+            type="text"
+            size="small"
+            icon={<FolderOpenOutlined style={{ fontSize: 12 }} />}
+            onClick={(e) => {
+              e.stopPropagation()
+              onOpenWorkbench(item)
+            }}
+          />
+        </Tooltip>
         <Tooltip title="查看个股详情">
           <Button
             type="text"
