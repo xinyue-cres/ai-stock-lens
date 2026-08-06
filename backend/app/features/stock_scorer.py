@@ -75,7 +75,11 @@ def _post_golden_gain(close: pd.Series, signals: list[tuple[int, str]]) -> float
         if end_idx <= gidx or close.iloc[gidx] <= 0:
             continue
         seg = close.iloc[gidx:end_idx + 1]
-        peak_gains.append(seg.max() / close.iloc[gidx] - 1)
+        # 基准用金叉日前一天收盘，把金叉确认当天的涨幅也计入
+        base = close.iloc[gidx - 1] if gidx > 0 else close.iloc[gidx]
+        if base <= 0:
+            continue
+        peak_gains.append(seg.max() / base - 1)
 
     if len(peak_gains) >= 5:
         # 均值易被极端暴涨拉偏（少数 +50% 周期抬高整体，如 000066 均值22.9% vs 中位1.8%），
@@ -177,10 +181,14 @@ def _cycle_stats(close: pd.Series, signals: list[tuple[int, str]]) -> tuple[list
         if end_idx <= s_idx or close.iloc[s_idx] <= 0:
             continue
         seg = close.iloc[s_idx:end_idx + 1]
+        # 基准用信号日前一天收盘，把金叉/死叉确认当天的跳涨/跳跌也计入
+        base = close.iloc[s_idx - 1] if s_idx > 0 else close.iloc[s_idx]
+        if base <= 0:
+            continue
         if s_dir == "golden":
-            golden_peaks.append((seg.max() / close.iloc[s_idx] - 1) * 100)
+            golden_peaks.append((seg.max() / base - 1) * 100)
         else:
-            death_valleys.append((seg.min() / close.iloc[s_idx] - 1) * 100)
+            death_valleys.append((seg.min() / base - 1) * 100)
     for i in range(len(signals)):
         if signals[i][1] != "golden":
             continue
@@ -240,7 +248,9 @@ def _signal_summary(close: pd.Series, signals: list[tuple[int, str]],
         info["current_signal"] = last_dir  # golden / death
         info["signal_days"] = max(0, n - 1 - last_idx)
         if 0 <= last_idx < n and close.iloc[last_idx] > 0:
-            info["signal_gain_pct"] = round((close.iloc[-1] / close.iloc[last_idx] - 1) * 100, 2)
+            # 基准用信号日前一天收盘，当前信号期间的涨幅也含确认当天的跳变
+            base = close.iloc[last_idx - 1] if last_idx > 0 else close.iloc[last_idx]
+            info["signal_gain_pct"] = round((close.iloc[-1] / base - 1) * 100, 2) if base > 0 else None
         else:
             info["signal_gain_pct"] = None
 
