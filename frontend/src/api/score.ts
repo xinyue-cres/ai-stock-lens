@@ -31,6 +31,8 @@ export interface ScoreItem {
   dif_slope: number | null
   dif_slope_dir: 'up' | 'down' | 'flat' | null
   current_state: string | null
+  // 过峰信号（MACD 柱掉头预警，列表行标记用）
+  peak_signal?: '上涨过峰' | '下跌过峰' | '涨势延续' | '跌势延续' | null
   // 是否在自选 + 所属分组（选股页跳工作台分组视图用，由 list 接口批量注入）
   in_watchlist?: boolean
   group_ids?: number[]
@@ -111,6 +113,7 @@ export interface ScoreListParams {
   stage?: string
   group_ids?: string // 逗号分隔的自选分组 id，如 "9,10"
   scope?: string // all/watchlist/group，决定取哪个范围的最近扫描批次
+  peak_filter?: 'all' | 'exclude_up' | 'only_down' // 过峰过滤
 }
 
 export async function getScoreList(params: ScoreListParams = {}): Promise<ScoreItem[]> {

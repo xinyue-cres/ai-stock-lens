@@ -80,6 +80,8 @@ def _serialize(r: StockScore) -> dict:
         "dif_slope": (_sig(r).get("dif_slope")),
         "dif_slope_dir": (_sig(r).get("dif_slope_dir")),
         "current_state": (_sig(r).get("current_state")),
+        # 过峰信号（柱体掉头预警）：上涨过峰/下跌过峰/涨势延续/跌势延续
+        "peak_signal": (_sig(r).get("peak_signal")),
     }
 
 
@@ -181,13 +183,23 @@ def list_scores(
     stage: str | None = None,
     group_ids: str | None = None,  # 逗号分隔的自选分组 id，如 "9,10"（任意匹配）
     scope: str | None = None,  # all/watchlist/group，决定取哪个范围的最近扫描批次
+    peak_filter: str = "all",  # all / exclude_up（排除上涨过峰）/ only_down（只看下跌过峰）
 ):
     """打分排行列表。按综合分或任意子维度排序，支持过滤。
 
     group_ids 传了则只显示这些自选分组内的标的打分（多选，命中任一即显示）。
+    peak_filter 在 Python 层过滤（peak_signal 存于 components_json，无法 SQL 过滤）：
+    先多查一批再过滤，保证过滤后仍能取满 limit 条。
     """
-    rows = _query_scores(session, sort_by, dir, limit, min_score, can_entry, stage, group_ids, scope)
+    # 过峰过滤时多查，Python 层过滤后再截断，避免过滤后不足 limit
+    sql_limit = limit if peak_filter == "all" else max(limit * 5, 1000)
+    rows = _query_scores(session, sort_by, dir, sql_limit, min_score, can_entry, stage, group_ids, scope)
     items = [_serialize(r) for r in rows]
+    if peak_filter == "exclude_up":
+        items = [i for i in items if i.get("peak_signal") != "上涨过峰"]
+    elif peak_filter == "only_down":
+        items = [i for i in items if i.get("peak_signal") == "下跌过峰"]
+    items = items[:limit]
     _attach_watchlist_info(session, items)
     return items
 

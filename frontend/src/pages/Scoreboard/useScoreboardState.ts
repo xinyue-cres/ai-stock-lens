@@ -13,17 +13,20 @@ function loadGroupIds(): number[] {
   }
 }
 
-/** 选股页工具栏/过滤状态：范围 + 分组 + 排序 + 只看可入手 + 强制重扫。
+/** 选股页工具栏/过滤状态：范围 + 分组 + 只看可入手 + 过峰过滤 + 强制重扫。
  *
- * scope / groupIds 持久化到 localStorage（切页面回来不丢）；其余为会话级。
+ * scope / groupIds / peakFilter 持久化到 localStorage（切页面回来不丢）；其余为会话级。
  * aiParams 统一 AI 点评/汇总共用的过滤口径，避免两处各拼一遍。
  */
 export function useScoreboardState() {
-  const [sortDir, setSortDir] = useState<'desc' | 'asc'>('desc')
   const [onlyEntry, setOnlyEntry] = useState(false)
   const [scope, setScopeState] = useState<string>(loadScope)
   const [groupIds, setGroupIdsState] = useState<number[]>(loadGroupIds)
   const [force, setForce] = useState(false)
+  // 过峰过滤：all 不过滤 / exclude_up 排除上涨过峰 / only_down 只看下跌过峰
+  const [peakFilter, setPeakFilterState] = useState<'all' | 'exclude_up' | 'only_down'>(
+    () => (localStorage.getItem('scoreboard-peak-filter') as any) || 'all',
+  )
 
   const setScope = (v: string) => {
     setScopeState(v)
@@ -39,20 +42,23 @@ export function useScoreboardState() {
     localStorage.setItem('scoreboard-group-ids', JSON.stringify(v))
   }
 
+  const setPeakFilter = (v: 'all' | 'exclude_up' | 'only_down') => {
+    setPeakFilterState(v)
+    localStorage.setItem('scoreboard-peak-filter', v)
+  }
+
   // AI 调用参数：与列表一致的总分降序过滤口径，点评/汇总共用
   const aiParams = useMemo(
     () => ({
       scope,
       group_ids: scope === 'group' && groupIds.length ? groupIds.join(',') : undefined,
       sort_by: 'total' as const,
-      dir: sortDir,
+      dir: 'desc' as const,
     }),
-    [scope, groupIds, sortDir],
+    [scope, groupIds],
   )
 
   return {
-    sortDir,
-    setSortDir,
     onlyEntry,
     setOnlyEntry,
     scope,
@@ -61,6 +67,8 @@ export function useScoreboardState() {
     setGroupIds,
     force,
     setForce,
+    peakFilter,
+    setPeakFilter,
     aiParams,
   }
 }

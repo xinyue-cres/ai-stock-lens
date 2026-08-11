@@ -18,10 +18,10 @@ interface ScoreboardToolbarProps {
   groups: GroupOption[]
   force: boolean
   setForce: (v: boolean) => void
-  sortDir: 'desc' | 'asc'
-  setSortDir: (v: 'desc' | 'asc') => void
   onlyEntry: boolean
   setOnlyEntry: (v: boolean) => void
+  peakFilter: 'all' | 'exclude_up' | 'only_down'
+  setPeakFilter: (v: 'all' | 'exclude_up' | 'only_down') => void
   scan: ScanStatus | undefined
   running: boolean
   scanPending: boolean
@@ -37,7 +37,7 @@ interface ScoreboardToolbarProps {
 export default function ScoreboardToolbar(props: ScoreboardToolbarProps) {
   const {
     scope, setScope, groupIds, setGroupIds, groups, force, setForce,
-    sortDir, setSortDir, onlyEntry, setOnlyEntry,
+    onlyEntry, setOnlyEntry, peakFilter, setPeakFilter,
     scan, running, scanPending, commentPending, summaryPending,
     onStartScan, onCancelScan, onAIComment, onAISummary, onOpenCriteria,
   } = props
@@ -106,15 +106,16 @@ export default function ScoreboardToolbar(props: ScoreboardToolbarProps) {
           </Button>
         </Space>
 
-        {/* 排序过滤 */}
+        {/* 过滤：过峰信号（排除上涨过峰 / 只看下跌过峰） */}
         <Space size={8} align="center" wrap>
           <Segmented
             size="small"
-            value={sortDir}
-            onChange={(v) => setSortDir(v as 'desc' | 'asc')}
+            value={peakFilter}
+            onChange={(v) => setPeakFilter(v as 'all' | 'exclude_up' | 'only_down')}
             options={[
-              { value: 'desc', label: '综合降' },
-              { value: 'asc', label: '综合升' },
+              { value: 'all', label: '全部' },
+              { value: 'exclude_up', label: '排除上涨过峰' },
+              { value: 'only_down', label: '只看下跌过峰' },
             ]}
           />
           <Switch size="small" checked={onlyEntry} onChange={setOnlyEntry} />

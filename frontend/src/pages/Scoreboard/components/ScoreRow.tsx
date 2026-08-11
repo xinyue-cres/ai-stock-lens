@@ -103,6 +103,22 @@ export default function ScoreRow({ item, active, onClick, onAddWatchlist, onOpen
         </span>
       )}
 
+      {/* 过峰信号标记：MACD 柱掉头预警（比 DIF 斜率更早），只在过峰时显示 */}
+      {item.peak_signal === '上涨过峰' && (
+        <Tooltip title="MACD 柱缩小（上涨动能掉头），见顶预警，注意回调">
+          <span style={{ fontSize: 11, fontWeight: 700, marginLeft: 6, flexShrink: 0, color: '#d97706' }}>
+            ▲过峰
+          </span>
+        </Tooltip>
+      )}
+      {item.peak_signal === '下跌过峰' && (
+        <Tooltip title="MACD 柱回升（下跌动能衰竭），见底信号，关注反抽">
+          <span style={{ fontSize: 11, fontWeight: 700, marginLeft: 6, flexShrink: 0, color: '#16a34a' }}>
+            ▼过峰
+          </span>
+        </Tooltip>
+      )}
+
       {/* DIF 斜率 */}
       {item.dif_slope != null && item.dif_slope_dir && (
         <Tooltip title={`MACD ${item.current_state ?? ''} · DIF 当日−昨前均值 ${item.dif_slope > 0 ? '+' : ''}${item.dif_slope}`}>

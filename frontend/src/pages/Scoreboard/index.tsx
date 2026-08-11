@@ -55,10 +55,11 @@ export default function ScoreboardPage() {
     }, { replace: true })
   }, [setSearchParams])
 
-  // 工具栏/过滤状态（scope/groupIds 持久化到 localStorage）
+  // 工具栏/过滤状态（scope/groupIds/peakFilter 持久化到 localStorage）
   const {
-    sortDir, setSortDir, onlyEntry, setOnlyEntry,
-    scope, setScope, groupIds, setGroupIds, force, setForce, aiParams,
+    onlyEntry, setOnlyEntry,
+    scope, setScope, groupIds, setGroupIds, force, setForce,
+    peakFilter, setPeakFilter, aiParams,
   } = useScoreboardState()
   const [criteriaOpen, setCriteriaOpen] = useState(false)
   const [summaryOpen, setSummaryOpen] = useState(false)
@@ -73,18 +74,19 @@ export default function ScoreboardPage() {
   const groups = groupsQ.data ?? []
 
   // 打分排行（选了自选分组范围时，按所选分组过滤显示）
-  // scope 进 queryKey：切全 A/自选/分组时强制重查对应范围的最近批次，避免显示上次范围的数据
+  // scope/peakFilter 进 queryKey：切范围或过峰过滤时强制重查，避免显示上次的数据
   const activeGroupIds = scope === 'group' && groupIds.length ? groupIds.join(',') : undefined
   const listQ = useQuery({
-    queryKey: ['score-list', scope, sortDir, onlyEntry, activeGroupIds],
+    queryKey: ['score-list', scope, onlyEntry, activeGroupIds, peakFilter],
     queryFn: () =>
       getScoreList({
         sort_by: 'total',
-        dir: sortDir,
+        dir: 'desc',
         limit: 200,
         can_entry: onlyEntry ? true : undefined,
         group_ids: activeGroupIds,
         scope,
+        peak_filter: peakFilter,
       }),
   })
   const items = listQ.data ?? []
@@ -182,10 +184,10 @@ export default function ScoreboardPage() {
         groups={groups}
         force={force}
         setForce={setForce}
-        sortDir={sortDir}
-        setSortDir={setSortDir}
         onlyEntry={onlyEntry}
         setOnlyEntry={setOnlyEntry}
+        peakFilter={peakFilter}
+        setPeakFilter={setPeakFilter}
         scan={scan}
         running={running}
         scanPending={scanMut.isPending}
