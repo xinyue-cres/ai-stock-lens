@@ -50,6 +50,8 @@ def _format_previous_block(previous: dict | None) -> str:
 STAGE_LABEL = {
     "strong_uptrend": "上升趋势",
     "pullback_entry": "回踩可入手",
+    "weak_golden": "弱势金叉",
+    "left_entry": "左侧机会",
     "overheat": "过热",
     "downtrend": "下跌趋势",
     "range": "震荡",

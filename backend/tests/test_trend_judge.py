@@ -55,11 +55,15 @@ def test_left_entry_deadcross_high_signal():
     assert r["trend_stage"] == "left_entry"
 
 
-def test_overheat_golden_touches_upper():
-    """金叉态但贴上轨（%B 高）→ 短期过热，等回踩。"""
+def test_weak_golden_strong_trend_upper_with_bar_shrink():
+    """金叉态贴轨但 ADX 强（V 型急拉制造极端 ADX）+ 柱体缩小 → 弱势金叉，别追。
+
+    V 型反弹序列 ADX 极高（~90），按新语义"强趋势贴轨不算过热"跳过 overheat，
+    又因 bar_shrinking=True 跳过 strong_uptrend，落入 weak_golden。
+    """
     closes = list(np.linspace(20, 10, 80)) + list(np.linspace(10, 14, 70))
     r = judge_trend(_mk_df(closes), signal_score=85)
-    assert r["trend_stage"] == "overheat"
+    assert r["trend_stage"] == "weak_golden"
     assert r["indicators"]["pct_b"] is not None
     assert r["indicators"]["pct_b"] > 0.85
 

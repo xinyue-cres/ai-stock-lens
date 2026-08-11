@@ -2,11 +2,14 @@
 
 决策口径：
 - 金叉态（DIF > DEA）= 上升候选：
-  - 贴上轨（%B 高）→ 短期过热，等回踩
+  - 贴上轨（%B 高）且非强趋势 → 短期过热，等回踩
+  - ADX 强 + 已涨一段 + 柱未缩小 → 强趋势，可持有·不追高·逢高减
   - 距 60 日高点回撤极深（<-40%）且历史金叉延续差 → 深跌中刚金叉，不可靠
+  - MACD 柱掉头（上涨过峰）→ 弱势金叉，别追
   - 历史金叉延续可靠（signal 分高）→ 可入手
   - 否则只要未过热、有空间 → 可入手
-- 死叉态：历史金叉可靠（signal 高分）→ 等下次金叉（观望）；否则下跌趋势回避
+- 死叉态：下跌过峰 + 历史可靠 → 左侧机会（高风险可轻仓）；历史可靠 → 等下次金叉；
+  距高点近或历史差 → 下跌趋势回避
 
 MA 结构 / ADX / RSI 降为辅助参考（indicators），不再一票否决——MA 滞后，
 反映不了 MACD 金叉的即时信号（实测高分股金叉态却被 MA 空头误判 downtrend）。
@@ -15,7 +18,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from app.features.stock_scorer import compute_indicator_cache
+from app.features.stock_scorer import compute_indicator_cache, _signal_summary
 from app.indicators.ma import compute_ma
 
 _MIN_ROWS = 60  # MACD EMA26 预热需要 ~60 根
@@ -24,8 +27,17 @@ _MIN_ROWS = 60  # MACD EMA26 预热需要 ~60 根
 # 含金叉日跳涨后评分整体上移（中位 ~72），原 65 已无区分度（95% 达标），上调到 72
 _SIGNAL_RELIABLE = 72
 
+# ADX 强趋势判定线（经验值，上线后可数据校准）
+_ADX_STRONG = 25
+
+# 强趋势"已涨一段"门槛（% 涨幅）
+_STRONG_TREND_GAIN = 8.0
+
 _REASONS = {
     "pullback_entry": "金叉态·上方空间足，可入手",
+    "left_entry": "死叉态·下跌动能衰竭（下跌过峰），高风险左侧机会·轻仓",
+    "strong_uptrend": "金叉态·强趋势已涨，可持有·不追高·逢高减",
+    "weak_golden": "金叉态·动能掉头（上涨过峰），别追等回踩",
     "overheat": "金叉态但贴上轨（短期过热），等回踩",
     "downtrend": "死叉态·历史金叉延续差，回避",
     "range": "观望（等金叉或信号不明）",
@@ -51,11 +63,11 @@ def _decide_stage(golden: bool, pct_b: float | None, dist_high: float,
     """
     if golden:
         # 1. 过热度（非强趋势才叫过热；强趋势贴轨是顺势）
-        if pct_b is not None and pct_b > 0.85 and (adx is None or adx < 25):
+        if pct_b is not None and pct_b > 0.85 and (adx is None or adx < _ADX_STRONG):
             return "overheat"  # 贴上轨、非强趋势，短期涨过头
         # 2. 强趋势中已涨一段 → 可持有·不追高·逢高减
-        if (adx is not None and adx >= 25
-                and signal_gain_pct is not None and signal_gain_pct > 8
+        if (adx is not None and adx >= _ADX_STRONG
+                and signal_gain_pct is not None and signal_gain_pct > _STRONG_TREND_GAIN
                 and bar_shrinking is not True):
             return "strong_uptrend"
         if dist_high < -0.4 and (signal_score is None or signal_score < _SIGNAL_RELIABLE):
@@ -78,10 +90,17 @@ def _decide_stage(golden: bool, pct_b: float | None, dist_high: float,
 
 
 def _entry_reason(stage: str, golden: bool, bar_shrinking: bool | None,
-                  signal_score: float | None, peak_winrate: float | None) -> str:
+                  signal_score: float | None, peak_winrate: float | None,
+                  adx: float | None = None, signal_gain_pct: float | None = None) -> str:
     """细化 entry_reason：覆盖决策树降级的具体原因。"""
     if golden and bar_shrinking:
-        return "金叉态·MACD柱掉头（上涨过峰预警），观望"
+        return "金叉态·MACD柱掉头（上涨过峰预警），别追等回踩"
+    if golden and adx is not None and adx >= _ADX_STRONG \
+            and signal_gain_pct is not None and signal_gain_pct > _STRONG_TREND_GAIN \
+            and bar_shrinking is not True:
+        return "金叉态·强趋势已涨，可持有·不追高·逢高减"
+    if not golden and bar_shrinking is False and signal_score is not None and signal_score >= _SIGNAL_RELIABLE:
+        return "死叉态·下跌过峰（动能衰竭）+ 历史可靠，左侧机会·建议轻仓"
     if golden and signal_score is not None and signal_score >= _SIGNAL_RELIABLE \
             and peak_winrate is not None and peak_winrate < 50:
         return "金叉态·历史峰值胜率低（<50%），观望"
@@ -130,8 +149,13 @@ def judge_trend(df: pd.DataFrame, signal_score: float | None = None,
     high_60 = float(df["high"].tail(60).max()) if len(df) >= 60 else float(df["high"].max())
     dist_high = close / high_60 - 1 if high_60 else 0.0
 
+    # 当前信号期间涨幅（金叉后已涨一段 = 强趋势别追高的判据；复用打分引擎统计）
+    sig_summary = _signal_summary(close_s, cache["signals"], cache.get("cycles"))
+    signal_gain_pct = sig_summary.get("signal_gain_pct")
+
     # 决策：金叉死叉为主导（纯逻辑，见 _decide_stage）
-    stage = _decide_stage(golden, pct_b, dist_high, signal_score, peak_winrate, bar_shrinking)
+    stage = _decide_stage(golden, pct_b, dist_high, signal_score, peak_winrate,
+                          bar_shrinking, adx=adx_info.get("adx"), signal_gain_pct=signal_gain_pct)
 
     # 辅助参考（不参与决策）
     arrangement = compute_ma(df).get("arrangement")
@@ -142,8 +166,10 @@ def judge_trend(df: pd.DataFrame, signal_score: float | None = None,
 
     return {
         "trend_stage": stage,
-        "can_entry": stage == "pullback_entry",
-        "entry_reason": _entry_reason(stage, golden, bar_shrinking, signal_score, peak_winrate),
+        # 可入手两档：pullback_entry（安全可入手）+ left_entry（左侧机会·高风险可轻仓）
+        "can_entry": stage in ("pullback_entry", "left_entry"),
+        "entry_reason": _entry_reason(stage, golden, bar_shrinking, signal_score, peak_winrate,
+                                      adx=adx_info.get("adx"), signal_gain_pct=signal_gain_pct),
         "key_prices": {
             "close": round(close, 3),
             "ma20": round(ma20, 3) if ma20 is not None else None,
