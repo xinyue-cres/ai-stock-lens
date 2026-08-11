@@ -48,11 +48,11 @@ def test_downtrend_deadcross_low_signal():
     assert not r["can_entry"]
 
 
-def test_range_deadcross_high_signal():
-    """死叉态但历史金叉延续可靠 → 观望，等下次金叉。"""
+def test_left_entry_deadcross_high_signal():
+    """死叉态下跌过峰（柱缩）且历史金叉延续可靠 → 左侧机会。"""
     closes = list(np.linspace(10, 20, 80)) + list(np.linspace(20, 14, 70))
     r = judge_trend(_mk_df(closes), signal_score=85)
-    assert r["trend_stage"] == "range"
+    assert r["trend_stage"] == "left_entry"
 
 
 def test_overheat_golden_touches_upper():
@@ -98,3 +98,52 @@ def test_decide_stage_deadcross():
     assert _decide_stage(golden=False, pct_b=0.5, dist_high=-0.1, signal_score=85) == "range"
     assert _decide_stage(golden=False, pct_b=0.5, dist_high=-0.1, signal_score=50) == "downtrend"
     assert _decide_stage(golden=False, pct_b=0.5, dist_high=-0.1, signal_score=None) == "downtrend"
+
+
+# 新增分支：左侧机会 / 弱势金叉 / 上升趋势
+def test_decide_stage_left_entry():
+    # 死叉态 + 下跌过峰（bar_shrinking=False 绿柱回升）+ 历史可靠 → 左侧机会
+    assert _decide_stage(golden=False, pct_b=0.5, dist_high=-0.3, signal_score=85,
+                         bar_shrinking=False) == "left_entry"
+
+
+def test_decide_stage_left_entry_rejected_if_unreliable():
+    # 死叉 + 过峰但历史差 → 仍下跌
+    assert _decide_stage(golden=False, pct_b=0.5, dist_high=-0.3, signal_score=50,
+                         bar_shrinking=False) == "downtrend"
+
+
+def test_decide_stage_weak_golden():
+    # 金叉态 + 柱体缩小（上涨过峰）→ 弱势金叉，别追
+    assert _decide_stage(golden=True, pct_b=0.5, dist_high=-0.2, signal_score=85,
+                         bar_shrinking=True) == "weak_golden"
+
+
+def test_decide_stage_strong_uptrend():
+    # 金叉态 + ADX 强 + 已涨一段 + 柱体未缩小 → 可持有不追高
+    assert _decide_stage(golden=True, pct_b=0.5, dist_high=-0.1, signal_score=85,
+                         bar_shrinking=False, adx=30.0, signal_gain_pct=10.0) == "strong_uptrend"
+
+
+def test_decide_stage_strong_uptrend_needs_gain():
+    # ADX 强但还没涨到 8% → 不判强趋势，走普通可入手
+    assert _decide_stage(golden=True, pct_b=0.5, dist_high=-0.1, signal_score=85,
+                         bar_shrinking=False, adx=30.0, signal_gain_pct=3.0) == "pullback_entry"
+
+
+def test_decide_stage_strong_uptrend_needs_adx():
+    # ADX 弱 → 不判强趋势，走普通可入手
+    assert _decide_stage(golden=True, pct_b=0.5, dist_high=-0.1, signal_score=85,
+                         bar_shrinking=False, adx=15.0, signal_gain_pct=10.0) == "pullback_entry"
+
+
+def test_decide_stage_overheat_strong_trend():
+    # 强趋势 + 贴上轨 → 不算过热（强趋势贴轨是顺势），走 strong_uptrend
+    assert _decide_stage(golden=True, pct_b=0.9, dist_high=-0.1, signal_score=85,
+                         bar_shrinking=False, adx=30.0, signal_gain_pct=10.0) == "strong_uptrend"
+
+
+def test_decide_stage_overheat_weak_trend():
+    # 非强趋势 + 贴上轨 → 过热
+    assert _decide_stage(golden=True, pct_b=0.9, dist_high=-0.1, signal_score=85,
+                         bar_shrinking=False, adx=15.0, signal_gain_pct=10.0) == "overheat"

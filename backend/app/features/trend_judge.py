@@ -35,22 +35,33 @@ _REASONS = {
 
 def _decide_stage(golden: bool, pct_b: float | None, dist_high: float,
                   signal_score: float | None, peak_winrate: float | None = None,
-                  bar_shrinking: bool | None = None) -> str:
+                  bar_shrinking: bool | None = None,
+                  adx: float | None = None,
+                  signal_gain_pct: float | None = None) -> str:
     """金叉驱动的阶段决策（纯逻辑，无 I/O，可直接单测）。
 
-    - 金叉态 = 上升候选：贴上轨→过热；深跌且历史差→下跌；
-      MACD 柱掉头（上涨过峰预警）→震荡观望；历史可靠→可入手；
-      未过热有空间→可入手；否则贴下轨（%B<0.2 弱势）→震荡
-    - 死叉态：历史可靠→观望等下次金叉；否则→下跌回避
+    - 金叉态 = 上升候选：贴上轨且非强趋势→过热；ADX 强且已涨一段→强趋势
+      （可持有·不追高·逢高减）；深跌且历史差→下跌；MACD 柱掉头（上涨过峰预警）
+      →弱势金叉，别追；历史可靠→可入手；未过热有空间→可入手；
+      否则贴下轨（%B<0.2 弱势）→震荡
+    - 死叉态：下跌过峰（柱缩）且历史可靠→左侧机会；否则历史可靠→观望等下次金叉；
+      距高点过近或历史差→下跌回避
     peak_winrate：历史金叉冲过 +5% 的占比；bar_shrinking：MACD 柱当日 < 昨前均值
+    adx：ADX 趋势强度；signal_gain_pct：当前信号期间累计涨幅%（% 为单位，如 10.5 表示 10.5%）
     """
     if golden:
-        if pct_b is not None and pct_b > 0.85:
-            return "overheat"  # 贴上轨，短期涨过头
+        # 1. 过热度（非强趋势才叫过热；强趋势贴轨是顺势）
+        if pct_b is not None and pct_b > 0.85 and (adx is None or adx < 25):
+            return "overheat"  # 贴上轨、非强趋势，短期涨过头
+        # 2. 强趋势中已涨一段 → 可持有·不追高·逢高减
+        if (adx is not None and adx >= 25
+                and signal_gain_pct is not None and signal_gain_pct > 8
+                and bar_shrinking is not True):
+            return "strong_uptrend"
         if dist_high < -0.4 and (signal_score is None or signal_score < _SIGNAL_RELIABLE):
             return "downtrend"  # 深跌中刚金叉且历史不可靠
         if bar_shrinking is True:
-            return "range"  # 金叉态但动能掉头（上涨过峰），见顶预警观望
+            return "weak_golden"  # 金叉但动能掉头 → 弱势金叉，别追
         if signal_score is not None and signal_score >= _SIGNAL_RELIABLE:
             if peak_winrate is not None and peak_winrate < 50:
                 return "range"  # 历史分高但胜率不足（过半金叉没冲过 +5%），可靠性打折
@@ -58,9 +69,12 @@ def _decide_stage(golden: bool, pct_b: float | None, dist_high: float,
         if pct_b is None or pct_b >= 0.2:
             return "pullback_entry"  # 金叉、未过热、有上方空间
         return "range"  # 金叉但贴下轨（弱势）
-    if signal_score is not None and signal_score >= _SIGNAL_RELIABLE:
-        return "range"  # 历史金叉可靠，等下次金叉
-    return "downtrend"  # 死叉 + 历史差 → 回避
+    # 死叉态
+    if bar_shrinking is False and signal_score is not None and signal_score >= _SIGNAL_RELIABLE:
+        return "left_entry"  # 下跌过峰 + 历史可靠 → 左侧机会
+    if dist_high > -0.1 or (signal_score is None or signal_score < _SIGNAL_RELIABLE):
+        return "downtrend"  # 距高点近或历史差 → 回避
+    return "range"
 
 
 def _entry_reason(stage: str, golden: bool, bar_shrinking: bool | None,
