@@ -4,6 +4,8 @@ export type TrendStage =
   | 'strong_uptrend'
   | 'pullback_entry'
   | 'overheat'
+  | 'weak_golden'
+  | 'left_entry'
   | 'downtrend'
   | 'range'
   | 'insufficient'

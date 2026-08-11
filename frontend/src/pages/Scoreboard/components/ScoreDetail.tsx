@@ -64,6 +64,9 @@ export default function ScoreDetail({ detail, onAddWatchlist, onOpenDetail }: Sc
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             {stage && <Tag style={{ color: stage.color, borderColor: stage.border, background: stage.bg }}>{stage.label}</Tag>}
+            {detail.trend_stage === 'left_entry' && (
+              <Tag style={{ color: '#7c3aed', borderColor: '#ddd6fe', background: '#f5f3ff' }}>高风险·轻仓</Tag>
+            )}
             <Button size="small" icon={<LineChartOutlined />} onClick={() => onOpenDetail(detail.code)}>
               完整详情
             </Button>
@@ -72,7 +75,12 @@ export default function ScoreDetail({ detail, onAddWatchlist, onOpenDetail }: Sc
             </Button>
           </div>
         </div>
-        {detail.can_entry && detail.entry_reason && (
+        {detail.can_entry && detail.trend_stage === 'left_entry' && detail.entry_reason && (
+          <div style={{ marginTop: 8, fontSize: 12, color: '#7c3aed', background: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: 6, padding: '8px 10px' }}>
+            ⚠ 左侧机会 · 高风险逆势，建议轻仓 · {detail.entry_reason}
+          </div>
+        )}
+        {detail.can_entry && detail.trend_stage !== 'left_entry' && detail.entry_reason && (
           <div style={{ marginTop: 8, fontSize: 12, color: '#dc2626', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 6, padding: '8px 10px' }}>
             ✔ 可入手 · {detail.entry_reason}
           </div>

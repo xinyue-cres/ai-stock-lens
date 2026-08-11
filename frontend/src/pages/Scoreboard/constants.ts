@@ -38,8 +38,10 @@ export interface StagePalette {
 
 export const STAGE_PALETTE: Record<TrendStage, StagePalette> = {
   pullback_entry: { label: '可入手', color: '#dc2626', bg: '#fef2f2', border: '#fecaca' },
+  left_entry: { label: '左侧·轻仓', color: '#7c3aed', bg: '#f5f3ff', border: '#ddd6fe' },
   strong_uptrend: { label: '上升趋势', color: '#b91c1c', bg: '#fff7ed', border: '#fed7aa' },
   overheat: { label: '过热', color: '#d97706', bg: '#fffbeb', border: '#fde68a' },
+  weak_golden: { label: '弱势金叉', color: '#d97706', bg: '#fffbeb', border: '#fde68a' },
   range: { label: '震荡', color: '#2563eb', bg: '#eff6ff', border: '#bfdbfe' },
   downtrend: { label: '下跌趋势', color: '#059669', bg: '#ecfdf5', border: '#a7f3d0' },
   insufficient: { label: '数据不足', color: '#6b7280', bg: '#f3f4f6', border: '#e5e7eb' },

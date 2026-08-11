@@ -137,11 +137,16 @@ export default function ScoreRow({ item, active, onClick, onAddWatchlist, onOpen
         </Tooltip>
       )}
 
-      {/* 趋势徽章（可入手 / 震荡 / 下跌等） */}
+      {/* 趋势徽章（可入手 / 左侧机会 / 震荡 / 下跌等） */}
       {stage && (
         <Tag style={{ margin: 0, marginLeft: 6, color: stage.color, borderColor: stage.border, background: stage.bg, fontSize: 11, flexShrink: 0 }}>
           {stage.label}
         </Tag>
+      )}
+      {item.trend_stage === 'left_entry' && (
+        <Tooltip title="死叉下跌动能衰竭的左侧机会，逆势·高风险，建议轻仓">
+          <span style={{ fontSize: 10, marginLeft: 6, color: '#7c3aed', flexShrink: 0 }}>⚠逆势</span>
+        </Tooltip>
       )}
 
       {/* 弹性空隙：把 hover 操作推到最右，状态/斜率/徽章保持靠左 */}
