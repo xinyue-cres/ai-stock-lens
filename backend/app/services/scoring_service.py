@@ -1,7 +1,7 @@
 """选股扫描编排：候选池 → 并发拉 K 线 → 打分 + 趋势判断 → upsert StockScore。
 
 关键设计：
-- 扫描不落 K 线库，只用 DataRouter 直拉近 ~500 根日线，内存计算后只写 StockScore。
+- 扫描不落 K 线库，只用 DataRouter 直拉近 ~1000 根日线（约 4 年），内存计算后只写 StockScore。
 - ThreadPoolExecutor 并发 + 每请求 sleep 限流，防东财封禁。
 - 全局 _scan_state 供前端轮询进度；进程级锁保证单扫描实例；支持取消。
 - 每个 worker 用独立的 SQLAlchemy Session（Session 不是线程安全的）。
@@ -110,10 +110,10 @@ def _build_pool(session: Session, scope: str, codes: list[str] | None,
 
 
 def _fetch_kline(code: str, settings) -> object | None:
-    """拉近 ~500 根日线（优先用库内 K 线缓存，缺失才拉网络）。带限流 sleep。"""
+    """拉近 ~1000 根日线（优先用库内 K 线缓存，缺失才拉网络）。带限流 sleep。"""
     try:
         end = date.today()
-        start = end - timedelta(days=settings.scan_kline_days)  # 约 2 自然年 ≈ 500 交易日
+        start = end - timedelta(days=settings.scan_kline_days)  # 约 4 自然年 ≈ 1000 交易日
         cached = _load_cached_kline(code, start)
         if cached is not None:
             return cached
@@ -128,7 +128,7 @@ def _fetch_kline(code: str, settings) -> object | None:
 
 
 def _load_cached_kline(code: str, start: date) -> object | None:
-    """从 KlineDaily 读 K 线缓存；覆盖扫描窗口（≥400 根）直接返回，否则 None 走网络拉取。
+    """从 KlineDaily 读 K 线缓存；覆盖扫描窗口（≥1000 根）直接返回，否则 None 走网络拉取。
 
     复权口径与扫描一致（KlineDaily 由 sync 用 qfq 写入，扫描也用 qfq），可安全复用；
     已同步/自选过的股票扫描不再重复拉网络。
@@ -141,7 +141,7 @@ def _load_cached_kline(code: str, start: date) -> object | None:
             .where(KlineDaily.code == code, KlineDaily.trade_date >= start)
             .order_by(KlineDaily.trade_date.asc())
         ))
-    if len(rows) < 400:
+    if len(rows) < 1000:
         return None
     return pd.DataFrame([
         {

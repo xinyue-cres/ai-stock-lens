@@ -35,11 +35,11 @@ class Settings(BaseSettings):
 
     # 选股打分扫描（仅手动触发；scan_enabled/scan_cron_* 已移除，不再定时自动扫全 A）
     scan_concurrency: int = 12
-    scan_kline_bars: int = 500
+    scan_kline_bars: int = 1000  # 扫描拉取约 4 年（覆盖完整牛熊周期，避免 2 年窗口只含单边牛市）
 
     @property
     def scan_kline_days(self) -> int:
-        """扫描拉取的自然日窗口：500 交易日 ≈ 1.4 倍自然日 ≈ 2 年。"""
+        """扫描拉取的自然日窗口：1000 交易日 ≈ 1.4 倍自然日 ≈ 4 年。"""
         return int(self.scan_kline_bars * 1.4)
 
     app_log_level: str = "INFO"

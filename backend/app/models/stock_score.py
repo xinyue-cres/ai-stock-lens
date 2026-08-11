@@ -27,7 +27,7 @@ class StockScore(SQLModel, table=True):
     dividend_yield: float | None = Field(default=None)
 
     # 趋势判断（需求 2）
-    trend_stage: str | None = Field(default=None, description="strong_uptrend/pullback_entry/overheat/downtrend/range")
+    trend_stage: str | None = Field(default=None, description="strong_uptrend/pullback_entry/overheat/weak_golden/left_entry/downtrend/range/insufficient")
     can_entry: bool | None = Field(default=None)
     entry_reason: str | None = Field(default=None)
 
