@@ -53,7 +53,12 @@ def test_whipsaw_penalizes_signal_score():
     closes = [10.0 + np.sin(i / 2) * 0.3 for i in range(300)]
     sc = score_stock(_mk_df(closes))
     assert sc is not None
-    assert sc["signal_score"] < 50
+    # 锚点 24% 校准后绝对分数整体上移（横跳 56.6 / 单调 74.4），不再用硬编码 <50，
+    # 改为相对比较"横跳显著低于单调"，更反映"被惩罚"的意图
+    up = list(np.linspace(30, 10, 150)) + list(np.linspace(10, 30, 150))
+    sc_up = score_stock(_mk_df(up))
+    assert sc_up is not None
+    assert sc["signal_score"] < sc_up["signal_score"] - 10
 
 
 def test_dividend_uses_percent_unit():
