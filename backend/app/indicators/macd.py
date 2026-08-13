@@ -31,16 +31,21 @@ def macd_series(
     """
     dif = close.ewm(span=fast, adjust=False).mean() - close.ewm(span=slow, adjust=False).mean()
     dea = dif.ewm(span=signal, adjust=False).mean()
-    signals: list[tuple[int, str]] = []
-    for i in range(1, len(close)):
-        d0, d1 = dif.iloc[i - 1], dif.iloc[i]
-        e0, e1 = dea.iloc[i - 1], dea.iloc[i]
-        if any(pd.isna(v) for v in (d0, d1, e0, e1)):
-            continue
-        if d0 <= e0 and d1 > e1:
-            signals.append((i, "golden"))
-        elif d0 >= e0 and d1 < e1:
-            signals.append((i, "death"))
+
+    # 向量化交叉检测（替代逐根 for 循环；工作台 243 只自选串行时这是最大热点）。
+    # 精确复刻原 for 循环语义（d0<=e0 and d1>e1 → golden；d0>=e0 and d1<e1 → death，
+    # 含"相等"边界；任一根 NaN → 跳过）。用 shift 比较直接等价原条件。
+    prev_dif = dif.shift(1)
+    prev_dea = dea.shift(1)
+    # NaN 传播：任何一根 NaN → 比较得 False（等效 any(pd.isna) → continue）
+    golden_mask = (prev_dif <= prev_dea) & (dif > dea)
+    death_mask = (prev_dif >= prev_dea) & (dif < dea)
+
+    # 只取 index>=1（首根无"前一根"；shift 后 index0 的 prev 为 NaN → 已自动 False）
+    golden_idx = [int(i) for i in dif.index[golden_mask]]
+    death_idx = [int(i) for i in dif.index[death_mask]]
+    signals = [(i, "golden") for i in golden_idx] + [(i, "death") for i in death_idx]
+    signals.sort(key=lambda t: t[0])
     return dif, dea, signals
 
 
