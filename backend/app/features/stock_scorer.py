@@ -15,7 +15,7 @@ import statistics
 
 import pandas as pd
 
-from app.features.quant_factors import compute_quant_features
+from app.features.quant_factors import _sigma
 from app.indicators.adx import compute_adx
 from app.indicators.macd import dif_slope as compute_dif_slope
 from app.indicators.macd import is_golden, macd_series
@@ -67,11 +67,8 @@ def _post_golden_gain(close: pd.Series, signals: list[tuple[int, str]]) -> float
         if signals[i][1] != "golden":
             continue
         gidx = signals[i][0]
-        end_idx = n - 1
-        for j in range(i + 1, len(signals)):
-            if signals[j][1] == "death":
-                end_idx = signals[j][0]
-                break
+        # 相邻交叉必然异向（DIF 上穿后只能下穿），signals[i+1] 即下一个死叉
+        end_idx = signals[i + 1][0] if i + 1 < len(signals) else n - 1
         if end_idx <= gidx or close.iloc[gidx] <= 0:
             continue
         seg = close.iloc[gidx:end_idx + 1]
@@ -113,10 +110,10 @@ def _golden_life_score(signals: list[tuple[int, str]]) -> float:
     for i in range(len(signals)):
         if signals[i][1] != "golden":
             continue
-        for j in range(i + 1, len(signals)):
-            if signals[j][1] == "death":
-                lives.append((signals[i][0], signals[j][0] - signals[i][0]))
-                break
+        # 相邻交叉必然异向：金叉的下一个信号必然是死叉
+        if i + 1 < len(signals):
+            nxt = signals[i + 1][0]
+            lives.append((signals[i][0], nxt - signals[i][0]))
     if not lives:
         return 80.0  # 只有金叉无后续死叉：仍延续中，高分
 
@@ -173,11 +170,8 @@ def _cycle_stats(close: pd.Series, signals: list[tuple[int, str]]) -> tuple[list
     lives: list[int] = []
     for i in range(len(signals)):
         s_idx, s_dir = signals[i]
-        end_idx = n - 1
-        for j in range(i + 1, len(signals)):
-            if signals[j][1] != s_dir:
-                end_idx = signals[j][0]
-                break
+        # 相邻交叉必然异向，signals[i+1] 即"下一个异向信号"（金叉后必是死叉，反之亦然）
+        end_idx = signals[i + 1][0] if i + 1 < len(signals) else n - 1
         if end_idx <= s_idx or close.iloc[s_idx] <= 0:
             continue
         seg = close.iloc[s_idx:end_idx + 1]
@@ -192,10 +186,8 @@ def _cycle_stats(close: pd.Series, signals: list[tuple[int, str]]) -> tuple[list
     for i in range(len(signals)):
         if signals[i][1] != "golden":
             continue
-        for j in range(i + 1, len(signals)):
-            if signals[j][1] == "death":
-                lives.append(signals[j][0] - signals[i][0])
-                break
+        if i + 1 < len(signals):
+            lives.append(signals[i + 1][0] - signals[i][0])
     return golden_peaks, death_valleys, lives
 
 
@@ -378,8 +370,10 @@ def _band_score(df: pd.DataFrame) -> dict:
     旧版 ATR/振幅 与 sigma 相关 0.93~0.97（本质同是波动），纯冗余；且锚点
     5% 太松造成 39~43% 满分白给分，故彻底去掉，只保留 sigma + 新增节奏。
     """
-    qf = compute_quant_features(df)
-    sigma_20 = qf.get("volatility", {}).get("sigma_20d")
+    close = df["close"].astype(float)
+    # 打分只用 20 日波动率（sigma_20d），不再跑 compute_quant_features 全量 AI 因子——
+    # 那些是 build_ai_input 的输入，扫描打分时算纯属浪费（占比 ~30%）
+    sigma_20 = _sigma(close, 20)
 
     # 幅度分：20 日波动率适中最佳（三角归一）
     if sigma_20 is not None:
@@ -388,7 +382,6 @@ def _band_score(df: pd.DataFrame) -> dict:
         amp = 50.0
 
     # 节奏分：MA5 下方平均连续停留天数（值越小=反复跌破又弹回=赌博）
-    close = df["close"].astype(float)
     ma5 = close.rolling(5).mean()
     below = (close < ma5).fillna(False)
     runs: list[int] = []
@@ -457,7 +450,8 @@ def score_stock(df: pd.DataFrame, dividend_yield: float | None = None,
     close = float(latest["close"])
     pct_chg = float(latest["pct_chg"]) if pd.notna(latest.get("pct_chg")) else None
     turnover = float(latest["turnover"]) if pd.notna(latest.get("turnover")) else None
-    hist_vol = compute_risk(df).get("hist_vol_20d")
+    # compute_indicator_cache 已算过 risk，直接用，避免重复计算（扫描 4000 只时省 2 倍）
+    hist_vol = (cache["risk"]["hist_vol_20d"] if cache else compute_risk(df).get("hist_vol_20d"))
 
     return {
         "total_score": round(total, 2),

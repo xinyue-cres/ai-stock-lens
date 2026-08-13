@@ -30,14 +30,16 @@ def compute_risk(df: pd.DataFrame) -> dict:
     close = df["close"].astype(float)
     prev_close = close.shift(1)
 
-    tr = pd.concat(
-        [
-            (high - low).abs(),
-            (high - prev_close).abs(),
-            (low - prev_close).abs(),
-        ],
-        axis=1,
-    ).max(axis=1)
+    # True Range：三元素逐点取最大（pd.concat + max(axis=1) 构造开销大，numpy 快 ~2 倍）。
+    # 用 np.fmax（忽略 NaN）复刻 pandas max 的 skipna 语义：首根 prev_close 为 NaN 时仍取 high-low。
+    tr = pd.Series(
+        np.fmax.reduce([
+            (high - low).abs().to_numpy(),
+            (high - prev_close).abs().to_numpy(),
+            (low - prev_close).abs().to_numpy(),
+        ]),
+        index=df.index,
+    )
     atr14 = tr.ewm(alpha=1 / 14, adjust=False).mean().iloc[-1]
     latest_close = float(close.iloc[-1])
     atr_pct = round(atr14 / latest_close * 100, 2) if latest_close else None

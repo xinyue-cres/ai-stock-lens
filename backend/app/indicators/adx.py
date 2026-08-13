@@ -42,14 +42,16 @@ def compute_adx(df: pd.DataFrame) -> dict:
         (down_move > up_move) & (down_move > 0), down_move, 0.0
     ), index=df.index)
 
-    tr = pd.concat(
-        [
-            (high - low),
-            (high - prev_close).abs(),
-            (low - prev_close).abs(),
-        ],
-        axis=1,
-    ).max(axis=1)
+    # True Range：三元素逐点取最大（同 risk.compute_risk 口径；numpy 比 pd.concat+max 快）。
+    # 用 np.fmax（忽略 NaN）复刻 pandas max 的 skipna 语义：首根 prev_close 为 NaN 时仍取 high-low。
+    tr = pd.Series(
+        np.fmax.reduce([
+            (high - low).to_numpy(),
+            (high - prev_close).abs().to_numpy(),
+            (low - prev_close).abs().to_numpy(),
+        ]),
+        index=df.index,
+    )
 
     tr = tr.astype(float)
     plus_dm = plus_dm.astype(float)

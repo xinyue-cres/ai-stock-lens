@@ -61,17 +61,19 @@ def _classify_kdj(k, d, j) -> str | None:
 
 def compute_rsi(df: pd.DataFrame) -> dict:
     close = df["close"]
-    return {
-        "rsi6": _last_float(_rsi(close, 6)),
-        "rsi12": _last_float(_rsi(close, 12)),
-        "rsi24": _last_float(_rsi(close, 24)),
-    }
-
-
-def _rsi(close: pd.Series, n: int) -> pd.Series:
+    # diff/clip 只算一次，三个窗口(6/12/24)复用 up/down——原来每个窗口各自重算
+    # diff+clip（工作台 compute_all 最大热点）。只取末值，不需要多份全序列。
     delta = close.diff()
     up = delta.clip(lower=0)
     down = -delta.clip(upper=0)
+    return {
+        "rsi6": _last_float(_rsi_from_updown(up, down, 6)),
+        "rsi12": _last_float(_rsi_from_updown(up, down, 12)),
+        "rsi24": _last_float(_rsi_from_updown(up, down, 24)),
+    }
+
+
+def _rsi_from_updown(up: pd.Series, down: pd.Series, n: int) -> pd.Series:
     avg_up = up.ewm(alpha=1 / n, adjust=False).mean()
     avg_down = down.ewm(alpha=1 / n, adjust=False).mean()
     rs = avg_up / avg_down.replace(0, np.nan)
