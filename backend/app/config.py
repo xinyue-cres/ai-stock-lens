@@ -39,8 +39,12 @@ class Settings(BaseSettings):
 
     @property
     def scan_kline_days(self) -> int:
-        """扫描拉取的自然日窗口：1000 交易日 ≈ 1.4 倍自然日 ≈ 4 年。"""
-        return int(self.scan_kline_bars * 1.4)
+        """扫描拉取的自然日窗口：1000 交易日 ≈ 1.5 倍自然日 ≈ 4.1 年。
+
+        1.4 只够 ~960 交易日（自然日含周末节假日，交易日占比 ~0.66），
+        会导致 _load_cached_kline 的 ≥1000 根判定永远不足 → 缓存命中失效全走网络。
+        """
+        return int(self.scan_kline_bars * 1.5)
 
     app_log_level: str = "INFO"
     # 默认随运行环境：打包态 exe 旁 data/，源码态 backend/data/；可被 .env 覆盖

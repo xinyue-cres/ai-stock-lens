@@ -75,9 +75,10 @@ export default function ScoreboardToolbar(props: ScoreboardToolbarProps) {
               options={groups.map((g) => ({ value: g.id, label: `${g.name} (${g.stock_count})` }))}
             />
           )}
-          <Checkbox checked={force} onChange={(e) => setForce(e.target.checked)}>
+          {/* 强制重扫：会强制拉数据，不如工作台自选缓存快，暂隐藏（force 默认 false = 当日已扫跳过） */}
+          {/* <Checkbox checked={force} onChange={(e) => setForce(e.target.checked)}>
             强制重扫
-          </Checkbox>
+          </Checkbox> */}
           <Button size="small" type="primary" icon={<PlayCircleOutlined />} loading={scanPending} disabled={running} onClick={onStartScan}>
             {running ? '扫描中' : '开始扫描'}
           </Button>

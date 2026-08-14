@@ -109,39 +109,21 @@ def _build_pool(session: Session, scope: str, codes: list[str] | None,
     return [si.code for si in stock_infos], {si.code: si.name for si in stock_infos}
 
 
-def _fetch_kline(code: str, settings) -> object | None:
-    """拉近 ~1000 根日线（优先用库内 K 线缓存，缺失才拉网络）。带限流 sleep。"""
-    try:
-        end = date.today()
-        start = end - timedelta(days=settings.scan_kline_days)  # 约 4 自然年 ≈ 1000 交易日
-        cached = _load_cached_kline(code, start)
-        if cached is not None:
-            return cached
-        df = get_data_router().fetch_stock_daily(code, start, end)
-        # 请求间限流，防数据源封禁；当前东财不可用走新浪兜底，可更激进。
-        # 若东财恢复后被限流，可回调到 0.05~0.08
-        time.sleep(0.02)
-        return df
-    except Exception:  # noqa: BLE001
-        logger.warning("拉取 %s K 线失败", code)
-        return None
+def _load_cached_kline(session: Session, code: str, start: date, min_bars: int = 1000) -> object | None:
+    """从 KlineDaily 读 K 线缓存（用调用方传入的单连接 Session）。
 
-
-def _load_cached_kline(code: str, start: date) -> object | None:
-    """从 KlineDaily 读 K 线缓存；覆盖扫描窗口（≥1000 根）直接返回，否则 None 走网络拉取。
-
-    复权口径与扫描一致（KlineDaily 由 sync 用 qfq 写入，扫描也用 qfq），可安全复用；
-    已同步/自选过的股票扫描不再重复拉网络。
+    覆盖扫描窗口（≥ min_bars × 0.9，容忍自然日/交易日换算误差）直接返回，否则 None 走网络拉取。
+    复用单连接串行读：SQLite WAL 多连接并发读竞争严重（实测 12 并发慢 8.7 倍），
+    扫描必须先单连接把所有缓存读完，未命中再并发网络。
     """
     from app.models.kline import KlineDaily
 
-    with Session(engine) as s:
-        rows = list(s.exec(
-            select(KlineDaily)
-            .where(KlineDaily.code == code, KlineDaily.trade_date >= start)
-            .order_by(KlineDaily.trade_date.asc())
-        ))
-    if len(rows) < 1000:
+    rows = list(session.exec(
+        select(KlineDaily)
+        .where(KlineDaily.code == code, KlineDaily.trade_date >= start)
+        .order_by(KlineDaily.trade_date.asc())
+    ))
+    if len(rows) < int(min_bars * 0.9):
         return None
     return pd.DataFrame([
         {
@@ -219,9 +201,14 @@ def _build_plan(session: Session, scope: str, codes: list[str] | None,
 def _run_scan(todo: list[str], name_map: dict[str, str], settings, today: date, scope: str) -> None:
     """后台线程执行实际打分（启动后立即返回，不阻塞 POST）。
 
-    股息 map 在后台线程内用独立 Session 拉取：
-    - 请求级 session 已随 POST 返回被关闭，不能复用（复用会抛异常→扫描静默中断 done=0）；
-    - 放后台还能避免全市场扫描拉 3 年分红全表时阻塞 POST（超过 30s 前端报错）。
+    关键性能设计（数据同步后缓存充足，SQLite 并发读成为瓶颈）：
+    1. 单 Session 串行读缓存——SQLite WAL 多连接并发读竞争严重（实测 12 并发慢 8.7 倍），
+       必须先单连接把所有 K 线缓存读出来（快），未命中的才走网络；
+    2. 缓存未命中 → 并发网络拉取（网络 I/O 释放 GIL，并发有收益）；
+    3. compute + upsert 串行（GIL 下并发计算无收益，串行最简最快）。
+
+    股息 map 在后台线程内用独立 Session 拉取：请求级 session 已随 POST 返回被关闭，
+    不能复用（复用会抛异常→扫描静默中断 done=0）。
     """
     try:
         try:
@@ -231,12 +218,48 @@ def _run_scan(todo: list[str], name_map: dict[str, str], settings, today: date, 
             logger.warning("预加载股息 map 失败，按无股息处理")
             dividend_map = {}
 
-        def _process(code: str) -> None:
+        # 1) 单 Session 串行读缓存（快路径；数据同步后绝大多数走这里）
+        end = date.today()
+        start = end - timedelta(days=settings.scan_kline_days)
+        cache_map: dict[str, object] = {}
+        need_net: list[str] = []
+        try:
+            with Session(engine) as s:
+                for code in todo:
+                    df = _load_cached_kline(s, code, start)
+                    if df is not None:
+                        cache_map[code] = df
+                    else:
+                        need_net.append(code)
+        except Exception:  # noqa: BLE001
+            logger.exception("读 K 线缓存失败，全部走网络")
+            need_net = list(todo)
+
+        # 2) 缓存未命中 → 并发网络拉取（网络 I/O 释放 GIL，并发提速）
+        def _fetch_net(code: str) -> tuple[str, object | None]:
             if _scan_state["cancel_requested"]:
-                return
+                return code, None
+            try:
+                df = get_data_router().fetch_stock_daily(code, start, end)
+                time.sleep(0.02)  # 请求间限流，防数据源封禁
+                return code, df
+            except Exception:  # noqa: BLE001
+                logger.warning("拉取 %s K 线失败", code)
+                return code, None
+
+        if need_net:
+            with ThreadPoolExecutor(max_workers=settings.scan_concurrency) as pool:
+                for code, df in pool.map(_fetch_net, need_net):
+                    if df is not None and not df.empty:
+                        cache_map[code] = df
+
+        # 3) 串行 compute + upsert（GIL 下并发计算无收益，串行最简最快）
+        for code in todo:
+            if _scan_state["cancel_requested"]:
+                break
             failed = True
             try:
-                df = _fetch_kline(code, settings)
+                df = cache_map.get(code)
                 if df is not None and not df.empty:
                     # 指标只算一次，score_stock 与 judge_trend 复用（避免重复算 MACD/ADX/BOLL/Risk）
                     cache = compute_indicator_cache(df)
@@ -254,10 +277,6 @@ def _run_scan(todo: list[str], name_map: dict[str, str], settings, today: date, 
                 if failed:
                     _scan_state["failed"] += 1
                 _scan_state["current"] = code
-
-        with ThreadPoolExecutor(max_workers=settings.scan_concurrency) as pool:
-            for _ in pool.map(_process, todo):
-                pass
     finally:
         with _scan_lock:
             _scan_state.update(running=False, finished_at=date.today().isoformat())
