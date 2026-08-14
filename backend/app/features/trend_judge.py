@@ -5,7 +5,7 @@
   - 贴上轨（%B 高）且非强趋势 → 短期过热，等回踩
   - ADX 强 + 已涨一段 + 动能未急刹 → 强趋势，可持有·不追高·逢高减
   - 距 60 日高点回撤极深（<-40%）且历史金叉延续差 → 深跌中刚金叉，不可靠
-  - 动能急刹（顶部过峰，bar|acc_z 放量确认）→ 弱势金叉，别追
+  - 动能掉头（顶部过峰放量确认 / 金叉·走弱动能衰减）→ 弱势金叉，别追
   - 历史金叉延续可靠（signal 分高）→ 可入手
   - 否则只要未过热、有空间 → 可入手
 - 死叉态：下跌过峰 + 历史可靠 → 左侧机会（高风险可轻仓）；历史可靠 → 等下次金叉；
@@ -81,8 +81,8 @@ def _decide_stage(golden: bool, pct_b: float | None, dist_high: float,
             return "strong_uptrend"
         if dist_high < -0.4 and (signal_score is None or signal_score < _SIGNAL_RELIABLE):
             return "downtrend"  # 深跌中刚金叉且历史不可靠
-        if peak_top:
-            return "weak_golden"  # 金叉但动能急刹（顶部过峰）→ 弱势金叉，别追
+        if peak_top or slope_up is False:
+            return "weak_golden"  # 金叉但动能掉头（顶部过峰 / 金叉·走弱）→ 弱势金叉，别追
         if signal_score is not None and signal_score >= _SIGNAL_RELIABLE:
             if peak_winrate is not None and peak_winrate < 50:
                 return "range"  # 历史分高但胜率不足（过半金叉没冲过 +5%），可靠性打折
@@ -106,6 +106,8 @@ def _entry_reason(stage: str, golden: bool, peak_conf: int, slope_up: bool | Non
     peak_bot = peak_conf >= _PEAK_CONF_STRONG and slope_up is False  # 底部过峰（强档以上）
     if golden and peak_top:
         return "金叉态·动能急刹（顶部过峰预警），别追等回踩"
+    if golden and slope_up is False:
+        return "金叉态·动能走弱（金叉衰减），随时可能死叉，别追等动能修复"
     if golden and adx is not None and adx >= _ADX_STRONG \
             and signal_gain_pct is not None and signal_gain_pct > _STRONG_TREND_GAIN \
             and not peak_top:
