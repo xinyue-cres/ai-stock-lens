@@ -27,6 +27,12 @@ _MIN_ROWS = 60  # MACD EMA26 预热需要 ~60 根
 # 含金叉日跳涨后评分整体上移（中位 ~72），原 65 已无区分度（95% 达标），上调到 72
 _SIGNAL_RELIABLE = 72
 
+# 左侧机会（死叉态博反弹）的历史可靠门槛：低于金叉态可入手线（72）——
+# 下跌过峰多为长期弱势股，历史金叉延续分天然偏低（实测全库 63~70），拿金叉标准卡
+# 死叉态逻辑矛盾（可靠早就该金叉了），导致 left_entry 全库为 0。经验值 64 使今日
+# 唯一强档下跌过峰（福耀 64.2）可进。
+_LEFT_ENTRY_SIGNAL = 64
+
 # ADX 强趋势判定线（经验值，上线后可数据校准）
 _ADX_STRONG = 25
 
@@ -85,8 +91,8 @@ def _decide_stage(golden: bool, pct_b: float | None, dist_high: float,
             return "pullback_entry"  # 金叉、未过热、有上方空间
         return "range"  # 金叉但贴下轨（弱势）
     # 死叉态
-    if peak_bot and signal_score is not None and signal_score >= _SIGNAL_RELIABLE:
-        return "left_entry"  # 下跌动能急转（底部过峰）+ 历史可靠 → 左侧机会
+    if peak_bot and signal_score is not None and signal_score >= _LEFT_ENTRY_SIGNAL:
+        return "left_entry"  # 下跌动能急转（底部过峰）+ 历史尚可 → 左侧机会
     if dist_high > -0.1 or (signal_score is None or signal_score < _SIGNAL_RELIABLE):
         return "downtrend"  # 距高点近或历史差 → 回避
     return "range"
@@ -104,8 +110,8 @@ def _entry_reason(stage: str, golden: bool, peak_conf: int, slope_up: bool | Non
             and signal_gain_pct is not None and signal_gain_pct > _STRONG_TREND_GAIN \
             and not peak_top:
         return "金叉态·强趋势已涨，可持有·不追高·逢高减"
-    if not golden and peak_bot and signal_score is not None and signal_score >= _SIGNAL_RELIABLE:
-        return "死叉态·下跌动能急转（底部过峰）+ 历史可靠，左侧机会·建议轻仓"
+    if not golden and peak_bot and signal_score is not None and signal_score >= _LEFT_ENTRY_SIGNAL:
+        return "死叉态·下跌动能急转（底部过峰）+ 历史尚可，左侧机会·建议轻仓"
     if golden and signal_score is not None and signal_score >= _SIGNAL_RELIABLE \
             and peak_winrate is not None and peak_winrate < 50:
         return "金叉态·历史峰值胜率低（<50%），观望"
