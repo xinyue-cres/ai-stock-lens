@@ -122,7 +122,7 @@ export default function ScoreCriteriaModal({
           <li><b>历史金叉平均持续</b>：历史上每次金叉平均延续几天（对照当前，超出=强势延续）</li>
           <li><b>历史金叉周期峰值涨幅</b>：每次金叉冲到的最高涨幅，展示<Text type="secondary">均值 · 中位 · 胜率（冲过 +5% 的占比）</Text></li>
           <li><b>历史死叉周期谷值跌幅</b>：每次死叉砸到的最深跌幅（负值=真跌），展示<Text type="secondary">均值 · 中位 · 胜率（跌破 -5% 的占比）</Text></li>
-          <li><b>过峰信号</b>：MACD 柱（DIF−DEA）当日 vs 昨前均值——上涨中柱体缩小=<Text type="secondary">上涨见顶</Text>，下跌中柱体回升=<Text type="secondary">下跌见底</Text>（比 DIF 斜率更早预警）</li>
+          <li><b>过峰信号</b>：DIF 二阶导（动能加速度）相对该股历史波动的偏离——加速度急刹=<Text type="secondary">上涨见顶</Text>，加速度急转=<Text type="secondary">下跌见底</Text>（取代旧 MACD 柱单日缩小判定，误报率大幅下降）</li>
           <li><b>DIF 斜率 / ADX / 均线结构</b>：动能方向、趋势强度、均线排列（多头/空头/纠缠）</li>
         </ul>
       </div>

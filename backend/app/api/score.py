@@ -80,8 +80,9 @@ def _serialize(r: StockScore) -> dict:
         "dif_slope": (_sig(r).get("dif_slope")),
         "dif_slope_dir": (_sig(r).get("dif_slope_dir")),
         "current_state": (_sig(r).get("current_state")),
-        # 过峰信号（柱体掉头预警）：上涨过峰/下跌过峰/涨势延续/跌势延续
+        # 过峰信号（bar|acc_z 触发 + 置信度评级）：上涨过峰/下跌过峰/涨势延续/跌势延续 + 置信度
         "peak_signal": (_sig(r).get("peak_signal")),
+        "peak_conf": (_sig(r).get("peak_conf")),
     }
 
 

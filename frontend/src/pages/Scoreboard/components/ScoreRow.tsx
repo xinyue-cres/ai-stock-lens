@@ -13,6 +13,18 @@ function subScoreColor(v: number): string {
   return '#9ca3af'
 }
 
+// 过峰置信度档位标签：触发类型(bar/acc/双)×量能(缩/中/放)，误报单调递减 88→45%
+function PeakConfTag({ conf }: { conf?: number | null }) {
+  if (conf == null || conf <= 0) return null
+  const grade =
+    conf >= 66 ? { label: '极强', color: '#dc2626' } :
+    conf >= 51 ? { label: '强', color: '#ea580c' } :
+    conf >= 36 ? { label: '中', color: '#d97706' } :
+    conf >= 21 ? { label: '弱', color: '#a16207' } :
+    { label: '极弱', color: '#ca8a04' }
+  return <span style={{ fontSize: 10, fontWeight: 600, marginLeft: 3, color: grade.color }}>{grade.label}</span>
+}
+
 // 当前 MACD 状态着色：按 A 股红涨绿跌——金叉(看涨)=红/橙，死叉(看跌)=蓝/绿
 function stateColor(s: string): string {
   if (s.includes('金叉') && s.includes('走强')) return priceColor.up // 红：金叉·走强=看涨动能足
@@ -103,18 +115,18 @@ export default function ScoreRow({ item, active, onClick, onAddWatchlist, onOpen
         </span>
       )}
 
-      {/* 过峰信号标记：MACD 柱掉头预警（比 DIF 斜率更早），只在过峰时显示 */}
+      {/* 过峰信号标记：bar|acc_z 触发 + 置信度档位（放量/双触发=强，缩量=弱） */}
       {item.peak_signal === '上涨过峰' && (
-        <Tooltip title="MACD 柱缩小（上涨动能掉头），见顶预警，注意回调">
+        <Tooltip title={`动能急刹（上涨见顶预警）·置信度${item.peak_conf ?? 0}分，注意回调`}>
           <span style={{ fontSize: 11, fontWeight: 700, marginLeft: 6, flexShrink: 0, color: '#d97706' }}>
-            ▲过峰
+            ▲过峰<PeakConfTag conf={item.peak_conf} />
           </span>
         </Tooltip>
       )}
       {item.peak_signal === '下跌过峰' && (
-        <Tooltip title="MACD 柱回升（下跌动能衰竭），见底信号，关注反抽">
+        <Tooltip title={`动能急转（下跌见底信号）·置信度${item.peak_conf ?? 0}分，关注反抽`}>
           <span style={{ fontSize: 11, fontWeight: 700, marginLeft: 6, flexShrink: 0, color: '#16a34a' }}>
-            ▼过峰
+            ▼过峰<PeakConfTag conf={item.peak_conf} />
           </span>
         </Tooltip>
       )}

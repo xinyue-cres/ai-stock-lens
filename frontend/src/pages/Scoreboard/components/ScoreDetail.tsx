@@ -123,6 +123,7 @@ export default function ScoreDetail({ detail, onAddWatchlist, onOpenDetail }: Sc
             {sig.peak_signal ? (
               <span style={{ color: sig.peak_signal === '上涨过峰' ? '#d97706' : sig.peak_signal === '下跌过峰' ? '#2563eb' : undefined }}>
                 {sig.peak_signal}
+                {sig.peak_conf ? `（置信度${sig.peak_conf}）` : ''}
               </span>
             ) : '-'}
           </Field>

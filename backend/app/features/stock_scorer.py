@@ -13,6 +13,7 @@ from __future__ import annotations
 import math
 import statistics
 
+import numpy as np
 import pandas as pd
 
 from app.features.quant_factors import _sigma
@@ -30,6 +31,12 @@ W_DIVIDEND = 0.10
 _MIN_ROWS = 60  # 少于 60 根日线不评分
 
 _GOLDEN_HORIZONS = (5, 10, 20)  # 金叉后延续观察窗口
+
+# 动能加速度过峰阈值（A 方法）：acc_z = DIF 二阶导相对该股历史波动的 z-score。
+# 方向由 acc_z 符号给出：acc_z < −_PEAK_Z = 动能急刹（顶部过峰）；acc_z > +_PEAK_Z = 动能急转（底部过峰）。
+# 实时版验证：|acc_z|>1.0 报警率 ~19%（bar 旧判定 ~49%），|acc_z|>1.5 ~12.5%。取 1.0（预警宁可多报）。
+_PEAK_Z = 1.0
+_PEAK_CONF_STRONG = 51  # 过峰置信度"强"档（决策树降级门槛，误报 ~57%）；弱/极弱只前端提示
 
 
 def _norm(x: float | None, lo: float, hi: float) -> float:
@@ -152,11 +159,59 @@ def _golden_life_score(signals: list[tuple[int, str]]) -> float:
     return round(score, 1)
 
 
-def _bar_shrinking(bar: pd.Series) -> bool | None:
-    """MACD 柱（DIF−DEA）单日是否缩小：当日 < (昨日+前日)/2。"""
-    if len(bar) >= 3:
-        return bool(bar.iloc[-1] < (bar.iloc[-2] + bar.iloc[-3]) / 2)
-    return None
+def _peak_features(close: pd.Series, dif: pd.Series, dea: pd.Series,
+                   volume: pd.Series) -> dict:
+    """过峰信号特征（bar|acc_z + 置信度评级）：返回 dict。
+
+    - 触发 = bar（柱缩/柱回升，方向相关）OR acc_z（动能急刹/急转）；
+    - 置信度 = 触发类型(bar 15 / acc 25 / 双 45) + 量能(缩 0 / 中 15 / 放 30)；
+      档位：极弱≤20 / 弱21-35 / 中36-50 / 强51-65 / 极强≥66（实测各档误报单调递减 88→45%）。
+    - 方向由一阶导 slope 给出：动能向上看顶（柱缩/急刹），向下看底（柱回升/急转）。
+      实测顶底对称；量能（vr20）作为"放量过峰更可信"的确认维度。
+    """
+    empty = {"acc_z": None, "slope_up": None, "peak_signal": None, "peak_conf": 0, "vr20": None}
+    slope = dif - (dif.shift(1) + dif.shift(2)) / 2
+    acc = slope.diff()
+    fv = acc.dropna()
+    if len(fv) < 30:
+        return empty
+    sd = float(fv.std(ddof=0))
+    if sd <= 1e-9:
+        return empty
+    acc_z = float((acc.iloc[-1] - fv.mean()) / sd)
+    slope_up = bool(slope.iloc[-1] > 0) if len(slope) > 0 else None
+    if slope_up is None:
+        return empty
+
+    # 量比（周期相对量，消除个股差异）
+    vr20: float | None = None
+    if len(volume) >= 20:
+        vol = volume.astype(float)
+        m20 = vol.rolling(20).mean().iloc[-1]
+        if pd.notna(m20) and m20 > 0:
+            vr20 = float(vol.iloc[-1] / m20)
+
+    # bar 触发（方向相关：动能向上柱缩=涨势衰减，向下柱回升=跌势衰竭）
+    has_bar = False
+    if len(dif) >= 3:
+        bar = dif - dea
+        prev = (bar.iloc[-2] + bar.iloc[-3]) / 2
+        if slope_up:
+            has_bar = bool(bar.iloc[-1] < prev)
+        else:
+            has_bar = bool(bar.iloc[-1] > prev)
+    # acc 触发
+    has_acc = (acc_z < -_PEAK_Z) if slope_up else (acc_z > +_PEAK_Z)
+
+    if not (has_acc or has_bar):
+        return {"acc_z": acc_z, "slope_up": slope_up,
+                "peak_signal": "涨势延续" if slope_up else "跌势延续",
+                "peak_conf": 0, "vr20": vr20}
+    base = 45 if (has_acc and has_bar) else (25 if has_acc else 15)
+    vol_add = 30 if (vr20 is not None and vr20 >= 1.3) else (15 if (vr20 is not None and vr20 >= 0.9) else 0)
+    return {"acc_z": acc_z, "slope_up": slope_up,
+            "peak_signal": "上涨过峰" if slope_up else "下跌过峰",
+            "peak_conf": base + vol_add, "vr20": vr20}
 
 
 def _cycle_stats(close: pd.Series, signals: list[tuple[int, str]]) -> tuple[list[float], list[float], list[int]]:
@@ -201,12 +256,13 @@ def _peak_winrate(golden_peaks: list[float]) -> float | None:
 def compute_indicator_cache(df: pd.DataFrame) -> dict:
     """扫描/判断公用的指标快照：score_stock 与 judge_trend 复用，避免同一 df 重复计算。
 
-    返回 close/dif/dea/signals/dif_slope/golden/adx/boll/risk/bar_shrinking/cycles。
+    返回 close/dif/dea/signals/dif_slope/golden/adx/boll/risk/acc_z/cycles。
     独立调用（如详情页）可不传 cache，由各函数自行计算。
     """
     close = df["close"].astype(float)
     dif, dea, signals = macd_series(close)
     cycles = _cycle_stats(close, signals)
+    peak = _peak_features(close, dif, dea, df["volume"])
     return {
         "close": close,
         "dif": dif,
@@ -217,7 +273,11 @@ def compute_indicator_cache(df: pd.DataFrame) -> dict:
         "adx": compute_adx(df),
         "boll": compute_boll(df),
         "risk": compute_risk(df),
-        "bar_shrinking": _bar_shrinking(dif - dea),
+        "acc_z": peak["acc_z"],
+        "slope_up": peak["slope_up"],
+        "peak_signal": peak["peak_signal"],
+        "peak_conf": peak["peak_conf"],
+        "vr20": peak["vr20"],
         "cycles": cycles,
         "peak_winrate": _peak_winrate(cycles[0]),
     }
@@ -295,7 +355,9 @@ def _golden_continuation(df: pd.DataFrame, cache: dict | None = None) -> dict:
         adx = cache["adx"]["adx"]
         dif_slope = cache["dif_slope"]
         current_golden = cache["golden"]
-        bar_shrinking = cache["bar_shrinking"]
+        peak_signal = cache["peak_signal"]
+        peak_conf = cache["peak_conf"]
+        vr20 = cache["vr20"]
         cycles = cache["cycles"]
     else:
         close = df["close"].astype(float)
@@ -303,7 +365,10 @@ def _golden_continuation(df: pd.DataFrame, cache: dict | None = None) -> dict:
         adx = compute_adx(df)["adx"]
         dif_slope = compute_dif_slope(dif)
         current_golden = is_golden(dif, dea)
-        bar_shrinking = _bar_shrinking(dif - dea)
+        peak = _peak_features(close, dif, dea, df["volume"])
+        peak_signal = peak["peak_signal"]
+        peak_conf = peak["peak_conf"]
+        vr20 = peak["vr20"]
         cycles = None
 
     post_gain = _post_golden_gain(close, signals)
@@ -329,16 +394,9 @@ def _golden_continuation(df: pd.DataFrame, cache: dict | None = None) -> dict:
 
     score = 0.40 * life + 0.60 * post_eff
 
-    # MACD 柱（DIF−DEA）当日 vs 昨前均值：柱体缩小 = 动能掉头（比 DIF 斜率更早预警）
-    # 用单日判定：用户实测多股，第一天缩小往往就是真拐点（bar_shrinking 已在开头复用）
-
-    # 过峰信号：上涨中柱体缩小 → 见顶；下跌中柱体回升（绿柱由负变大）→ 见底
-    if bar_shrinking is None:
-        peak_signal = None
-    elif current_golden:
-        peak_signal = "上涨过峰" if bar_shrinking else "涨势延续"
-    else:
-        peak_signal = "下跌过峰" if not bar_shrinking else "跌势延续"
+    # 过峰信号已由 _peak_features 统一计算（bar|acc_z 触发 + 置信度评级）：
+    # 触发类型(bar/acc/双) × 量能(缩/中/放) → peak_conf 0-100，分 5 档（极弱/弱/中/强/极强）。
+    # 强档以上(≥51)才够可信供决策树降级，弱/极弱只做前端提示。
 
     return {
         "score": round(score, 1),
@@ -351,6 +409,8 @@ def _golden_continuation(df: pd.DataFrame, cache: dict | None = None) -> dict:
         "dif_slope": dif_slope,
         "dif_slope_dir": dif_slope_dir,
         "peak_signal": peak_signal,
+        "peak_conf": peak_conf,
+        "vr20": vr20,
         **_signal_summary(close, signals, cycles),
     }
 
@@ -476,6 +536,8 @@ def score_stock(df: pd.DataFrame, dividend_yield: float | None = None,
                 "dif_slope": golden["dif_slope"],
                 "dif_slope_dir": golden["dif_slope_dir"],
                 "peak_signal": golden.get("peak_signal"),
+                "peak_conf": golden.get("peak_conf"),
+                "vr20": golden.get("vr20"),
                 "current_signal": golden.get("current_signal"),
                 "signal_days": golden.get("signal_days"),
                 "signal_gain_pct": golden.get("signal_gain_pct"),

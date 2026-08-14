@@ -3,9 +3,9 @@
 决策口径：
 - 金叉态（DIF > DEA）= 上升候选：
   - 贴上轨（%B 高）且非强趋势 → 短期过热，等回踩
-  - ADX 强 + 已涨一段 + 柱未缩小 → 强趋势，可持有·不追高·逢高减
+  - ADX 强 + 已涨一段 + 动能未急刹 → 强趋势，可持有·不追高·逢高减
   - 距 60 日高点回撤极深（<-40%）且历史金叉延续差 → 深跌中刚金叉，不可靠
-  - MACD 柱掉头（上涨过峰）→ 弱势金叉，别追
+  - 动能急刹（顶部过峰，bar|acc_z 放量确认）→ 弱势金叉，别追
   - 历史金叉延续可靠（signal 分高）→ 可入手
   - 否则只要未过热、有空间 → 可入手
 - 死叉态：下跌过峰 + 历史可靠 → 左侧机会（高风险可轻仓）；历史可靠 → 等下次金叉；
@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from app.features.stock_scorer import compute_indicator_cache, _signal_summary
+from app.features.stock_scorer import _PEAK_CONF_STRONG, _signal_summary, compute_indicator_cache
 from app.indicators.ma import compute_ma
 
 _MIN_ROWS = 60  # MACD EMA26 预热需要 ~60 根
@@ -47,33 +47,36 @@ _REASONS = {
 
 def _decide_stage(golden: bool, pct_b: float | None, dist_high: float,
                   signal_score: float | None, peak_winrate: float | None = None,
-                  bar_shrinking: bool | None = None,
+                  peak_conf: int = 0, slope_up: bool | None = None,
                   adx: float | None = None,
                   signal_gain_pct: float | None = None) -> str:
     """金叉驱动的阶段决策（纯逻辑，无 I/O，可直接单测）。
 
     - 金叉态 = 上升候选：贴上轨且非强趋势→过热；ADX 强且已涨一段→强趋势
-      （可持有·不追高·逢高减）；深跌且历史差→下跌；MACD 柱掉头（上涨过峰预警）
+      （可持有·不追高·逢高减）；深跌且历史差→下跌；动能急刹（顶部过峰预警）
       →弱势金叉，别追；历史可靠→可入手；未过热有空间→可入手；
       否则贴下轨（%B<0.2 弱势）→震荡
-    - 死叉态：下跌过峰（柱缩）且历史可靠→左侧机会；否则历史可靠→观望等下次金叉；
+    - 死叉态：下跌动能急转（底部过峰）且历史可靠→左侧机会；否则历史可靠→观望等下次金叉；
       距高点过近或历史差→下跌回避
-    peak_winrate：历史金叉冲过 +5% 的占比；bar_shrinking：MACD 柱当日 < 昨前均值
+    peak_winrate：历史金叉冲过 +5% 的占比；peak_conf：过峰置信度 0-100（bar|acc_z × 量能），
+    强档以上(≥_PEAK_CONF_STRONG)才认定"动能急刹/急转"；slope_up：动能方向（顶/底）。
     adx：ADX 趋势强度；signal_gain_pct：当前信号期间累计涨幅%（% 为单位，如 10.5 表示 10.5%）
     """
+    peak_top = peak_conf >= _PEAK_CONF_STRONG and slope_up is True   # 动能向上·放量/双触发急刹（顶部过峰）
+    peak_bot = peak_conf >= _PEAK_CONF_STRONG and slope_up is False  # 动能向下·放量/双触发急转（底部过峰）
     if golden:
         # 1. 过热度（非强趋势才叫过热；强趋势贴轨是顺势）
         if pct_b is not None and pct_b > 0.85 and (adx is None or adx < _ADX_STRONG):
             return "overheat"  # 贴上轨、非强趋势，短期涨过头
-        # 2. 强趋势中已涨一段 → 可持有·不追高·逢高减
+        # 2. 强趋势中已涨一段 → 可持有·不追高·逢高减（动能未急刹）
         if (adx is not None and adx >= _ADX_STRONG
                 and signal_gain_pct is not None and signal_gain_pct > _STRONG_TREND_GAIN
-                and bar_shrinking is not True):
+                and not peak_top):
             return "strong_uptrend"
         if dist_high < -0.4 and (signal_score is None or signal_score < _SIGNAL_RELIABLE):
             return "downtrend"  # 深跌中刚金叉且历史不可靠
-        if bar_shrinking is True:
-            return "weak_golden"  # 金叉但动能掉头 → 弱势金叉，别追
+        if peak_top:
+            return "weak_golden"  # 金叉但动能急刹（顶部过峰）→ 弱势金叉，别追
         if signal_score is not None and signal_score >= _SIGNAL_RELIABLE:
             if peak_winrate is not None and peak_winrate < 50:
                 return "range"  # 历史分高但胜率不足（过半金叉没冲过 +5%），可靠性打折
@@ -82,25 +85,27 @@ def _decide_stage(golden: bool, pct_b: float | None, dist_high: float,
             return "pullback_entry"  # 金叉、未过热、有上方空间
         return "range"  # 金叉但贴下轨（弱势）
     # 死叉态
-    if bar_shrinking is False and signal_score is not None and signal_score >= _SIGNAL_RELIABLE:
-        return "left_entry"  # 下跌过峰 + 历史可靠 → 左侧机会
+    if peak_bot and signal_score is not None and signal_score >= _SIGNAL_RELIABLE:
+        return "left_entry"  # 下跌动能急转（底部过峰）+ 历史可靠 → 左侧机会
     if dist_high > -0.1 or (signal_score is None or signal_score < _SIGNAL_RELIABLE):
         return "downtrend"  # 距高点近或历史差 → 回避
     return "range"
 
 
-def _entry_reason(stage: str, golden: bool, bar_shrinking: bool | None,
+def _entry_reason(stage: str, golden: bool, peak_conf: int, slope_up: bool | None,
                   signal_score: float | None, peak_winrate: float | None,
                   adx: float | None = None, signal_gain_pct: float | None = None) -> str:
     """细化 entry_reason：覆盖决策树降级的具体原因。"""
-    if golden and bar_shrinking:
-        return "金叉态·MACD柱掉头（上涨过峰预警），别追等回踩"
+    peak_top = peak_conf >= _PEAK_CONF_STRONG and slope_up is True   # 顶部过峰（强档以上）
+    peak_bot = peak_conf >= _PEAK_CONF_STRONG and slope_up is False  # 底部过峰（强档以上）
+    if golden and peak_top:
+        return "金叉态·动能急刹（顶部过峰预警），别追等回踩"
     if golden and adx is not None and adx >= _ADX_STRONG \
             and signal_gain_pct is not None and signal_gain_pct > _STRONG_TREND_GAIN \
-            and bar_shrinking is not True:
+            and not peak_top:
         return "金叉态·强趋势已涨，可持有·不追高·逢高减"
-    if not golden and bar_shrinking is False and signal_score is not None and signal_score >= _SIGNAL_RELIABLE:
-        return "死叉态·下跌过峰（动能衰竭）+ 历史可靠，左侧机会·建议轻仓"
+    if not golden and peak_bot and signal_score is not None and signal_score >= _SIGNAL_RELIABLE:
+        return "死叉态·下跌动能急转（底部过峰）+ 历史可靠，左侧机会·建议轻仓"
     if golden and signal_score is not None and signal_score >= _SIGNAL_RELIABLE \
             and peak_winrate is not None and peak_winrate < 50:
         return "金叉态·历史峰值胜率低（<50%），观望"
@@ -137,7 +142,8 @@ def judge_trend(df: pd.DataFrame, signal_score: float | None = None,
     close = float(close_s.iloc[-1])
     golden = cache["golden"]
     dif_slope = cache["dif_slope"]
-    bar_shrinking = cache["bar_shrinking"]
+    peak_conf = cache.get("peak_conf", 0)
+    slope_up = cache.get("slope_up")
     peak_winrate = cache["peak_winrate"]
     boll = cache["boll"]
     adx_info = cache["adx"]
@@ -155,7 +161,7 @@ def judge_trend(df: pd.DataFrame, signal_score: float | None = None,
 
     # 决策：金叉死叉为主导（纯逻辑，见 _decide_stage）
     stage = _decide_stage(golden, pct_b, dist_high, signal_score, peak_winrate,
-                          bar_shrinking, adx=adx_info.get("adx"), signal_gain_pct=signal_gain_pct)
+                          peak_conf, slope_up, adx=adx_info.get("adx"), signal_gain_pct=signal_gain_pct)
 
     # 辅助参考（不参与决策）
     arrangement = compute_ma(df).get("arrangement")
@@ -168,7 +174,7 @@ def judge_trend(df: pd.DataFrame, signal_score: float | None = None,
         "trend_stage": stage,
         # 可入手两档：pullback_entry（安全可入手）+ left_entry（左侧机会·高风险可轻仓）
         "can_entry": stage in ("pullback_entry", "left_entry"),
-        "entry_reason": _entry_reason(stage, golden, bar_shrinking, signal_score, peak_winrate,
+        "entry_reason": _entry_reason(stage, golden, peak_conf, slope_up, signal_score, peak_winrate,
                                       adx=adx_info.get("adx"), signal_gain_pct=signal_gain_pct),
         "key_prices": {
             "close": round(close, 3),

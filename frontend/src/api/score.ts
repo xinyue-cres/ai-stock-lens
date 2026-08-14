@@ -33,8 +33,9 @@ export interface ScoreItem {
   dif_slope: number | null
   dif_slope_dir: 'up' | 'down' | 'flat' | null
   current_state: string | null
-  // 过峰信号（MACD 柱掉头预警，列表行标记用）
+  // 过峰信号（bar|acc_z 触发 + 置信度评级，列表行标记用）
   peak_signal?: '上涨过峰' | '下跌过峰' | '涨势延续' | '跌势延续' | null
+  peak_conf?: number | null
   // 是否在自选 + 所属分组（选股页跳工作台分组视图用，由 list 接口批量注入）
   in_watchlist?: boolean
   group_ids?: number[]
@@ -51,6 +52,9 @@ export interface SignalComponent {
   dif_slope?: number | null
   dif_slope_dir?: 'up' | 'down' | 'flat' | null
   peak_signal?: '上涨过峰' | '下跌过峰' | '涨势延续' | '跌势延续' | null
+  // 过峰置信度 0-100（触发类型 × 量能）与量比 vr20
+  peak_conf?: number | null
+  vr20?: number | null
   // 信号汇总（趋势判断卡展示用）
   current_signal?: 'golden' | 'death' | null
   signal_days?: number | null
