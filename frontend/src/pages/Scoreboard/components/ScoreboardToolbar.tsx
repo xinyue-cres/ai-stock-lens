@@ -115,7 +115,7 @@ export default function ScoreboardToolbar(props: ScoreboardToolbarProps) {
             onChange={(v) => setPeakFilter(v as 'all' | 'exclude_up' | 'only_down')}
             options={[
               { value: 'all', label: '全部' },
-              { value: 'exclude_up', label: '排除上涨过峰' },
+              { value: 'exclude_up', label: '排除强档上涨过峰' },
               { value: 'only_down', label: '只看下跌过峰' },
             ]}
           />

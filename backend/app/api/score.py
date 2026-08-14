@@ -15,6 +15,7 @@ from app.ai.analyzer import AIAnalysisError, analyze_score_summary, analyze_stoc
 from app.config import get_settings
 from app.datasource.router import get_data_router
 from app.db import get_session
+from app.features.stock_scorer import _PEAK_CONF_STRONG
 from app.features.trend_judge import judge_trend
 from app.models.stock import Stock
 from app.models.stock_group import StockGroup
@@ -197,7 +198,11 @@ def list_scores(
     rows = _query_scores(session, sort_by, dir, sql_limit, min_score, can_entry, stage, group_ids, scope)
     items = [_serialize(r) for r in rows]
     if peak_filter == "exclude_up":
-        items = [i for i in items if i.get("peak_signal") != "上涨过峰"]
+        # 只排除强档及以上（≥51）的上涨过峰；弱/中档多为涨势中正常柱缩（历史占比 ~28%），保留不误杀
+        items = [
+            i for i in items
+            if not (i.get("peak_signal") == "上涨过峰" and (i.get("peak_conf") or 0) >= _PEAK_CONF_STRONG)
+        ]
     elif peak_filter == "only_down":
         items = [i for i in items if i.get("peak_signal") == "下跌过峰"]
     items = items[:limit]
