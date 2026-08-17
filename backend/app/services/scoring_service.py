@@ -1,7 +1,10 @@
-"""选股扫描编排：候选池 → 并发拉 K 线 → 打分 + 趋势判断 → upsert StockScore。
+"""选股扫描编排：候选池 → 拉 K 线 → 打分 + 趋势判断 → upsert StockScore。
 
 关键设计：
-- 扫描不落 K 线库，只用 DataRouter 直拉近 ~1000 根日线（约 4 年），内存计算后只写 StockScore。
+- 扫描优先用库内 K 线缓存（单连接串行读，SQLite WAL 多连接并发读慢 8.7 倍），
+  覆盖 ≥ ~1000 根窗口才命中；缓存命中但落后到今天（≥1 交易日）→ 仅增量补拉缺的
+  最近几根（复用 sync_service.sync_one_stock），不重拉全量；缓存不够新才网络直拉。
+- 打分基于"今日收盘已入库"的最新 K 线；当日已扫但 K 线库又新增收盘线 → 自动重算。
 - ThreadPoolExecutor 并发 + 每请求 sleep 限流，防东财封禁。
 - 全局 _scan_state 供前端轮询进度；进程级锁保证单扫描实例；支持取消。
 - 每个 worker 用独立的 SQLAlchemy Session（Session 不是线程安全的）。
@@ -24,10 +27,13 @@ from app.datasource.router import get_data_router
 from app.db import engine
 from app.features.stock_scorer import compute_indicator_cache, score_stock
 from app.features.trend_judge import judge_trend
+from app.models.kline import KlineDaily
 from app.models.stock import Stock
 from app.models.stock_score import StockScore
 from app.services.dividend_service import load_dividend_map
 from app.services.stock_service import watchlist_codes_in_groups
+from app.services.sync_service import sync_one_stock
+from app.services.trader_service import _trading_days_between
 
 logger = logging.getLogger(__name__)
 
@@ -135,6 +141,57 @@ def _load_cached_kline(session: Session, code: str, start: date, min_bars: int =
     ])
 
 
+def _latest_db_dates(session: Session, codes: list[str]) -> dict[str, date | None]:
+    """批量查询候选股票在 K 线库中的最后交易日（code → date|None）。
+
+    ∥ 供扫描计划判断"库里是否已有更新的收盘线"（避免 N+1 逐票查）。
+    """
+    if not codes:
+        return {}
+    rows = session.exec(
+        select(KlineDaily.code, KlineDaily.trade_date)
+        .where(KlineDaily.code.in_(codes))  # type: ignore[attr-defined]
+        .order_by(KlineDaily.trade_date.asc())
+    ).all()
+    out: dict[str, date | None] = {c: None for c in codes}
+    for code, d in rows:
+        out[code] = d  # 升序遍历，最后一次赋值即该票最新日期
+    return out
+
+
+def _is_stale(latest: date | None, today: date) -> bool:
+    """K 线是否落后到今天 ≥1 个交易日（沿用 _trading_days_between：跳周末、不算节假日）。
+
+    周五收盘数据在周六/周日不判落后；周一开盘后再扫描才会触发补拉。
+    latest 为 None（库无该股）时视为需补拉。
+    """
+    if latest is None:
+        return True
+    return _trading_days_between(latest, today) >= 1
+
+
+def _ensure_fresh_cache(session: Session, code: str, df: object | None,
+                        settings, today: date) -> tuple[object | None, dict]:
+    """确保打分用到的 K 线是最新的：缓存命中但落后 → 增量补拉缺的最近几根。
+
+    增量补拉复用 sync_service.sync_one_stock（start=库里最后交易日+1 至今，写回 kline_daily
+    并刷新快照），随后重读缓存窗口。返回 (最新完整窗口 df|None, 增量结果 diag)。
+    """
+    latest = df["trade_date"].iloc[-1] if df is not None and not df.empty else None
+    if df is not None and not df.empty and not _is_stale(latest, today):
+        return df, {"pulled": False, "reason": "already_fresh"}
+    try:
+        # 增量补拉只拉缺失的最近几根（不清库），写回 KlineDaily
+        sync_one_stock(session, code)
+    except Exception:  # noqa: BLE001
+        logger.exception("增量补拉 %s 失败，沿用现有数据", code)
+        return df, {"pulled": False, "reason": "pull_failed"}
+    # 补拉后重读缓存（覆盖 1500 自然日窗口）
+    start = today - timedelta(days=settings.scan_kline_days)
+    fresh = _load_cached_kline(session, code, start)
+    return fresh, {"pulled": True, "reason": "pulled"}
+
+
 def _upsert(session: Session, code: str, name: str, scored: dict, trend: dict,
             scan_date: date, as_of_date: date | None, scope: str) -> None:
     row = session.get(StockScore, code)
@@ -177,12 +234,31 @@ def _build_plan(session: Session, scope: str, codes: list[str] | None,
     try:
         candidates, name_map = _build_pool(session, scope, codes, group_ids)
         if not force:
-            already = set(session.exec(
-                select(StockScore.code).where(StockScore.scan_date == today)
-            ).all())
-            todo = [c for c in candidates if c not in already]
+            # 当日已扫的记录 → 快照 as_of_date（该次打分用到的 K 线最后交易日）
+            scanned: dict[str, date | None] = {
+                r.code: r.as_of_date
+                for r in session.exec(
+                    select(StockScore.code, StockScore.as_of_date)
+                    .where(StockScore.scan_date == today)
+                ).all()
+            }
+            latest_dates = _latest_db_dates(session, list(scanned.keys()))
+            todo: list[str] = []
+            skipped = 0
+            for c in candidates:
+                if c in scanned:
+                    db_latest = latest_dates.get(c)
+                    snap_asof = scanned[c]
+                    # 当日已扫但 K 线库出现了更新的收盘线（比打分时 as_of_date 更晚）→ 用今日收盘重算
+                    if db_latest is not None and (snap_asof is None or db_latest > snap_asof):
+                        todo.append(c)
+                    else:
+                        skipped += 1
+                else:
+                    todo.append(c)
         else:
             todo = list(candidates)
+            skipped = 0
 
         with _scan_lock:
             _scan_state["total"] = len(todo)
@@ -191,7 +267,7 @@ def _build_plan(session: Session, scope: str, codes: list[str] | None,
             with _scan_lock:
                 _scan_state.update(running=False, finished_at=today.isoformat())
 
-        return {"todo": todo, "name_map": name_map, "total": len(todo), "skipped": len(candidates) - len(todo)}
+        return {"todo": todo, "name_map": name_map, "total": len(todo), "skipped": skipped}
     except Exception:  # noqa: BLE001
         with _scan_lock:
             _scan_state.update(running=False, finished_at=date.today().isoformat())
@@ -219,6 +295,7 @@ def _run_scan(todo: list[str], name_map: dict[str, str], settings, today: date, 
             dividend_map = {}
 
         # 1) 单 Session 串行读缓存（快路径；数据同步后绝大多数走这里）
+        #    缓存命中但落后到今天 → 仅增量补拉缺的最近几根（不重拉全量）
         end = date.today()
         start = end - timedelta(days=settings.scan_kline_days)
         cache_map: dict[str, object] = {}
@@ -227,9 +304,11 @@ def _run_scan(todo: list[str], name_map: dict[str, str], settings, today: date, 
             with Session(engine) as s:
                 for code in todo:
                     df = _load_cached_kline(s, code, start)
-                    if df is not None:
-                        cache_map[code] = df
-                    else:
+                    if df is None:
+                        need_net.append(code)
+                        continue
+                    cache_map[code], _diag = _ensure_fresh_cache(s, code, df, settings, end)
+                    if cache_map[code] is None:
                         need_net.append(code)
         except Exception:  # noqa: BLE001
             logger.exception("读 K 线缓存失败，全部走网络")
