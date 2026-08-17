@@ -21,6 +21,10 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # 数据源 https 证书校验在本机系统代理(Whistle)环境下失败，先装 requests 忽略校验补丁
+    from app.datasource.akshare_guard import install_tls_patch
+
+    install_tls_patch()
     init_db()
     start_scheduler()
     logger.info("应用启动完成")
