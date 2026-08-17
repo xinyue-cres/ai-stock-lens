@@ -1,13 +1,14 @@
 """选股扫描编排：候选池 → 拉 K 线 → 打分 + 趋势判断 → upsert StockScore。
 
 关键设计：
-- 扫描优先用库内 K 线缓存（单连接串行读，SQLite WAL 多连接并发读慢 8.7 倍），
-  覆盖 ≥ ~1000 根窗口才命中；缓存命中但落后到今天（≥1 交易日）→ 仅增量补拉缺的
-  最近几根（复用 sync_service.sync_one_stock），不重拉全量；缓存不够新才网络直拉。
+- 扫描优先用库内 K 线缓存（串行读），覆盖 ≥ ~1000 根窗口才命中；
+  缓存命中但落后到今天（≥1 交易日）→ 统一「并发增量补拉」缺的最近几根
+  （复用 sync_service 的工作台并发单只 worker _sync_one_isolated），不重拉全量；
+  缓存不足/补拉后仍不足才网络直拉。
 - 打分基于"今日收盘已入库"的最新 K 线；当日已扫但 K 线库又新增收盘线 → 自动重算。
-- ThreadPoolExecutor 并发 + 每请求 sleep 限流，防东财封禁。
+- 网络/补拉全程 ThreadPoolExecutor 并发 + 每请求 sleep 限流，防数据源封禁。
 - 全局 _scan_state 供前端轮询进度；进程级锁保证单扫描实例；支持取消。
-- 每个 worker 用独立的 SQLAlchemy Session（Session 不是线程安全的）。
+- 每个补拉 worker 用独立的 SQLAlchemy Session（Session 不是线程安全的）。
 """
 from __future__ import annotations
 
@@ -19,6 +20,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import date, timedelta
 
 import pandas as pd
+from sqlalchemy import text
 from sqlmodel import Session, select
 
 from app.config import get_settings
@@ -32,10 +34,20 @@ from app.models.stock import Stock
 from app.models.stock_score import StockScore
 from app.services.dividend_service import load_dividend_map
 from app.services.stock_service import watchlist_codes_in_groups
-from app.services.sync_service import sync_one_stock
+from app.services.sync_service import _sync_one_isolated
 from app.services.trader_service import _trading_days_between
 
 logger = logging.getLogger(__name__)
+
+# ETF/LOF 的缓存门槛：基金历史短、次新多，且 ETF 数据源常晚一天/不足 900 根；
+# 放宽到 ≥300 根即可打分（score_stock/_MIN_ROWS=60），避免不足 900 根就走网络拉取→失败→不显示。
+_ETF_MIN_BARS = 300
+
+
+def _min_bars_for(code: str, settings) -> int:
+    """打分窗口所需的缓存根数：ETF 放宽（_ETF_MIN_BARS），个股用扫描配置(默认 1000)。"""
+    return _ETF_MIN_BARS if is_fund_code(code) else settings.scan_kline_bars
+
 
 _scan_lock = threading.Lock()
 _scan_state: dict = {
@@ -116,29 +128,26 @@ def _build_pool(session: Session, scope: str, codes: list[str] | None,
 
 
 def _load_cached_kline(session: Session, code: str, start: date, min_bars: int = 1000) -> object | None:
-    """从 KlineDaily 读 K 线缓存（用调用方传入的单连接 Session）。
+    """从 KlineDaily 读 K 线缓存。
 
     覆盖扫描窗口（≥ min_bars × 0.9，容忍自然日/交易日换算误差）直接返回，否则 None 走网络拉取。
-    复用单连接串行读：SQLite WAL 多连接并发读竞争严重（实测 12 并发慢 8.7 倍），
-    扫描必须先单连接把所有缓存读完，未命中再并发网络。
+    用 pandas.read_sql 直连读（比 SQLModel ORM 逐行构造对象快 ~5 倍，扫描 1000+ 只时节省数秒）。
+    session 参数仅用于保持一致签名（真实查询走 engine 连接池）。
     """
-    from app.models.kline import KlineDaily
-
-    rows = list(session.exec(
-        select(KlineDaily)
-        .where(KlineDaily.code == code, KlineDaily.trade_date >= start)
-        .order_by(KlineDaily.trade_date.asc())
-    ))
-    if len(rows) < int(min_bars * 0.9):
+    sql = text("""
+        SELECT trade_date, open, high, low, close, volume, amount, turnover, pct_chg
+        FROM kline_daily
+        WHERE code = :code AND trade_date >= :start
+        ORDER BY trade_date ASC
+    """)
+    with engine.connect() as conn:
+        df = pd.read_sql(sql, conn, params={"code": code, "start": start})
+    if len(df) < int(min_bars * 0.9):
         return None
-    return pd.DataFrame([
-        {
-            "trade_date": r.trade_date, "open": r.open, "high": r.high,
-            "low": r.low, "close": r.close, "volume": r.volume,
-            "amount": r.amount, "turnover": r.turnover, "pct_chg": r.pct_chg,
-        }
-        for r in rows
-    ])
+    # read_sql 把 date 列读成 str；转回 date 以保持与 ORM 版一致（下游 _is_stale/排序/快照都用真日期）
+    if len(df) and not isinstance(df["trade_date"].iloc[0], date):
+        df["trade_date"] = pd.to_datetime(df["trade_date"]).dt.date
+    return df
 
 
 def _latest_db_dates(session: Session, codes: list[str]) -> dict[str, date | None]:
@@ -159,37 +168,28 @@ def _latest_db_dates(session: Session, codes: list[str]) -> dict[str, date | Non
     return out
 
 
-def _is_stale(latest: date | None, today: date) -> bool:
-    """K 线是否落后到今天 ≥1 个交易日（沿用 _trading_days_between：跳周末、不算节假日）。
+def _is_stale(latest: date | None, today: date, grace: int = 0) -> bool:
+    """K 线是否落后到今天超过 grace 个交易日（沿用 _trading_days_between：跳周末、不算节假日）。
 
-    周五收盘数据在周六/周日不判落后；周一开盘后再扫描才会触发补拉。
+    - 周五收盘数据在周六/周日不判落后；周一开盘后再扫描才会触发补拉。
+    - grace=0（个股）：落后今天 ≥1 交易日即算旧 → 需补拉。
+    - grace=1（ETF：数据源天然晚一天）：允许滞后再 1 个交易日，昨日数据仍视为最新 → 不补拉。
     latest 为 None（库无该股）时视为需补拉。
     """
     if latest is None:
         return True
-    return _trading_days_between(latest, today) >= 1
+    return _trading_days_between(latest, today) > grace
 
 
-def _ensure_fresh_cache(session: Session, code: str, df: object | None,
-                        settings, today: date) -> tuple[object | None, dict]:
-    """确保打分用到的 K 线是最新的：缓存命中但落后 → 增量补拉缺的最近几根。
+def _cache_needs_pull(df: object | None, today: date, grace: int = 0) -> bool:
+    """缓存窗口是否需要补拉：无数据或 K 线落后到今天超过 grace（沿用 _is_stale）。
 
-    增量补拉复用 sync_service.sync_one_stock（start=库里最后交易日+1 至今，写回 kline_daily
-    并刷新快照），随后重读缓存窗口。返回 (最新完整窗口 df|None, 增量结果 diag)。
+    仅做判定（不执行任何网络/写库），把"是否要补拉"交给调用方并发处理。
+    grace 透传给 _is_stale：ETF 传 1（允许昨日），个股传 0。
     """
-    latest = df["trade_date"].iloc[-1] if df is not None and not df.empty else None
-    if df is not None and not df.empty and not _is_stale(latest, today):
-        return df, {"pulled": False, "reason": "already_fresh"}
-    try:
-        # 增量补拉只拉缺失的最近几根（不清库），写回 KlineDaily
-        sync_one_stock(session, code)
-    except Exception:  # noqa: BLE001
-        logger.exception("增量补拉 %s 失败，沿用现有数据", code)
-        return df, {"pulled": False, "reason": "pull_failed"}
-    # 补拉后重读缓存（覆盖 1500 自然日窗口）
-    start = today - timedelta(days=settings.scan_kline_days)
-    fresh = _load_cached_kline(session, code, start)
-    return fresh, {"pulled": True, "reason": "pulled"}
+    if df is None or df.empty:
+        return True
+    return _is_stale(df["trade_date"].iloc[-1], today, grace)
 
 
 def _upsert(session: Session, code: str, name: str, scored: dict, trend: dict,
@@ -294,27 +294,43 @@ def _run_scan(todo: list[str], name_map: dict[str, str], settings, today: date, 
             logger.warning("预加载股息 map 失败，按无股息处理")
             dividend_map = {}
 
-        # 1) 单 Session 串行读缓存（快路径；数据同步后绝大多数走这里）
-        #    缓存命中但落后到今天 → 仅增量补拉缺的最近几根（不重拉全量）
+        # 1) 串行读缓存（快路径；数据同步后绝大多数走这里）
+        #    只做判定：已最新→直接用；缓存够但落后→收集待补拉；不足900→待网络
         end = date.today()
         start = end - timedelta(days=settings.scan_kline_days)
         cache_map: dict[str, object] = {}
         need_net: list[str] = []
+        pull_codes: list[str] = []
         try:
             with Session(engine) as s:
                 for code in todo:
-                    df = _load_cached_kline(s, code, start)
+                    df = _load_cached_kline(s, code, start, min_bars=_min_bars_for(code, settings))
                     if df is None:
                         need_net.append(code)
                         continue
-                    cache_map[code], _diag = _ensure_fresh_cache(s, code, df, settings, end)
-                    if cache_map[code] is None:
-                        need_net.append(code)
+                    if _cache_needs_pull(df, end, grace=1 if is_fund_code(code) else 0):
+                        pull_codes.append(code)  # 收集，稍后统一并发补拉（不在此串行原地拉）
+                    else:
+                        cache_map[code] = df
         except Exception:  # noqa: BLE001
             logger.exception("读 K 线缓存失败，全部走网络")
             need_net = list(todo)
 
-        # 2) 缓存未命中 → 并发网络拉取（网络 I/O 释放 GIL，并发提速）
+        # 1.5) 并发增量补拉（写回 kline_daily）——统一用工作台 sync_watchlist 那套
+        #     _sync_one_isolated（每 worker 独立 Session），避免逐只串行等网络
+        if pull_codes:
+            with ThreadPoolExecutor(max_workers=settings.scan_concurrency) as pool:
+                list(pool.map(_sync_one_isolated, pull_codes))
+            # 补拉后重读缓存
+            with Session(engine) as s:
+                for code in pull_codes:
+                    df = _load_cached_kline(s, code, start, min_bars=_min_bars_for(code, settings))
+                    if df is not None:
+                        cache_map[code] = df
+                    else:
+                        need_net.append(code)
+
+        # 2) 仍未命中 → 并发网络拉取（网络 I/O 释放 GIL，并发提速）
         def _fetch_net(code: str) -> tuple[str, object | None]:
             if _scan_state["cancel_requested"]:
                 return code, None

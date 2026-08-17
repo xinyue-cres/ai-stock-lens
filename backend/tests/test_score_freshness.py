@@ -1,21 +1,16 @@
-"""选股扫描"K 线最新性"单元测试：缓存最新性判定与增量补拉快路径。
+"""选股扫描"K 线最新性"单元测试：缓存最新性判定。
 
 覆盖纯逻辑部分：
 - _is_stale：缓存最后根是否落后到今天（跳周末，不算节假日）
-- _ensure_fresh_cache 的 already_fresh 快路径（缓存已最新时不触发同步/DB 访问）
+- _cache_needs_pull：判定该缓存窗口是否需要补拉（无数据/落后 → True）
 """
 from __future__ import annotations
 
 from datetime import date
 
 import pandas as pd
-import pytest
 
-from app.services.scoring_service import _ensure_fresh_cache, _is_stale
-
-
-def _noop_session(*_a, **_k):
-    raise AssertionError("已最新时不应当访问 DB / 触发同步")
+from app.services.scoring_service import _cache_needs_pull, _is_stale
 
 
 def _mk_df(last_date: date) -> pd.DataFrame:
@@ -52,13 +47,44 @@ class TestIsStale:
         assert _is_stale(friday, date(2026, 8, 17)) is True
 
 
-class TestEnsureFreshCacheAlreadyFresh:
-    """缓存已最新 → 快路径：直接返回原 df，不触碰 DB/不触发同步。"""
+class TestIsStaleGrace:
+    """ETF 档位（grace=1）：允许 K 线滞后 1 个交易日仍算最新（数据源天然晚一天）。"""
 
-    def test_fresh_returns_df(self):
+    def test_one_day_behind_not_stale_with_grace(self):
+        # 个股(grace=0)判定为旧；ETF(grace=1)允许滞后 1 交易日 → 昨日数据仍最新
+        friday = date(2026, 8, 14)
+        monday = date(2026, 8, 17)
+        assert _is_stale(friday, monday, grace=0) is True
+        assert _is_stale(friday, monday, grace=1) is False
+
+    def test_two_days_behind_stale_even_with_grace(self):
+        # 滞后 2 个交易日后，即便 ETF 也判为旧
+        thursday = date(2026, 8, 13)
+        monday = date(2026, 8, 17)
+        assert _is_stale(thursday, monday, grace=1) is True
+
+    def test_none_always_stale(self):
+        assert _is_stale(None, date(2026, 8, 17), grace=1) is True
+
+
+class TestCacheNeedsPull:
+    """判定缓存是否需补拉（无数据/落后 → True；已最新 → False，纯判定不触发 IO）。"""
+
+    def test_none_df_needs_pull(self):
+        assert _cache_needs_pull(None, date(2026, 8, 17)) is True
+
+    def test_empty_df_needs_pull(self):
+        assert _cache_needs_pull(pd.DataFrame(), date(2026, 8, 17)) is True
+
+    def test_fresh_no_pull(self):
         today = date(2026, 8, 17)
-        df = _mk_df(today)  # 最后根就是今天 → 非 stale
-        out, diag = _ensure_fresh_cache(_noop_session, "000001", df, None, today)
-        assert out is df
-        assert diag["pulled"] is False
-        assert diag["reason"] == "already_fresh"
+        assert _cache_needs_pull(_mk_df(today), today) is False
+
+    def test_stale_needs_pull(self):
+        assert _cache_needs_pull(_mk_df(date(2026, 8, 14)), date(2026, 8, 17)) is True
+
+    def test_etf_yesterday_no_pull_with_grace(self):
+        # 个股(grace=0)需要补拉；ETF(grace=1)昨日数据不补拉
+        today = date(2026, 8, 17)
+        assert _cache_needs_pull(_mk_df(date(2026, 8, 14)), today, grace=0) is True
+        assert _cache_needs_pull(_mk_df(date(2026, 8, 14)), today, grace=1) is False

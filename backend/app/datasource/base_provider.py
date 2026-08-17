@@ -39,8 +39,12 @@ def sina_symbol(code: str) -> str:
 
 
 def is_fund_code(code: str) -> bool:
-    """判断是否为场内基金（ETF/LOF）代码。"""
-    return code.startswith(("51", "56", "58", "15", "16"))
+    """判断是否为场内基金（ETF/LOF）代码。
+
+    沪市 6 位 5x 开头（51/52/56/58…）+ 深市 15/16 开头。含 52（LOF/跨境 ETF，
+    如 520790 港股通互联网ETF），此前漏掉导致被当成个股走错数据通道。
+    """
+    return code.startswith(("51", "52", "56", "58", "15", "16"))
 
 
 class BaseProvider:
