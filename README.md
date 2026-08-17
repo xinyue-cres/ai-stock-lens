@@ -23,8 +23,12 @@
 
 ### 选股打分
 - 全 A 股 + ETF 打分排行，核心维度「金叉延续性」：MACD DIF/DEA 金叉后能否涨一大段、不反复横跳
-- 趋势/可入手判断：金叉驱动决策树（可入手 / 过热 / 震荡 / 下跌），辅助波段适配、股息
+- 综合分 = 0.70·金叉延续性 + 0.20·波段适配 + 0.10·股息
+- **趋势状态机（8 态）**：金叉驱动决策树，`pullback_entry`（可入手）/ `left_entry`（左侧·轻仓·高风险）/ `strong_uptrend`（强趋势·可持有不追高）/ `weak_golden`（弱势金叉·别追）/ `overheat`（过热）/ `downtrend`（下跌）/ `range`（震荡）/ `insufficient`（数据不足）
+- **两档可入手**：`pullback_entry`（安全可入手）+ `left_entry`（左侧机会·高风险逆势·建议轻仓，前端紫色 ⚠ 提示）
+- **过峰信号评级**：MACD 柱体过峰（bar|acc_z 触发 × 量能）→ 置信度 0-100 五档，强档才进决策树降级；支持按过峰过滤（排除强档上涨过峰 / 只看下跌过峰）
 - 扫描进度实时展示，高分股一键加入自选，AI 逐股点评 + 整组汇总
+- 扫描拉取 **~1000 根日线（≈4 年，覆盖完整牛熊周期）** 做历史统计；扫描不落 K 线库，内存计算后只写结果
 
 ### 数据源
 - DataRouter fallback 链：东财 → BaoStock → 新浪 → 腾讯
@@ -111,20 +115,18 @@ ai-stock-lens/
 │   ├── run.py               # Windows 可执行版入口（自动开浏览器）
 │   └── app/
 │       ├── ai/              # prompts/ + normalizers + analyzer + client
-│       ├── api/             # FastAPI 路由 (signals, analysis, score, ...)
-│       ├── datasource/      # 多源 provider + fallback router
-│       ├── features/        # 选股打分引擎 + 趋势判断
-│       ├── indicators/      # 技术指标引擎
+│       ├── api/             # FastAPI 路由 (signals, analysis, score, sync, ...)
+│       ├── datasource/      # 多源 provider + fallback router（东财→BaoStock→新浪→腾讯）
+│       ├── features/        # 选股打分引擎 stock_scorer + 趋势状态机 trend_judge
+│       ├── indicators/      # 技术指标引擎（MA/BOLL/MACD/ADX/RSI/KDJ/量能/形态/周线）
 │       ├── models/          # SQLModel 数据模型
-│       └── services/        # 业务逻辑层
+│       └── services/        # 业务逻辑层（analysis/signals/trader/scoring/sync/...）
 ├── frontend/
 │   └── src/
-│       ├── api/             # HTTP 层 (一文件一领域)
-│       ├── pages/
-│       │   ├── StockList/   # 首页列表
-│       │   ├── StockDetail/ # 详情页
-│       │   └── Scoreboard/  # 选股打分页
-│       └── features/        # 分析 / 对话 / 自选 / 设置
+│       ├── api/             # HTTP 层（一文件一领域）
+│       ├── pages/           # StockList 首页 / StockDetail 详情 / Scoreboard 选股打分
+│       │                    # Positions 持仓 / Compare 对比 / SyncLogs 同步日志
+│       └── features/        # analysis 分析工作台 / watchlist 自选侧栏 / settings / status-bar
 ├── packaging/               # PyInstaller 打包 spec（Windows 可执行版）
 ├── .github/workflows/       # GitHub Actions（Windows 自动构建 + Release）
 └── docker-compose.yaml

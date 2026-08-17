@@ -1,7 +1,7 @@
 # AI Stock Lens · 架构设计
 
-> 版本：v3.0
-> 更新：2026-07-20
+> 版本：v3.1
+> 更新：2026-08-17
 > 定位：个人自用、本地部署的 A 股多视角 AI 技术分析工作台
 
 ---
@@ -92,18 +92,16 @@
 ```
 frontend/src/
 ├── App.tsx                 # 路由 + 顶部导航
-├── api/                    # HTTP 层（一文件一领域）
+├── api/                    # HTTP 层（一文件一领域：score/compare/positions/sync/...）
 ├── hooks/                  # 全局共享 hooks
 │   └── useSignalsQuery     # signals-today (列表+侧栏共享)
 ├── shared/                 # 纯工具 (theme, timeAgo)
 ├── pages/
-│   ├── StockList/          # 首页列表
-│   │   ├── index.tsx       # 组合逻辑 (~170行)
-│   │   ├── constants.ts    # 类型 + 常量
-│   │   └── components/     # SummaryBar, Toolbar, StockRow,
-│   │                       # GroupNav, BatchActionBar, GroupManagerModal
+│   ├── StockList/          # 首页列表（含分组/批量操作）
 │   ├── StockDetail/        # 详情页
+│   ├── Scoreboard/         # 选股打分页（趋势状态机排行 + AI 点评/汇总）
 │   ├── Positions/          # 持仓页
+│   ├── Compare/            # 对比页
 │   └── SyncLogs/           # 同步日志
 └── features/
     ├── stock-context/      # 当前股票 context（仅 code 管理）
@@ -125,7 +123,9 @@ frontend/src/
 ```
 /              → StockListPage (全宽列表 + 悬浮分组/批量面板)
 /stock/:code   → StockDetail   (左栏 sidebar + 右栏分析 Tabs)
-/positions     → Positions
+/scoreboard    → Scoreboard    (选股打分排行 + 趋势状态机)
+/positions     → Positions     (持仓管理)
+/compare       → Compare       (多股对比)
 /sync          → SyncLogs
 ```
 
@@ -178,6 +178,7 @@ models/        → 数据模型（SQLModel）
 | `market_service` | 大盘指数同步 + 市场摘要 | ~120 |
 | `stock_service` | 自选 CRUD + group_ids JSON 读写 | ~140 |
 | `position_service` | 持仓 CRUD + 盈亏计算 | ~80 |
+| `scoring_service` | 选股扫描编排（拉 K 线→打分→趋势判断→upsert）+ 进度/取消 | ~300 |
 
 ---
 
@@ -233,6 +234,49 @@ models/        → 数据模型（SQLModel）
 - SSE 流式输出
 - sessionStorage 持久化
 
+### 5.6 选股打分与趋势状态机（features 层）
+
+纯计算层，无 AI 参与、无 I/O，位于 `features/stock_scorer.py` + `features/trend_judge.py`，
+由 `scoring_service` 在扫描时驱动。
+
+**综合分**：`0.70·金叉延续性 + 0.20·波段适配 + 0.10·股息`
+- **金叉延续性**（核心）：纯历史统计——金叉后能否涨一大段、不反复横跳。
+  `0.60·金叉后大段上涨`（周期内峰值涨幅，均值/中位各半，开方×10 放大低分区分度）+ `0.40·金叉寿命`
+  （延续达标率 + 快速反叉惩罚 + 方差惩罚）。
+- **波段适配**：`sigma_20d` 适中最佳（三角归一，锚点 2~7% 峰 4%）× MA5 下方平均停留天数（节奏）。
+- **股息**：近 3 年平均股息率（个股）/ 中性 50（ETF/LOF）。
+
+**趋势状态机（8 态）**：`trend_judge.py::_decide_stage` 是纯决策函数（无 I/O，可单测）。
+金叉态（DIF > DEA）→ 上升候选，死叉态 → 左侧/下跌/观望。
+
+| 枚举 | 标签 | can_entry | 语义 |
+|---|---|---|---|
+| `pullback_entry` | 可入手 | ✅ 安全 | 金叉态·回踩/刚启动·历史可靠 |
+| `left_entry` | 左侧机会 | ✅ 高风险 | 死叉态·下跌过峰·历史尚可·轻仓 |
+| `strong_uptrend` | 上升趋势 | ❌ 持有 | 金叉态·ADX 强·已涨一段·可持有不追高逢高减 |
+| `weak_golden` | 弱势金叉 | ❌ | 金叉态·动能掉头（上涨过峰/走弱）·别追 |
+| `overheat` | 过热 | ❌ | 贴上轨（%B>0.85）·非强趋势 |
+| `downtrend` | 下跌趋势 | ❌ | 死叉·高位刚死叉·或历史差 |
+| `range` | 震荡 | ❌ | 观望（贴下轨/胜率不足/信号不明） |
+| `insufficient` | 数据不足 | ❌ | 数据 <60 根 |
+
+**两层可入手**：`can_entry` 保持布尔字段（`pullback_entry` 与 `left_entry` 都算 True），
+两档区分由前端按 `trend_stage` 判断——`left_entry` 用紫色系 +「左侧·轻仓」⚠ 提示，明确高风险逆势。
+
+**过峰信号评级**：`_peak_features` 用 `bar`（柱缩/柱回升）× `acc_z`（动能二阶导 z-score）触发，
+按「触发类型（bar 15 / acc 25 / 双 45）+ 量能（缩 0 / 中 15 / 放 30）」产出 `peak_conf` 0-100 五档
+（极弱≤20 / 弱21-35 / 中36-50 / 强51-65 / 极强≥66）。**强档以上（≥51）才进决策树降级**，
+弱/中档只做前端提示（避免误伤涨势中正常柱缩）。
+
+**关键阈值**（经验值，可数据校准）：
+`_SIGNAL_RELIABLE=72`（金叉延续可靠线）、`_LEFT_ENTRY_SIGNAL=64`（左侧专用低线，慢牛弱势股天然分低）、
+`_ADX_STRONG=25`（强趋势）、`_STRONG_TREND_GAIN=8%`（强趋势"已涨一段"）、`_PEAK_CONF_STRONG=51`（过峰强档）。
+
+**K 线历史窗口**：`config.scan_kline_bars = 1000`（≈ **4 年**，覆盖完整牛熊周期，避免 2 年窗口只含
+2024-09 起的单边牛市）；`scan_kline_days = 1000 × 1.5 = 1500 自然日`（1.4 只够 ~960 交易日，会致
+缓存覆盖判定永远不足）。扫描优先读库内缓存（单连接串行，SQLite WAL 多连接并发慢 8.7 倍），
+≥ `1000 × 0.9` 根命中，未命中才并发网络拉取（`scan_concurrency=12`）。
+
 ---
 
 ## 6. 数据层
@@ -259,6 +303,9 @@ index_chain = [EastMoney, Sina]
 | `ai_report_review` | 报告复盘评分 |
 | `position` | 持仓 (quantity, cost_price, opened_at) |
 | `app_setting` | 应用配置 (AI config / total_capital) |
+| `stock_score` | 选股打分结果（综合分 + 组件明细 + trend_stage/can_entry） |
+| `capital_flow_daily` | 资金流数据（对比/分析用） |
+| `stock_dividend` | 个股股息数据 |
 | `sync_log` | 同步日志 |
 
 ### 6.3 分组设计
@@ -289,6 +336,15 @@ index_chain = [EastMoney, Sina]
     → type='ai': 每只股票 3 视角并行 (Promise.all)
     → type='action_plan': 每只股票 1 次
     → per-item 状态实时回传给 StockRow 展示
+
+选股打分页 (Scoreboard):
+  POST /score/scan → scoring_service（手动触发，仅扫描不落 K 线库）
+     → 单连接串行读 K 线缓存（≥1000×0.9 根命中），未命中并发网络拉 ~1000 根
+     → 每只 compute_indicator_cache → score_stock + judge_trend = StockScore（含 trend_stage）
+     → 前端 GET /score/scan/status 轮询进度；GET /score/list 排行（按 peak_filter 过滤）
+  GET /score/{code}      → 打分明细 + 趋势判断卡
+  POST /score/trend/{code} → 独立 judge_trend（详情/工作台即算）
+  POST /score/summarize · analyze-batch → AI 整组汇总 / 逐股点评
 ```
 
 ---
@@ -312,6 +368,13 @@ index_chain = [EastMoney, Sina]
 | POST | `/api/sync/stock/{code}` | 同步单只 |
 | GET/PUT | `/api/settings/ai` | AI 配置 |
 | GET/PUT | `/api/settings/capital` | 总资金 |
+| GET | `/api/score/list` | 打分排行（sort/scope/group/peak_filter 过滤） |
+| GET | `/api/score/{code}` | 单只打分明细 |
+| POST | `/api/score/trend/{code}` | 趋势判断（独立调用 judge_trend） |
+| POST | `/api/score/scan` | 触发扫描（scope/codes/force/group_ids） |
+| GET/POST | `/api/score/scan/status` | 扫描进度轮询 / 取消 |
+| POST | `/api/score/summarize` | AI 整组汇总 |
+| POST | `/api/score/analyze-batch` | AI 逐股点评 |
 
 ---
 
@@ -351,9 +414,10 @@ cd frontend && pnpm dev
 | 项目 | 影响 | 优先级 |
 |------|------|--------|
 | `stock.group_id` 废弃字段 | 无功能影响，占空间 | 低 |
-| signals N+1 (逐股票 load_kline_df) | 26 只~1s，80 只可能 3s+ | 中 |
+| 自选信号扫描逐股票 load_kline_df | 已优化记忆体复用 + 单连接缓存读；80 只仍可能 2-3s | 中 |
 | Toolbar 19 个 props | 可读性差 | 低 |
 | 对话历史仅 sessionStorage | 关页丢失 | 设计决策 |
+| 趋势状态机阈值（ADX/涨幅/胜率）为经验值 | 上线后可据此前的数据回放校准 | 中 |
 
 ---
 
