@@ -17,7 +17,9 @@ from app.models.stock import Stock
 from app.models.sync_log import SyncLog
 
 # 并发同步 worker 数（瓶颈是网络拉取；SQLite 已配 WAL + busy_timeout=30s 容忍并发写）
-_SYNC_WORKERS = 8
+# 实测（8-18 自选 50 只）：16 是甜点（19s / 380ms/只）、12 紧随其后（21s / 422ms/只），
+# 8 被东财频繁 cooldown 反而最慢（242s），20+ 触发 eastmoney rate limit fallback baostock 串行
+_SYNC_WORKERS = 12
 
 # 全量同步实时进度（前端弹窗轮询用；进程级单实例，用锁保护）
 _sync_lock = threading.Lock()
@@ -128,14 +130,20 @@ def sync_one_stock(session: Session, code: str, full: bool = False) -> int:
         start = end - timedelta(days=365 * 5)
     else:
         latest = _latest_date_in_db(session, code)
-        start = (latest + timedelta(days=1)) if latest else end - timedelta(days=365 * 5)
+        if latest:
+            # 增量拉取多带 2 天窗口：sina/etf/指数 的 pct_chg = close.pct_change() 需要
+            # 上一天 close 作基准。只拉 1 根时 pct_change 是 NaN 被 fillna(0) → 显示 0%。
+            # 加 2 天后 df ≥3 根，pct_change 能算对；多余行用 session.merge 幂等更新，不重复入库。
+            start = latest - timedelta(days=2)
+        else:
+            start = end - timedelta(days=365 * 5)
         # 若最近一次入库的日期就是今天，且当前仍在盘中：那条数据可能是盘中脏快照，
         # 强制回退一天并删除今日行，以便本次同步能重新拉当天的最新值。
         if latest == end and _is_intraday(end):
             logger.info("[%s] 盘中重拉当天：删除 %s 已有行", code, end)
             session.exec(delete(KlineDaily).where(KlineDaily.code == code, KlineDaily.trade_date == end))
             session.commit()
-            start = end
+            start = end - timedelta(days=1)
 
     if start > end:
         # K 线已最新（无新数据可拉）：快照仍可能落后，用库最新行刷新
@@ -222,7 +230,22 @@ def _refresh_score_snapshot(session: Session, code: str) -> None:
     if score is None:
         return
     score.close = float(latest_row.close) if latest_row.close is not None else None
-    score.pct_chg = _safe_float(latest_row.pct_chg)
+
+    # 若 pct_chg 为 None 或异常 0（常见：sina/etf/指数 增量拉只含 1 根，pct_change NaN 被 fillna(0)），
+    # 用 K 线库前一天 close 反算真实涨跌幅——不覆盖合法 0%（两端 close 真相同则 pct_chg 也保持 0）。
+    pct_chg = _safe_float(latest_row.pct_chg)
+    if pct_chg is None or pct_chg == 0:
+        prev_close = session.exec(
+            select(KlineDaily.close)
+            .where(KlineDaily.code == code, KlineDaily.trade_date < latest_row.trade_date)
+            .order_by(KlineDaily.trade_date.desc()).limit(1)
+        ).first()
+        if prev_close and prev_close > 0 and latest_row.close:
+            true_pct = (float(latest_row.close) / float(prev_close) - 1) * 100
+            if abs(true_pct) > 0.0001:  # 真涨/真跌才覆盖
+                pct_chg = true_pct
+
+    score.pct_chg = round(pct_chg, 2) if pct_chg is not None else None
     score.turnover = _safe_float(latest_row.turnover)
     score.as_of_date = latest_row.trade_date
     session.add(score)

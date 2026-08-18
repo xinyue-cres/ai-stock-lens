@@ -133,7 +133,11 @@ export default function StockListPage() {
   const handleBatchStart = useCallback((type: BatchTaskType) => {
     const codes = [...selected]
     if (codes.length === 0) return
-    batchRun(type, codes, 5, (state) => {
+    // 并发按类型分离：sync 只发 K 线请求拉到 8（实测 8-19 并发 50 只自选耗时 242s/21s/19s/33s/32s，
+    // 超过 16 反而触发东财 rate limit 强制 fallback baostock 全局锁）；
+    // ai/action_plan 每只内还各并行 4 个 horizon 调 DeepSeek，拼太高会触发 rate limit，保持 3
+    const concurrency = type === 'sync' ? 8 : 3
+    batchRun(type, codes, concurrency, (state) => {
       setBatchState(state)
       if (!state.running) {
         const errors = [...state.items.values()].filter(s => s.status === 'error').length

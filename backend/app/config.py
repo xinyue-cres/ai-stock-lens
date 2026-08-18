@@ -34,7 +34,9 @@ class Settings(BaseSettings):
     sync_cron_minute: int = 10
 
     # 选股打分扫描（仅手动触发；scan_enabled/scan_cron_* 已移除，不再定时自动扫全 A）
-    scan_concurrency: int = 12
+    # scan 网络拉取并发：12+ 会触发东财 rate limit 连续失败进入 300s cooldown，
+    # 触发 fallback 到 baostock/sina（全局锁串行），扫描全程卡死。保持 6 保守保瑜
+    scan_concurrency: int = 6
     scan_kline_bars: int = 1000  # 扫描拉取约 4 年（覆盖完整牛熊周期，避免 2 年窗口只含单边牛市）
 
     @property
