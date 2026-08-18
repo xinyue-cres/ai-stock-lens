@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { memo, useState } from 'react'
 import { Button, Tag, Tooltip, Typography } from 'antd'
 import { FolderOpenOutlined, LineChartOutlined, PlusOutlined } from '@ant-design/icons'
 import type { ScoreItem } from '@/api/score'
@@ -37,20 +37,22 @@ function stateColor(s: string): string {
 interface ScoreRowProps {
   item: ScoreItem
   active: boolean
-  onClick: () => void
+  onClick: (code: string) => void
   onAddWatchlist: (code: string) => void
   onOpenDetail: (code: string) => void
   onOpenWorkbench: (item: ScoreItem) => void
 }
 
-export default function ScoreRow({ item, active, onClick, onAddWatchlist, onOpenDetail, onOpenWorkbench }: ScoreRowProps) {
+// React.memo：200 行 Rank 列表选中/30s 轮询时，只 active 变化的行重渲染；
+// 父组件必须保证回调（onClick/onAddWatchlist/onOpenDetail/onOpenWorkbench）引用稳定才能命中 memo。
+function ScoreRow({ item, active, onClick, onAddWatchlist, onOpenDetail, onOpenWorkbench }: ScoreRowProps) {
   const [hovered, setHovered] = useState(false)
   const pct = item.pct_chg
   const stage = item.trend_stage ? STAGE_PALETTE[item.trend_stage] : null
 
   return (
     <div
-      onClick={onClick}
+      onClick={() => onClick(item.code)}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
@@ -203,3 +205,5 @@ export default function ScoreRow({ item, active, onClick, onAddWatchlist, onOpen
     </div>
   )
 }
+
+export default memo(ScoreRow)
