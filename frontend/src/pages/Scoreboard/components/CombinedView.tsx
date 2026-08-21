@@ -4,20 +4,9 @@ import { Card, Empty, Segmented, Spin, Tag, Typography, message } from 'antd'
 import { PlusOutlined } from '@ant-design/icons'
 import { Button } from 'antd'
 import { getCombinedList, type CombinedItem, type CombinedStage } from '@/api/score'
-import { STAGE_PALETTE } from '../constants'
+import { COMBINED_PALETTE, STAGE_PALETTE } from '../constants'
 
 const { Text } = Typography
-
-/** 7 档 combined_stage → 标签主题色 + icon + label */
-const COMBINED_PALETTE: Record<CombinedStage, { color: string; bg: string; border: string; icon: string; label: string }> = {
-  strong_buy:          { color: '#dc2626', bg: '#fef2f2', border: '#fecaca', icon: '🐂', label: '强买信号' },
-  buy:                 { color: '#ea580c', bg: '#fff7ed', border: '#fed7aa', icon: '📈', label: '买入' },
-  watch_buy:           { color: '#d97706', bg: '#fffbeb', border: '#fde68a', icon: '👀', label: '观察买' },
-  deep_pullback_entry: { color: '#65a30d', bg: '#f7fee7', border: '#d9f99d', icon: '🎯', label: '深度回踩' },
-  light_buy:           { color: '#0891b2', bg: '#ecfeff', border: '#a5f3fc', icon: '💡', label: '轻仓试' },
-  watch:               { color: '#6b7280', bg: '#f9fafb', border: '#e5e7eb', icon: '⏸️', label: '观望' },
-  avoid:               { color: '#4b5563', bg: '#f3f4f6', border: '#d1d5db', icon: '🚫', label: '回避' },
-}
 
 interface CombinedRowProps {
   item: CombinedItem

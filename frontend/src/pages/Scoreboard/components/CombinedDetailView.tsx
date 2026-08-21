@@ -1,19 +1,9 @@
 import { Button, Card, Empty, Space, Tag, Typography, Divider } from 'antd'
 import { PlusOutlined } from '@ant-design/icons'
-import type { CombinedItem, CombinedStage } from '@/api/score'
-import { STAGE_PALETTE } from '../constants'
+import type { CombinedItem } from '@/api/score'
+import { COMBINED_PALETTE, STAGE_PALETTE } from '../constants'
 
-const { Title, Text, Paragraph } = Typography
-
-const COMBINED_PALETTE: Record<CombinedStage, { color: string; bg: string; border: string; icon: string; label: string; action: string }> = {
-  strong_buy:          { color: '#dc2626', bg: '#fef2f2', border: '#fecaca', icon: '🐂', label: '强买信号', action: '重仓买入' },
-  buy:                 { color: '#ea580c', bg: '#fff7ed', border: '#fed7aa', icon: '📈', label: '买入',     action: '可买入' },
-  watch_buy:           { color: '#d97706', bg: '#fffbeb', border: '#fde68a', icon: '👀', label: '观察买',   action: '加自选盯日线' },
-  deep_pullback_entry: { color: '#65a30d', bg: '#f7fee7', border: '#d9f99d', icon: '🎯', label: '深度回踩', action: '轻仓分批' },
-  light_buy:           { color: '#0891b2', bg: '#ecfeff', border: '#a5f3fc', icon: '💡', label: '轻仓试',   action: '轻仓试仓' },
-  watch:               { color: '#6b7280', bg: '#f9fafb', border: '#e5e7eb', icon: '⏸️', label: '观望',     action: '不动' },
-  avoid:               { color: '#4b5563', bg: '#f3f4f6', border: '#d1d5db', icon: '🚫', label: '回避',     action: '回避' },
-}
+const { Text, Paragraph } = Typography
 
 /** 一腿（weekly / daily）的核心数据块 */
 function LegBlock({ title, leg }: { title: '周线' | '日线'; leg: CombinedItem['weekly'] }) {
