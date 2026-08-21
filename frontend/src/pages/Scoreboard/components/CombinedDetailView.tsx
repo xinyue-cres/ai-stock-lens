@@ -82,45 +82,13 @@ export default function CombinedDetailView({ detail, onAddWatchlist }: CombinedD
 
       {/* 综合分 + 操作建议 */}
       <Card size="small" title="综合评判">
-        <div style={{ display: 'grid', gridTemplateColumns: '100px 1fr', gap: 16 }}>
-          <div style={{ textAlign: 'center', padding: '12px 8px', background: palette.bg, borderRadius: 6, border: `1px solid ${palette.border}` }}>
+        {/* 第一行：score + action/reason/hint */}
+        <div style={{ display: 'flex', gap: 20, marginBottom: 12, alignItems: 'flex-start' }}>
+          <div style={{ textAlign: 'center', padding: '8px 16px', background: palette.bg, borderRadius: 6, border: `1px solid ${palette.border}`, flexShrink: 0 }}>
             <div style={{ fontWeight: 700, fontSize: 26, color: palette.color }}>{detail.combined_score.toFixed(1)}</div>
             <Text type="secondary" style={{ fontSize: 11 }}>综合分</Text>
-            {/* 涨幅空间：当前已涨 + 剩余预期（来自该股历史金叉 peak）*/}
-            {(detail.hist_golden_peak_median != null || detail.weekly_signal_gain_pct != null) && (() => {
-              const cur = detail.weekly_signal_gain_pct ?? 0
-              const med = detail.hist_golden_peak_median ?? 0
-              const avg = detail.hist_golden_peak_pct ?? 0
-              const remain_med = med - cur
-              const remain_avg = avg - cur
-              return (
-                <div style={{ marginTop: 8, borderTop: `1px dashed ${palette.border}`, paddingTop: 6, display: 'flex', flexDirection: 'column', gap: 2 }}>
-                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
-                    <div style={{ fontWeight: 600, fontSize: 12, color: cur > 0 ? '#16a34a' : '#dc2626' }}>
-                      {cur > 0 ? `+${cur.toFixed(1)}%` : `${cur.toFixed(1)}%`}
-                    </div>
-                    <Text type="secondary" style={{ fontSize: 10 }}>当前已涨</Text>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
-                    <div style={{ fontWeight: 700, fontSize: 13, color: remain_med >= 10 ? '#16a34a' : remain_med > 0 ? '#0891b2' : '#d97706' }}>
-                      {remain_med > 0 ? `+${remain_med.toFixed(1)}%` : `${remain_med.toFixed(1)}%`}
-                    </div>
-                    <Text type="secondary" style={{ fontSize: 10 }}>剩余中位预期</Text>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
-                    <div style={{ fontWeight: 600, fontSize: 12, color: remain_avg >= 10 ? '#16a34a' : remain_avg > 0 ? '#0891b2' : '#d97706' }}>
-                      {remain_avg > 0 ? `+${remain_avg.toFixed(1)}%` : `${remain_avg.toFixed(1)}%`}
-                    </div>
-                    <Text type="secondary" style={{ fontSize: 10 }}>剩余平均预期</Text>
-                  </div>
-                  <Text type="secondary" style={{ fontSize: 9, marginTop: 2 }}>
-                    历史中位 {med > 0 ? `+${med.toFixed(1)}%` : '-'} · 历史平均 {avg > 0 ? `+${avg.toFixed(1)}%` : '-'}
-                  </Text>
-                </div>
-              )
-            })()}
           </div>
-          <div>
+          <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 6 }}>
               {palette.action}
             </div>
@@ -144,6 +112,45 @@ export default function CombinedDetailView({ detail, onAddWatchlist }: CombinedD
             )}
           </div>
         </div>
+
+        {/* 第二行：涨幅空间（整宽 4 列网格大字）*/}
+        {(detail.hist_golden_peak_median != null || detail.weekly_signal_gain_pct != null) && (() => {
+          const cur = detail.weekly_signal_gain_pct ?? 0
+          const med = detail.hist_golden_peak_median ?? 0
+          const avg = detail.hist_golden_peak_pct ?? 0
+          const remain_med = med - cur
+          const remain_avg = avg - cur
+          const Item = ({ val, label, hint }: { val: string; label: string; hint: string }) => (
+            <div style={{ textAlign: 'center', padding: '10px 8px', background: '#fafafa', borderRadius: 6, border: '1px solid #f0f0f0' }}>
+              <div style={{ fontWeight: 700, fontSize: 18, color: hint }}>{val}</div>
+              <Text type="secondary" style={{ fontSize: 11 }}>{label}</Text>
+            </div>
+          )
+          return (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, borderTop: '1px dashed #e5e7eb', paddingTop: 12 }}>
+              <Item
+                val={cur > 0 ? `+${cur.toFixed(1)}%` : `${cur.toFixed(1)}%`}
+                label="当前已涨"
+                hint={cur > 0 ? '#16a34a' : '#dc2626'}
+              />
+              <Item
+                val={remain_med > 0 ? `+${remain_med.toFixed(1)}%` : `${remain_med.toFixed(1)}%`}
+                label="剩余中位预期"
+                hint={remain_med >= 10 ? '#16a34a' : remain_med > 0 ? '#0891b2' : '#d97706'}
+              />
+              <Item
+                val={remain_avg > 0 ? `+${remain_avg.toFixed(1)}%` : `${remain_avg.toFixed(1)}%`}
+                label="剩余平均预期"
+                hint={remain_avg >= 10 ? '#16a34a' : remain_avg > 0 ? '#0891b2' : '#d97706'}
+              />
+              <Item
+                val={`${med > 0 ? `+${med.toFixed(1)}` : '-'} / ${avg > 0 ? `+${avg.toFixed(1)}` : '-'}%`}
+                label="历史中位 / 平均"
+                hint="#6b7280"
+              />
+            </div>
+          )
+        })()}
       </Card>
 
       {/* 双腿 detail */}
