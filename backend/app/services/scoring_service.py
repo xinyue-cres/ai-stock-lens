@@ -280,10 +280,33 @@ def _combined_upsert(session: Session, code: str, name: str,
         sig = comp.get("signal") or {}
         return sig.get("peak_signal"), int(sig.get("peak_conf") or 0)
 
+    def _pct_b_of(r) -> float | None:
+        """从 components_json 提取 BOLL pct_b（trend.indicators.pct_b）。"""
+        if not r or not r.components_json:
+            return None
+        try:
+            comp = json.loads(r.components_json)
+        except Exception:  # noqa: BLE001
+            return None
+        ind = (comp.get("trend") or {}).get("indicators") or {}
+        v = ind.get("pct_b")
+        return float(v) if isinstance(v, (int, float)) else None
+
     w_peak, w_conf = _peak_of(weekly_row)
     d_peak, d_conf = _peak_of(daily_row)
+    w_pct_b = _pct_b_of(weekly_row)
+    d_pct_b = _pct_b_of(daily_row)
 
     stage = combined_stage(w_stage, d_stage)
+
+    # 入场时机不优约束：BOLL pct_b >= 0.8 时 strong_buy 降级到 buy。
+    # 历史数据（100 只票×59509 时点 fwd 5 日收益）：pct_b 0.5-0.8 中位 +0.08%，
+    # 0.8-0.95 中位 -0.14%（已短期转负）；强买档必须更严。
+    # 只 applied 到 strong_buy，不 cascaded 整条 trend_judge 决策。
+    if stage == "strong_buy":
+        worst_pct_b = max((p for p in (w_pct_b, d_pct_b) if p is not None), default=None)
+        if worst_pct_b is not None and worst_pct_b >= 0.8:
+            stage = "buy"
     total = combined_score(w_total, d_total, stage)
     meta = combined_meta(stage)
     can_entry = stage in ("strong_buy", "buy", "light_buy", "deep_pullback_entry")
