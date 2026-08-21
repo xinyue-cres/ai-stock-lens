@@ -348,6 +348,7 @@ def _combined_upsert(session: Session, code: str, name: str,
     space_pct: float | None = None
     hist_golden_peak_pct: float | None = None
     hist_golden_peak_median: float | None = None
+    weekly_signal_gain_pct: float | None = None
     # 用 weekly 的 signal_summary（weekly 是揭示"该股金叉周期气质"的更稳定层次；
     # daily bar 太敏感、把金叉冲涨幅看扁）
     if weekly_row is not None and weekly_row.components_json:
@@ -361,6 +362,10 @@ def _combined_upsert(session: Session, code: str, name: str,
                 hist_golden_peak_pct = hp
             if isinstance(hm, (int, float)):
                 hist_golden_peak_median = hm
+            # 当前金叉已涨幅（这周 K 上 signal_gain_pct，供 "剩余涨幅" 推导）
+            sg = sig.get("signal_gain_pct")
+            if isinstance(sg, (int, float)):
+                weekly_signal_gain_pct = round(sg, 2)
         except (json.JSONDecodeError, TypeError, ValueError):
             pass
     # dist_high 副参考（daily）
@@ -380,6 +385,7 @@ def _combined_upsert(session: Session, code: str, name: str,
     row.space_pct = space_pct
     row.hist_golden_peak_pct = hist_golden_peak_pct
     row.hist_golden_peak_median = hist_golden_peak_median
+    row.weekly_signal_gain_pct = weekly_signal_gain_pct
     # as_of_date 用两条腿中较新的一个
     candidates = [r.as_of_date for r in (daily_row, weekly_row) if r and r.as_of_date]
     row.as_of_date = max(candidates) if candidates else None

@@ -70,7 +70,7 @@ function CombinedRow({ item, active, onClick, onAddWatchlist }: CombinedRowProps
       </div>
 
       {/* 第二行：weekly / daily 两条腿的简版状态 */}
-      <div style={{ display: 'flex', gap: 10, fontSize: 11, color: 'rgba(0,0,0,0.65)', marginBottom: 4 }}>
+      <div style={{ display: 'flex', gap: 10, fontSize: 11, color: 'rgba(0,0,0,0.65)', marginBottom: 4, flexWrap: 'wrap', rowGap: 2 }}>
         <span style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
           <span style={{ color: 'rgba(0,0,0,0.45)' }}>周</span>
           <span style={{ fontWeight: 600 }}>{item.weekly.total_score?.toFixed(0) ?? '-'}</span>
@@ -81,6 +81,25 @@ function CombinedRow({ item, active, onClick, onAddWatchlist }: CombinedRowProps
           <span style={{ fontWeight: 600 }}>{item.daily.total_score?.toFixed(0) ?? '-'}</span>
           {dStage && <span style={{ color: dStage.color }}>{dStage.label}</span>}
         </span>
+        {/* signal_score 双腿 + 剩余中位预期 */}
+        <span style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <span style={{ color: 'rgba(0,0,0,0.45)' }}>信</span>
+          <span style={{ fontWeight: 500 }}>
+            {item.weekly.signal_score?.toFixed(0) ?? '-'}/{item.daily.signal_score?.toFixed(0) ?? '-'}
+          </span>
+        </span>
+        {/* 历史可预期： 剩余中位（hist_med - signal_gain）*/}
+        {item.hist_golden_peak_median != null && item.weekly_signal_gain_pct != null && (() => {
+          const remain = item.hist_golden_peak_median - item.weekly_signal_gain_pct
+          return (
+            <span style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <span style={{ color: 'rgba(0,0,0,0.45)' }}>余中</span>
+              <span style={{ fontWeight: 600, color: remain >= 10 ? '#16a34a' : remain > 0 ? '#0891b2' : '#d97706' }}>
+                {remain > 0 ? `+${remain.toFixed(0)}%` : `${remain.toFixed(0)}%`}
+              </span>
+            </span>
+          )
+        })()}
         {!item.in_watchlist && (
           <Button
             size="small"
@@ -156,14 +175,14 @@ export function CombinedList({
           onChange={(v) => setStageFilter(v as typeof stageFilter)}
           options={[
             { value: 'all', label: '全部' },
-            { value: 'entry', label: '入手' },
-            { value: 'watch', label: '⏸️ 观望' },
-            { value: 'avoid', label: '🚫 回避' },
+            { value: 'entry', label: '可入手' },
             { value: 'strong_buy', label: '🐂 强买' },
             { value: 'buy', label: '📈 买入' },
+            { value: 'light_buy', label: '💡 轻仓' },
             { value: 'deep_pullback_entry', label: '🎯 回踩' },
             { value: 'watch_buy', label: '👀 观察' },
-            { value: 'light_buy', label: '💡 轻仓' },
+            { value: 'watch', label: '⏸️ 观望' },
+            { value: 'avoid', label: '🚫 回避' },
           ]}
         />
       </div>

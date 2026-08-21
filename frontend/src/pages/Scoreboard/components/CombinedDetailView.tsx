@@ -86,26 +86,39 @@ export default function CombinedDetailView({ detail, onAddWatchlist }: CombinedD
           <div style={{ textAlign: 'center', padding: '12px 8px', background: palette.bg, borderRadius: 6, border: `1px solid ${palette.border}` }}>
             <div style={{ fontWeight: 700, fontSize: 26, color: palette.color }}>{detail.combined_score.toFixed(1)}</div>
             <Text type="secondary" style={{ fontSize: 11 }}>综合分</Text>
-            {/* 历史金叉 peak 统计（该股气质的可预期涨幅）：中位 + 均值 */}
-            {(detail.hist_golden_peak_median != null || detail.hist_golden_peak_pct != null) && (
-              <div style={{ marginTop: 8, borderTop: `1px dashed ${palette.border}`, paddingTop: 6, display: 'flex', flexDirection: 'column', gap: 2 }}>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
-                  <div style={{ fontWeight: 700, fontSize: 13, color: (detail.hist_golden_peak_median ?? 0) >= 15 ? '#16a34a' : (detail.hist_golden_peak_median ?? 0) >= 8 ? '#0891b2' : '#d97706' }}>
-                    {detail.hist_golden_peak_median != null ? `+${detail.hist_golden_peak_median.toFixed(1)}%` : '-'}
+            {/* 涨幅空间：当前已涨 + 剩余预期（来自该股历史金叉 peak）*/}
+            {(detail.hist_golden_peak_median != null || detail.weekly_signal_gain_pct != null) && (() => {
+              const cur = detail.weekly_signal_gain_pct ?? 0
+              const med = detail.hist_golden_peak_median ?? 0
+              const avg = detail.hist_golden_peak_pct ?? 0
+              const remain_med = med - cur
+              const remain_avg = avg - cur
+              return (
+                <div style={{ marginTop: 8, borderTop: `1px dashed ${palette.border}`, paddingTop: 6, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+                    <div style={{ fontWeight: 600, fontSize: 12, color: cur > 0 ? '#16a34a' : '#dc2626' }}>
+                      {cur > 0 ? `+${cur.toFixed(1)}%` : `${cur.toFixed(1)}%`}
+                    </div>
+                    <Text type="secondary" style={{ fontSize: 10 }}>当前已涨</Text>
                   </div>
-                  <Text type="secondary" style={{ fontSize: 10 }}>历史中位</Text>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
-                  <div style={{ fontWeight: 600, fontSize: 12, color: (detail.hist_golden_peak_pct ?? 0) >= 15 ? '#16a34a' : (detail.hist_golden_peak_pct ?? 0) >= 8 ? '#0891b2' : '#d97706' }}>
-                    {detail.hist_golden_peak_pct != null ? `+${detail.hist_golden_peak_pct.toFixed(1)}%` : '-'}
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+                    <div style={{ fontWeight: 700, fontSize: 13, color: remain_med >= 10 ? '#16a34a' : remain_med > 0 ? '#0891b2' : '#d97706' }}>
+                      {remain_med > 0 ? `+${remain_med.toFixed(1)}%` : `${remain_med.toFixed(1)}%`}
+                    </div>
+                    <Text type="secondary" style={{ fontSize: 10 }}>剩余中位预期</Text>
                   </div>
-                  <Text type="secondary" style={{ fontSize: 10 }}>历史平均</Text>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+                    <div style={{ fontWeight: 600, fontSize: 12, color: remain_avg >= 10 ? '#16a34a' : remain_avg > 0 ? '#0891b2' : '#d97706' }}>
+                      {remain_avg > 0 ? `+${remain_avg.toFixed(1)}%` : `${remain_avg.toFixed(1)}%`}
+                    </div>
+                    <Text type="secondary" style={{ fontSize: 10 }}>剩余平均预期</Text>
+                  </div>
+                  <Text type="secondary" style={{ fontSize: 9, marginTop: 2 }}>
+                    历史中位 {med > 0 ? `+${med.toFixed(1)}%` : '-'} · 历史平均 {avg > 0 ? `+${avg.toFixed(1)}%` : '-'}
+                  </Text>
                 </div>
-                <Text type="secondary" style={{ fontSize: 9, marginTop: 2 }}>
-                  距60高 {detail.space_pct != null ? `+${detail.space_pct.toFixed(1)}%` : '-'}
-                </Text>
-              </div>
-            )}
+              )
+            })()}
           </div>
           <div>
             <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 6 }}>

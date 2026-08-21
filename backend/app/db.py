@@ -118,6 +118,7 @@ def init_db() -> None:
     # 增量迁移：stock_score_combined 历史金叉 peak 统计（该股气质）
     _migrate_add_column("stock_score_combined", "hist_golden_peak_pct", "FLOAT")
     _migrate_add_column("stock_score_combined", "hist_golden_peak_median", "FLOAT")
+    _migrate_add_column("stock_score_combined", "weekly_signal_gain_pct", "FLOAT")
 
     # 增量迁移：stock.pinned
     _migrate_add_column("stock", "pinned", "BOOLEAN DEFAULT 0")

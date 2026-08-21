@@ -41,5 +41,7 @@ class StockScoreCombined(SQLModel, table=True):
     # 历史金叉周期涨幅（该股的"气质"，比 60 日高更能代表预期空间；来自 signal_summary）
     hist_golden_peak_pct: float | None = Field(default=None, description="该股历史金叉周期峰值涨幅均值 %")
     hist_golden_peak_median: float | None = Field(default=None, description="该股历史金叉周期峰值涨幅中位 %")
+    # 当前金叉已涨幅（这周 K 上的当前信号累计涨跌；供"剩余涨幅"推导）
+    weekly_signal_gain_pct: float | None = Field(default=None, description="weekly 当前金叉状态下累计已涨幅 %")
 
     as_of_date: date | None = Field(default=None)
