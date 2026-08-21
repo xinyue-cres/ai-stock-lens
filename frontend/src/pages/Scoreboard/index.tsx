@@ -1,24 +1,12 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { Card, Empty, Spin, message } from 'antd'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import {
-  analyzeBatchScore,
-  cancelScan,
-  getScanStatus,
-  getScoreDetail,
-  getScoreList,
-  runScan,
-  ScoreDetail as ScoreDetailType,
-  ScoreItem as ScoreItemType,
-  StockComment as StockCommentType,
-  ScoreSummary as ScoreSummaryType,
-  summarizeScore,
-} from '@/api/score'
-import { getCombinedDetail } from '@/api/score'
-import { getGroups } from '@/api/groups'
-import { addWatchlist } from '@/api/watchlist'
-import { useInvalidation } from '@/hooks/useInvalidation'
+import { Card, Empty, Spin } from 'antd'
+import { ScoreItem as ScoreItemType } from '@/api/score'
+
+import { useScoreboardData } from './hooks/useScoreboardData'
+import { useScoreboardActions } from './hooks/useScoreboardActions'
+import { useScoreboardState } from './useScoreboardState'
+
 import ScoreboardToolbar from './components/ScoreboardToolbar'
 import ScoreRow from './components/ScoreRow'
 import ScoreDetailView from './components/ScoreDetail'
@@ -27,11 +15,8 @@ import CombinedDetailView from './components/CombinedDetailView'
 import ScoreCriteriaModal from './components/ScoreCriteriaModal'
 import ScoreSummaryModal from './components/ScoreSummaryModal'
 import ScoreCommentsModal from './components/ScoreCommentsModal'
-import { useScoreboardState } from './useScoreboardState'
 
 export default function ScoreboardPage() {
-  const qc = useQueryClient()
-  const globalInv = useInvalidation()
   const navigate = useNavigate()
   // 跳转到个股完整详情页（useCallback 稳定引用，避免 ScoreRow memo 被 props 变化命中变失效）
   const openDetail = useCallback((code: string) => navigate(`/stock/${code}`), [navigate])
@@ -44,13 +29,11 @@ export default function ScoreboardPage() {
     }
   }, [navigate])
 
-  // 支持 URL 定位：/scoreboard?code=X 直接选中该票（工作台「看打分」跳过来）
-  // selected 变化写回 URL（replace 不堆历史），外部进入时也能定位
+  // URL 定位：?code=X 直接选中该票（工作台「看打分」跳过来）；selected 变化写回 URL
   const [searchParams, setSearchParams] = useSearchParams()
   const [selected, setSelected] = useState<string | null>(() => searchParams.get('code'))
 
   // URL → selected 双向同步：浏览器后退/前进/外部分享链接也能正确选中
-  // （仅在 URL 变化与 selected 不一致时更新，避免 setState 循环）
   useEffect(() => {
     const urlCode = searchParams.get('code')
     if (urlCode !== selected) setSelected(urlCode)
@@ -67,137 +50,30 @@ export default function ScoreboardPage() {
     }, { replace: true })
   }, [setSearchParams])
 
-  // 工具栏/过滤状态（scope/groupIds/peakFilter 持久化到 localStorage）
+  // 工具栏/过滤状态
   const {
     onlyEntry, setOnlyEntry,
     scope, setScope, groupIds, setGroupIds, force, setForce,
     peakFilter, setPeakFilter, timeframe, setTimeframe, aiParams,
   } = useScoreboardState()
-  const [criteriaOpen, setCriteriaOpen] = useState(false)
-  const [summaryOpen, setSummaryOpen] = useState(false)
-  const [commentsOpen, setCommentsOpen] = useState(false)
 
-  // 自选分组列表（选"自选分组"范围时用）
-  const groupsQ = useQuery({
-    queryKey: ['groups'],
-    queryFn: getGroups,
-    enabled: scope === 'group',
-  })
-  const groups = groupsQ.data ?? []
-
-  // 打分排行（选了自选分组范围时，按所选分组过滤显示）
-  // scope/peakFilter/timeframe 进 queryKey：切范围/过峰过滤/周期时强制重查，避免显示上次的数据
-  const activeGroupIds = scope === 'group' && groupIds.length ? groupIds.join(',') : undefined
-  const listQ = useQuery({
-    queryKey: ['score-list', scope, onlyEntry, activeGroupIds, peakFilter, timeframe],
-    queryFn: () =>
-      getScoreList({
-        sort_by: 'total',
-        dir: 'desc',
-        limit: 200,
-        can_entry: onlyEntry ? true : undefined,
-        group_ids: activeGroupIds,
-        scope,
-        peak_filter: peakFilter,
-        // combined 模式：/list 不被使用（页面渲染 CombinedView 拉 /combined/list），
-        // 但需要合法值FastAPI 校验 → 传 'daily'；queryKey 仍带 combined 触发重查。
-        timeframe: timeframe === 'combined' ? 'daily' : timeframe,
-      }),
-    enabled: timeframe !== 'combined',
-  })
-  const items = listQ.data ?? []
-
-  // 扫描状态轮询（扫描中 2s，空闲 30s）
-  const statusQ = useQuery({
-    queryKey: ['score-scan-status'],
-    queryFn: getScanStatus,
-    refetchInterval: (q: any) => (q.state.data?.running ? 2000 : 30_000),
-  })
-  const scan = statusQ.data
-  const running = !!scan?.running
-
-  // 扫描结束 → 刷新列表与详情
-  // 两个完成信号：running true→false（正常慢扫描）；finished_at null→有值（兜底，
-  // 防止扫描太快、空闲 30s 轮询没 poll 到 running=true 时漏掉完成事件）
-  const prevRunning = useRef<boolean>(false)
-  const prevFinishedNull = useRef<boolean>(false)
-  useEffect(() => {
-    const runningNow = !!scan?.running
-    const finishedAtIsNull = scan?.finished_at == null
-    const justFinished = prevRunning.current && !runningNow
-    const finishedAppeared = prevFinishedNull.current && !finishedAtIsNull && !runningNow
-    if (justFinished || finishedAppeared) {
-      qc.invalidateQueries({ queryKey: ['score-list'] })
-      if (selected) qc.invalidateQueries({ queryKey: ['score-detail', selected] })
-    }
-    prevRunning.current = runningNow
-    prevFinishedNull.current = finishedAtIsNull
-  }, [scan?.running, scan?.finished_at, qc, selected])
-
-  // 详情：daily/weekly 走 score_detail
-  const detailQ = useQuery({
-    queryKey: ['score-detail', selected, timeframe],
-    queryFn: () => getScoreDetail(selected!, timeframe as 'daily' | 'weekly'),
-    enabled: !!selected && timeframe !== 'combined',
-  })
-  const detail: ScoreDetailType | undefined = detailQ.data
-
-  // combined detail：综合模式时单独拉
-  const combinedDetailQ = useQuery({
-    queryKey: ['combined-detail', selected],
-    queryFn: () => getCombinedDetail(selected!),
-    enabled: !!selected && timeframe === 'combined',
-  })
-  const combinedDetail = combinedDetailQ.data
-
-  const scanMut = useMutation({
-    mutationFn: () =>
-      runScan({
-        scope,
-        force,
-        group_ids: scope === 'group' && groupIds.length ? groupIds : undefined,
-        timeframe: timeframe === 'combined' ? 'weekly' : timeframe,  // 扫什么周期 = 看什么周期；combined 在 weekly/daily 之后由 backend 自动合成
-      }),
-    onSuccess: (d) => {
-      if (d.started === false) message.warning(d.reason || '已有扫描进行中')
-      else message.success(`开始扫描，共 ${d.total} 只`)
-      // 立即刷新扫描状态：让轮询尽快切到 running(2s)，避免最长 30s 的空闲轮询延迟
-      qc.invalidateQueries({ queryKey: ['score-scan-status'] })
-    },
-    onError: () => message.error('触发扫描失败'),
+  // 数据获取（列表/详情/分组/扫描进度）
+  const {
+    groups, items, scan, running,
+    detailQ, detail,
+    combinedDetailQ, combinedDetail,
+  } = useScoreboardData({
+    onlyEntry, scope, groupIds, peakFilter, timeframe, aiParams, selected,
   })
 
-  const cancelMut = useMutation({
-    mutationFn: cancelScan,
-    onSuccess: () => message.info('已请求取消'),
-  })
-
-  // AI 逐股点评（独立按钮：对当前列表每只各自生成总结，不做组对比）
-  const commentMut = useMutation({
-    mutationFn: () => analyzeBatchScore({ ...aiParams, limit: 10 }),
-    onSuccess: () => setCommentsOpen(true),
-    onError: () => message.error('AI 逐股点评失败，请稍后重试'),
-  })
-  const commentData: StockCommentType[] | null = commentMut.data?.items ?? null
-
-  // AI 整组汇总（独立按钮，复用当前列表的过滤/排序参数，不参与扫描）
-  const summaryMut = useMutation({
-    mutationFn: () => summarizeScore({ ...aiParams, limit: 15 }),
-    onSuccess: () => setSummaryOpen(true),
-    onError: () => message.error('AI 汇总失败，请稍后重试'),
-  })
-  const summaryData: ScoreSummaryType | null = summaryMut.data ?? null
-
-  const addMut = useMutation({
-    // 处于"自选分组"范围且选中了分组时，加入自选直接放进当前分组
-    mutationFn: (code: string) =>
-      addWatchlist(code, scope === 'group' && groupIds.length ? groupIds : undefined),
-    onSuccess: () => {
-      message.success('已加入自选股')
-      globalInv.afterSync()
-    },
-    onError: () => message.error('加入自选失败'),
-  })
+  // 异步操作（扫描/取消/AI/加自选）
+  const {
+    criteriaOpen, setCriteriaOpen,
+    summaryOpen, setSummaryOpen,
+    commentsOpen, setCommentsOpen,
+    scanMut, cancelMut, commentMut, summaryMut, addMut,
+    summaryData, commentData,
+  } = useScoreboardActions({ scope, force, groupIds, timeframe, aiParams })
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12, height: 'calc(100vh - 96px)' }}>
