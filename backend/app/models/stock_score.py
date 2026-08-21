@@ -1,4 +1,7 @@
-"""选股打分结果表：每只标的一行，扫描时按 code 覆盖写最新结果。"""
+"""选股打分结果表：每只标的在每个周期（daily/weekly）下各占一行。
+
+主键是 (code, scan_timeframe) 复合——daily/weekly 互不覆盖，两条腿各自缓存。
+"""
 from datetime import date
 
 from sqlmodel import Field, SQLModel
@@ -8,6 +11,7 @@ class StockScore(SQLModel, table=True):
     __tablename__ = "stock_score"
 
     code: str = Field(primary_key=True)
+    scan_timeframe: str = Field(primary_key=True, description="打分基于的 K 线周期 daily/weekly；与 code 构成复合主键")
     name: str = Field(default="")
     is_fund: bool = Field(default=False, description="ETF/LOF 标记（股息走中性）")
     scan_date: date = Field(index=True, description="扫描日期")

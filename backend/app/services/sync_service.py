@@ -226,10 +226,13 @@ def _refresh_score_snapshot(session: Session, code: str) -> None:
     ).first()
     if latest_row is None:
         return
-    score = session.get(StockScore, code)
-    if score is None:
+    # 复合主键 (code, scan_timeframe)：刷新所有周期的快照（daily/weekly 都更新最新行情）
+    scores = list(session.exec(
+        select(StockScore).where(StockScore.code == code)
+    ).all())
+    if not scores:
         return
-    score.close = float(latest_row.close) if latest_row.close is not None else None
+    new_close = float(latest_row.close) if latest_row.close is not None else None
 
     # 若 pct_chg 为 None 或异常 0（常见：sina/etf/指数 增量拉只含 1 根，pct_change NaN 被 fillna(0)），
     # 用 K 线库前一天 close 反算真实涨跌幅——不覆盖合法 0%（两端 close 真相同则 pct_chg 也保持 0）。
@@ -245,10 +248,15 @@ def _refresh_score_snapshot(session: Session, code: str) -> None:
             if abs(true_pct) > 0.0001:  # 真涨/真跌才覆盖
                 pct_chg = true_pct
 
-    score.pct_chg = round(pct_chg, 2) if pct_chg is not None else None
-    score.turnover = _safe_float(latest_row.turnover)
-    score.as_of_date = latest_row.trade_date
-    session.add(score)
+    new_pct_chg = round(pct_chg, 2) if pct_chg is not None else None
+    new_turnover = _safe_float(latest_row.turnover)
+    new_as_of = latest_row.trade_date
+    for score in scores:
+        score.close = new_close
+        score.pct_chg = new_pct_chg
+        score.turnover = new_turnover
+        score.as_of_date = new_as_of
+        session.add(score)
     session.commit()
 
 

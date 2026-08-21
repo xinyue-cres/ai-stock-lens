@@ -203,6 +203,18 @@ def _peak_features(close: pd.Series, dif: pd.Series, dea: pd.Series,
     # acc 触发
     has_acc = (acc_z < -_PEAK_Z) if slope_up else (acc_z > +_PEAK_Z)
 
+    # 边界情况：DIF 在零轴下方（dif<0，底部区域）时虽然 slope_up=True，
+    # 但语义是"底部反转/金叉启动"，绝非"上涨过峰"。acc_z 把"DIF 急跌后减速反弹"
+    # 误识为顶部急刹——dif 在负区本身就是底部证据，过峰信号不可信。
+    # 同对称的边界：DIF 在零轴上方（dif>0）且 slope_up=False 时也不是"下跌过峰"。
+    dif_last = float(dif.iloc[-1])
+    if slope_up and dif_last < 0:
+        return {"acc_z": acc_z, "slope_up": slope_up,
+                "peak_signal": "底部反转", "peak_conf": 0, "vr20": vr20}
+    if not slope_up and dif_last > 0:
+        return {"acc_z": acc_z, "slope_up": slope_up,
+                "peak_signal": "顶部回落", "peak_conf": 0, "vr20": vr20}
+
     if not (has_acc or has_bar):
         return {"acc_z": acc_z, "slope_up": slope_up,
                 "peak_signal": "涨势延续" if slope_up else "跌势延续",
@@ -421,21 +433,29 @@ def _golden_continuation(df: pd.DataFrame, cache: dict | None = None) -> dict:
 # 波段适配 / 股息
 # ---------------------------------------------------------------------------
 
-def _band_score(df: pd.DataFrame) -> dict:
+def _band_score(df: pd.DataFrame, timeframe: str = "daily") -> dict:
     """波段适配 = 幅度 × 节奏（两个独立维度，实测 corr≈0）。
 
     - 幅度：sigma_20d 适中最佳（波动太小没肉、太大风险高）。真实分布
       P25=2.1% P50=3.3% P90=5.5%，锚点 2~7% 峰值 4%，P90 以上高波动才归零。
-    - 节奏：价格在 MA5 下方平均停留天数（3~5.5 天线性，越长越从容）。
+      注意锚点对应**日等效 sigma**：weekly/monthly 时把原始 sigma 按
+      features.timeframe.SIGMA_SCALE 折回日尺度再喂锚，保证跨周期分布对齐。
+    - 节奏：价格在 MA5 下方平均停留 bar 数（3~5.5 bar 线性，越长越从容）。
       太短=快探快弹赌博（来不及在均线下埋伏），适中偏长=有操作窗口。
+      实测 daily p50=3.95 vs weekly p50=3.97（bar 单位），基本不变，无需折换。
 
     旧版 ATR/振幅 与 sigma 相关 0.93~0.97（本质同是波动），纯冗余；且锚点
     5% 太松造成 39~43% 满分白给分，故彻底去掉，只保留 sigma + 新增节奏。
     """
+    from app.features.timeframe import SIGMA_SCALE
+
     close = df["close"].astype(float)
     # 打分只用 20 日波动率（sigma_20d），不再跑 compute_quant_features 全量 AI 因子——
     # 那些是 build_ai_input 的输入，扫描打分时算纯属浪费（占比 ~30%）
-    sigma_20 = _sigma(close, 20)
+    sigma_raw = _sigma(close, 20)
+    # 跨周期对齐：weekly sigma 天然是 daily 的 ~2.6 倍（实测），除以系数变回日等效
+    sigma_scale = SIGMA_SCALE.get(timeframe, 1.0)  # type: ignore[arg-type]
+    sigma_20 = sigma_raw / sigma_scale if sigma_raw is not None else None
 
     # 幅度分：20 日波动率适中最佳（三角归一）
     if sigma_20 is not None:
@@ -467,6 +487,9 @@ def _band_score(df: pd.DataFrame) -> dict:
     return {
         "score": round(score, 1),
         "sigma_20d": round(sigma_20 * 100, 2) if sigma_20 is not None else None,
+        # sigma_raw 透出原始值供调试/对比（不折换）
+        "sigma_20d_raw": round(sigma_raw * 100, 2) if sigma_raw is not None else None,
+        "sigma_scale": sigma_scale,
         "ma5_stay_days": round(stay, 2) if stay is not None else None,
         "amplitude_score": round(amp, 1),
         "rhythm_score": round(rhythm, 1),
@@ -489,11 +512,14 @@ def _dividend_score(dividend_yield: float | None, is_fund: bool) -> dict:
 # ---------------------------------------------------------------------------
 
 def score_stock(df: pd.DataFrame, dividend_yield: float | None = None,
-                is_fund: bool = False, cache: dict | None = None) -> dict | None:
+                is_fund: bool = False, cache: dict | None = None,
+                timeframe: str = "daily") -> dict | None:
     """对单只标的打分。df 需含 trade_date/open/high/low/close/volume/amount/turnover/pct_chg（升序）。
 
     返回完整打分 dict（含子维度明细 components）；数据不足返回 None。
     cache：compute_indicator_cache 预计算指标（扫描复用），None 时自行计算。
+    timeframe：打分基于的 K 线周期（daily/weekly）。跨入 `_band_score` 做
+    波动率尺度折换，保证跨周期分数分布对齐；别的维度本身 bar-级运算不受影响。
     """
     if df is None or df.empty or len(df) < _MIN_ROWS:
         return None
@@ -501,7 +527,7 @@ def score_stock(df: pd.DataFrame, dividend_yield: float | None = None,
         df = df.sort_values("trade_date").reset_index(drop=True)
 
     golden = _golden_continuation(df, cache=cache)
-    band = _band_score(df)
+    band = _band_score(df, timeframe=timeframe)
     dividend = _dividend_score(dividend_yield, is_fund)
 
     total = (W_GOLDEN * golden["score"]

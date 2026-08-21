@@ -28,6 +28,7 @@ from app.datasource.base_provider import is_fund_code
 from app.datasource.router import get_data_router
 from app.db import engine
 from app.features.stock_scorer import compute_indicator_cache, score_stock
+from app.features.timeframe import Timeframe, to_bars
 from app.features.trend_judge import judge_trend
 from app.models.kline import KlineDaily
 from app.models.stock import Stock
@@ -193,10 +194,12 @@ def _cache_needs_pull(df: object | None, today: date, grace: int = 0) -> bool:
 
 
 def _upsert(session: Session, code: str, name: str, scored: dict, trend: dict,
-            scan_date: date, as_of_date: date | None, scope: str) -> None:
-    row = session.get(StockScore, code)
+            scan_date: date, as_of_date: date | None, scope: str,
+            timeframe: Timeframe = "daily") -> None:
+    # 复合主键 (code, scan_timeframe)：daily/weekly 各占一行，互不覆盖
+    row = session.get(StockScore, (code, timeframe))
     if row is None:
-        row = StockScore(code=code)
+        row = StockScore(code=code, scan_timeframe=timeframe)
     row.name = name
     row.is_fund = is_fund_code(code)
     row.scan_date = scan_date
@@ -224,8 +227,13 @@ def _upsert(session: Session, code: str, name: str, scored: dict, trend: dict,
 
 
 def _build_plan(session: Session, scope: str, codes: list[str] | None,
-                group_ids: list[int] | None, force: bool) -> dict:
+                group_ids: list[int] | None, force: bool,
+                timeframe: Timeframe = "daily") -> dict:
     """同步构建扫描计划：候选池 + 当日去重。
+
+    去重口径按 (scan_date, scan_scope, scan_timeframe) 三元组：同一天 daily 扫过不跳过
+    weekly 扫描，反之亦然——两个周期的打分互相独立（用户切换查看周期时不被另一种的
+    存量记录"截胡"）。
 
     返回 {todo, name_map, total, skipped}；todo 为空（全部已扫描）时同时把
     running 置回 False。候选池构建失败会抛异常（调用方负责复位状态）。
@@ -235,11 +243,14 @@ def _build_plan(session: Session, scope: str, codes: list[str] | None,
         candidates, name_map = _build_pool(session, scope, codes, group_ids)
         if not force:
             # 当日已扫的记录 → 快照 as_of_date（该次打分用到的 K 线最后交易日）
+            # 多周期隔离：scope/timeframe 任一不匹配都不参与去重
             scanned: dict[str, date | None] = {
                 r.code: r.as_of_date
                 for r in session.exec(
                     select(StockScore.code, StockScore.as_of_date)
                     .where(StockScore.scan_date == today)
+                    .where(StockScore.scan_timeframe == timeframe)
+                    .where(StockScore.scan_scope == scope)
                 ).all()
             }
             latest_dates = _latest_db_dates(session, list(scanned.keys()))
@@ -274,7 +285,8 @@ def _build_plan(session: Session, scope: str, codes: list[str] | None,
         raise
 
 
-def _run_scan(todo: list[str], name_map: dict[str, str], settings, today: date, scope: str) -> None:
+def _run_scan(todo: list[str], name_map: dict[str, str], settings, today: date, scope: str,
+              timeframe: Timeframe = "daily") -> None:
     """后台线程执行实际打分（启动后立即返回，不阻塞 POST）。
 
     关键性能设计（数据同步后缓存充足，SQLite 并发读成为瓶颈）：
@@ -354,16 +366,21 @@ def _run_scan(todo: list[str], name_map: dict[str, str], settings, today: date, 
                 break
             failed = True
             try:
-                df = cache_map.get(code)
-                if df is not None and not df.empty:
+                daily_df = cache_map.get(code)
+                if daily_df is not None and not daily_df.empty:
+                    # 周期转换：daily→原样；weekly→resample 到周五收盘 bar。
+                    # scorer/judge 全是 bar-级运算，与底层 K 线粒度解耦（见 features/timeframe.py）
+                    bars = to_bars(daily_df, timeframe)
                     # 指标只算一次，score_stock 与 judge_trend 复用（避免重复算 MACD/ADX/BOLL/Risk）
-                    cache = compute_indicator_cache(df)
-                    scored = score_stock(df, dividend_map.get(code), is_fund_code(code), cache=cache)
+                    cache = compute_indicator_cache(bars)
+                    scored = score_stock(bars, dividend_map.get(code), is_fund_code(code),
+                                         cache=cache, timeframe=timeframe)
                     if scored is not None:
-                        trend = judge_trend(df, signal_score=scored["signal_score"], cache=cache)
-                        as_of_date = _parse_as_of(df["trade_date"].iloc[-1])
+                        trend = judge_trend(bars, signal_score=scored["signal_score"], cache=cache)
+                        as_of_date = _parse_as_of(bars["trade_date"].iloc[-1])
                         with Session(engine) as s:
-                            _upsert(s, code, name_map.get(code, code), scored, trend, today, as_of_date, scope)
+                            _upsert(s, code, name_map.get(code, code), scored, trend,
+                                    today, as_of_date, scope, timeframe=timeframe)
                         failed = False
             except Exception:  # noqa: BLE001
                 logger.exception("打分失败 %s", code)
@@ -378,10 +395,12 @@ def _run_scan(todo: list[str], name_map: dict[str, str], settings, today: date, 
 
 
 def scan_market(session: Session, scope: str = "all", codes: list[str] | None = None,
-                force: bool = False, group_ids: list[int] | None = None) -> dict:
+                force: bool = False, group_ids: list[int] | None = None,
+                timeframe: Timeframe = "daily") -> dict:
     """触发一次全市场/自选股扫描。已在 running 时直接返回不重复启动。
 
     group_ids：scope=watchlist/group 时可传多个自选分组 id，只扫这些分组内的自选股（任意匹配）。
+    timeframe：打分基于的 K 线周期（daily/weekly），仅影响 bar 重采样与 scan_timeframe 标记。
 
     异步设计：同步构建候选池（拿到 total）后立即返回，实际打分放后台线程执行。
     全市场扫描可达数分钟，不能阻塞 POST（前端 30s 超时）。
@@ -397,11 +416,12 @@ def scan_market(session: Session, scope: str = "all", codes: list[str] | None = 
 
     settings = get_settings()
     today = date.today()
-    plan = _build_plan(session, scope, codes, group_ids, force)
+    plan = _build_plan(session, scope, codes, group_ids, force, timeframe=timeframe)
     if not plan["todo"]:
         return {"started": True, "total": 0, "skipped": plan["skipped"], "reason": "全部已扫描"}
 
     threading.Thread(
-        target=_run_scan, args=(plan["todo"], plan["name_map"], settings, today, scope), daemon=True
+        target=_run_scan, args=(plan["todo"], plan["name_map"], settings, today, scope, timeframe),
+        daemon=True,
     ).start()
     return {"started": True, "total": plan["total"], "pending": True}
