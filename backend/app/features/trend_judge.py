@@ -84,7 +84,9 @@ def _decide_stage(golden: bool, pct_b: float | None, dist_high: float,
         peak_top = peak_conf >= conf_strong and slope_up is True
         peak_bot = peak_conf >= conf_strong and slope_up is False
     if golden:
-        # 1. 过热度（非强趋势才叫过热；强趋势贴轨是顺势）
+        # 1. 过热度（贴上轨 BOLL > 95% 一律过热，无论 ADX 多强：上方无空间）
+        if pct_b is not None and pct_b > 0.95:
+            return "overheat"  # 物理贴顶——上方无空间，追进去就是接飞刀
         if pct_b is not None and pct_b > 0.85 and (adx is None or adx < _ADX_STRONG):
             return "overheat"  # 贴上轨、非强趋势，短期涨过头
         # 2. 强趋势中已涨一段 → 可持有·不追高·逢高减（动能未急刹）
