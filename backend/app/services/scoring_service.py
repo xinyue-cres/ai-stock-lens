@@ -182,15 +182,33 @@ def _is_stale(latest: date | None, today: date, grace: int = 0) -> bool:
     return _trading_days_between(latest, today) > grace
 
 
-def _cache_needs_pull(df: object | None, today: date, grace: int = 0) -> bool:
+def _is_intraday_now(today: date) -> bool:
+    """当前是否处于盘中（与 sync_service._is_intraday 同口径：今日 + 北京时间 < 15:00）。
+
+    延迟 import zoneinfo 避免顶层循环依赖；逻辑同 sync_service._is_intraday 重复实现是有意的——
+    两处独立业务函数偏巧同需求，未来若改市规可单独演进。
+    """
+    from datetime import datetime, time
+    from zoneinfo import ZoneInfo
+
+    now = datetime.now(ZoneInfo("Asia/Shanghai"))
+    return today == now.date() and now.time() < time(15, 0)
+
+
+def _cache_needs_pull(df: object | None, today: date, grace: int = 0,
+                      intraday_relax: bool = False) -> bool:
     """缓存窗口是否需要补拉：无数据或 K 线落后到今天超过 grace（沿用 _is_stale）。
 
     仅做判定（不执行任何网络/写库），把"是否要补拉"交给调用方并发处理。
     grace 透传给 _is_stale：ETF 传 1（允许昨日），个股传 0。
+    intraday_relax：当前时刻未到收盘（15:00 前）时，对个股额外 +1 天宽限——
+    盘中扫描时"昨天收盘"就应该视为最新（今天的 bar 根本还不存在，
+    数据源强拉也只返回昨收，照样不更新），否则全候选池都被错判 stale。
     """
     if df is None or df.empty:
         return True
-    return _is_stale(df["trade_date"].iloc[-1], today, grace)
+    eff_grace = grace + (1 if intraday_relax else 0)
+    return _is_stale(df["trade_date"].iloc[-1], today, eff_grace)
 
 
 def _upsert(session: Session, code: str, name: str, scored: dict, trend: dict,
@@ -310,6 +328,9 @@ def _run_scan(todo: list[str], name_map: dict[str, str], settings, today: date, 
         #    只做判定：已最新→直接用；缓存够但落后→收集待补拉；不足900→待网络
         end = date.today()
         start = end - timedelta(days=settings.scan_kline_days)
+        # 盘中扫描（15:00 前）：今天还没收盘，"昨天数据"应视为最新——加宽 grace+1
+        # （否则全候选池被判 stale 触发网络补拉，但数据源最强的也只有昨收，等于白拉）
+        intraday = _is_intraday_now(end)
         cache_map: dict[str, object] = {}
         need_net: list[str] = []
         pull_codes: list[str] = []
@@ -320,7 +341,8 @@ def _run_scan(todo: list[str], name_map: dict[str, str], settings, today: date, 
                     if df is None:
                         need_net.append(code)
                         continue
-                    if _cache_needs_pull(df, end, grace=1 if is_fund_code(code) else 0):
+                    if _cache_needs_pull(df, end, grace=1 if is_fund_code(code) else 0,
+                                         intraday_relax=intraday):
                         pull_codes.append(code)  # 收集，稍后统一并发补拉（不在此串行原地拉）
                     else:
                         cache_map[code] = df
