@@ -55,7 +55,8 @@ def _decide_stage(golden: bool, pct_b: float | None, dist_high: float,
                   signal_score: float | None, peak_winrate: float | None = None,
                   peak_conf: int = 0, slope_up: bool | None = None,
                   adx: float | None = None,
-                  signal_gain_pct: float | None = None) -> str:
+                  signal_gain_pct: float | None = None,
+                  peak_signal: str | None = None) -> str:
     """金叉驱动的阶段决策（纯逻辑，无 I/O，可直接单测）。
 
     - 金叉态 = 上升候选：贴上轨且非强趋势→过热；ADX 强且已涨一段→强趋势
@@ -66,10 +67,18 @@ def _decide_stage(golden: bool, pct_b: float | None, dist_high: float,
       距高点过近或历史差→下跌回避
     peak_winrate：历史金叉冲过 +5% 的占比；peak_conf：过峰置信度 0-100（bar|acc_z × 量能），
     强档以上(≥_PEAK_CONF_STRONG)才认定"动能急刹/急转"；slope_up：动能方向（顶/底）。
+    peak_signal：完整位置标签（上涨过峰/下跌过峰/底部反转/顶部回落）。slope_up 单看方向
+    会把"dif<0 底部抬头β"误判为顶部，所以 peak_bot/peak_top 优先看位置标签；
+    兼容老调用方回退到 slope_up 判定。
     adx：ADX 趋势强度；signal_gain_pct：当前信号期间累计涨幅%（% 为单位，如 10.5 表示 10.5%）
     """
-    peak_top = peak_conf >= _PEAK_CONF_STRONG and slope_up is True   # 动能向上·放量/双触发急刹（顶部过峰）
-    peak_bot = peak_conf >= _PEAK_CONF_STRONG and slope_up is False  # 动能向下·放量/双触发急转（底部过峰）
+    # 顶/底判定：优先按 peak_signal 位置标签（含 dif 位置语义），slope_up 仅作方向
+    if peak_signal:
+        peak_top = peak_conf >= _PEAK_CONF_STRONG and peak_signal in ("上涨过峰", "顶部回落")
+        peak_bot = peak_conf >= _PEAK_CONF_STRONG and peak_signal in ("下跌过峰", "底部反转")
+    else:
+        peak_top = peak_conf >= _PEAK_CONF_STRONG and slope_up is True
+        peak_bot = peak_conf >= _PEAK_CONF_STRONG and slope_up is False
     if golden:
         # 1. 过热度（非强趋势才叫过热；强趋势贴轨是顺势）
         if pct_b is not None and pct_b > 0.85 and (adx is None or adx < _ADX_STRONG):
@@ -100,10 +109,17 @@ def _decide_stage(golden: bool, pct_b: float | None, dist_high: float,
 
 def _entry_reason(stage: str, golden: bool, peak_conf: int, slope_up: bool | None,
                   signal_score: float | None, peak_winrate: float | None,
-                  adx: float | None = None, signal_gain_pct: float | None = None) -> str:
+                  adx: float | None = None, signal_gain_pct: float | None = None,
+                  peak_signal: str | None = None) -> str:
     """细化 entry_reason：覆盖决策树降级的具体原因。"""
-    peak_top = peak_conf >= _PEAK_CONF_STRONG and slope_up is True   # 顶部过峰（强档以上）
-    peak_bot = peak_conf >= _PEAK_CONF_STRONG and slope_up is False  # 底部过峰（强档以上）
+    # 顶/底判定优先按 peak_signal 位置标签（含 dif 位置语义）；
+    # 老调用方未传 peak_signal 时回退到 slope_up 单方向判定
+    if peak_signal:
+        peak_top = peak_conf >= _PEAK_CONF_STRONG and peak_signal in ("上涨过峰", "顶部回落")
+        peak_bot = peak_conf >= _PEAK_CONF_STRONG and peak_signal in ("下跌过峰", "底部反转")
+    else:
+        peak_top = peak_conf >= _PEAK_CONF_STRONG and slope_up is True
+        peak_bot = peak_conf >= _PEAK_CONF_STRONG and slope_up is False
     if golden and peak_top:
         return "金叉态·动能急刹（顶部过峰预警），别追等回踩"
     if golden and slope_up is False:
@@ -167,9 +183,12 @@ def judge_trend(df: pd.DataFrame, signal_score: float | None = None,
     sig_summary = _signal_summary(close_s, cache["signals"], cache.get("cycles"))
     signal_gain_pct = sig_summary.get("signal_gain_pct")
 
-    # 决策：金叉死叉为主导（纯逻辑，见 _decide_stage）
+    # 决策：金叉死叉为主导（纯逻辑，见 _decide_stage）。
+    # 传 peak_signal 全标签（含 dif 位置），不用 slope_up 单方向判断顶/底——避免
+    # "dif<0+slope_up=True 底部抬头β"被误识为顶部过峰进而漏掉 left_entry。
     stage = _decide_stage(golden, pct_b, dist_high, signal_score, peak_winrate,
-                          peak_conf, slope_up, adx=adx_info.get("adx"), signal_gain_pct=signal_gain_pct)
+                          peak_conf, slope_up, adx=adx_info.get("adx"),
+                          signal_gain_pct=signal_gain_pct, peak_signal=cache.get("peak_signal"))
 
     # 辅助参考（不参与决策）
     arrangement = compute_ma(df).get("arrangement")
@@ -183,7 +202,8 @@ def judge_trend(df: pd.DataFrame, signal_score: float | None = None,
         # 可入手两档：pullback_entry（安全可入手）+ left_entry（左侧机会·高风险可轻仓）
         "can_entry": stage in ("pullback_entry", "left_entry"),
         "entry_reason": _entry_reason(stage, golden, peak_conf, slope_up, signal_score, peak_winrate,
-                                      adx=adx_info.get("adx"), signal_gain_pct=signal_gain_pct),
+                                      adx=adx_info.get("adx"), signal_gain_pct=signal_gain_pct,
+                                      peak_signal=cache.get("peak_signal")),
         "key_prices": {
             "close": round(close, 3),
             "ma20": round(ma20, 3) if ma20 is not None else None,
