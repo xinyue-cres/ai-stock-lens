@@ -46,6 +46,8 @@ interface ScoreDetailProps {
 
 export default function ScoreDetail({ detail, onAddWatchlist, onOpenDetail }: ScoreDetailProps) {
   const stage = detail.trend_stage ? STAGE_PALETTE[detail.trend_stage] : null
+  // bar 单位标签：daily=天，weekly=周（后端 hist_golden_days/signal_days 均按 bar 计）
+  const barUnit = detail.timeframe === 'weekly' ? '周' : '天'
   const sig = detail.components?.signal ?? {}
   const band = detail.components?.band ?? {}
   const trend = detail.components?.trend ?? {}
@@ -147,14 +149,16 @@ export default function ScoreDetail({ detail, onAddWatchlist, onOpenDetail }: Sc
           </Field>
           <Field label="信号持续">
             {sig.signal_days === 0
-              ? (sig.current_signal === 'death' ? '今日死叉' : '今日金叉')
-              : sig.signal_days != null ? `${sig.signal_days} 天` : '-'}
+              ? (detail.timeframe === 'weekly'
+                  ? (sig.current_signal === 'death' ? '本周死叉' : '本周金叉')
+                  : (sig.current_signal === 'death' ? '今日死叉' : '今日金叉'))
+              : sig.signal_days != null ? `${sig.signal_days} ${barUnit}` : '-'}
           </Field>
           <Field label="历史金叉持续">
             {sig.hist_golden_days != null ? (
               <span>
-                均值 {sig.hist_golden_days} 天
-                {sig.hist_golden_days_median != null ? ` · 中位 ${sig.hist_golden_days_median} 天` : ''}
+                均值 {sig.hist_golden_days} {barUnit}
+                {sig.hist_golden_days_median != null ? ` · 中位 ${sig.hist_golden_days_median} ${barUnit}` : ''}
               </span>
             ) : '-'}
           </Field>
@@ -225,7 +229,7 @@ export default function ScoreDetail({ detail, onAddWatchlist, onOpenDetail }: Sc
             {band.sigma_20d != null ? `${band.sigma_20d}%` : '-'}
           </Descriptions.Item>
           <Descriptions.Item label="MA5下方平均停留">
-            {band.ma5_stay_days != null ? `${band.ma5_stay_days}天` : '-'}
+            {band.ma5_stay_days != null ? `${band.ma5_stay_days}${barUnit}` : '-'}
           </Descriptions.Item>
         </Descriptions>
         <Text type="secondary" style={{ fontSize: 11 }}>
@@ -240,7 +244,9 @@ export default function ScoreDetail({ detail, onAddWatchlist, onOpenDetail }: Sc
           <Descriptions.Item label="MA20">{keyPrices.ma20 ?? '-'}</Descriptions.Item>
           <Descriptions.Item label="MA60">{keyPrices.ma60 ?? '-'}</Descriptions.Item>
           <Descriptions.Item label="MA120">{keyPrices.ma120 ?? '-'}</Descriptions.Item>
-          <Descriptions.Item label="60日压力">{keyPrices.resistance_60d ?? '-'}</Descriptions.Item>
+          <Descriptions.Item label={detail.timeframe === 'weekly' ? '60周压力' : '60日压力'}>
+            {keyPrices.resistance_60d ?? '-'}
+          </Descriptions.Item>
           <Descriptions.Item label="止损参考">{keyPrices.stop_loss ?? '-'}</Descriptions.Item>
         </Descriptions>
       </Card>
