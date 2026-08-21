@@ -111,6 +111,10 @@ def init_db() -> None:
     # 增量迁移：ai_report.extras_json（老 DB 无此列）
     _migrate_add_column("ai_report", "extras_json", "TEXT")
 
+    # 增量迁移：stock_score_combined.demote_reason + space_pct（右侧详情可解释字段）
+    _migrate_add_column("stock_score_combined", "demote_reason", "TEXT")
+    _migrate_add_column("stock_score_combined", "space_pct", "FLOAT")
+
     # 增量迁移：stock.pinned
     _migrate_add_column("stock", "pinned", "BOOLEAN DEFAULT 0")
 

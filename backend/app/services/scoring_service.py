@@ -303,10 +303,12 @@ def _combined_upsert(session: Session, code: str, name: str,
     # 历史数据（100 只票×59509 时点 fwd 5 日收益）：pct_b 0.5-0.8 中位 +0.08%，
     # 0.8-0.95 中位 -0.14%（已短期转负）；强买档必须更严。
     # 只 applied 到 strong_buy，不 cascaded 整条 trend_judge 决策。
+    demote_reason: str | None = None
     if stage == "strong_buy":
         worst_pct_b = max((p for p in (w_pct_b, d_pct_b) if p is not None), default=None)
         if worst_pct_b is not None and worst_pct_b >= 0.8:
             stage = "buy"
+            demote_reason = f"BOLL 贴上轨 {worst_pct_b:.0%}（超过 sweet spot 80%），入场时机已不优——降级 strong_buy → buy"
     total = combined_score(w_total, d_total, stage)
     meta = combined_meta(stage)
     can_entry = stage in ("strong_buy", "buy", "light_buy", "deep_pullback_entry")
@@ -340,6 +342,25 @@ def _combined_upsert(session: Session, code: str, name: str,
     row.can_entry = can_entry
     row.entry_reason = entry_reason
     row.trade_hint = meta.get("trade_hint")
+    row.demote_reason = demote_reason
+    # 空间 = 距 60 日高点的上行空间 %。如果 pct_b 已经 >0.95（贴近上轨），
+    # 用 "高_60 - close" 的实际空间 percent 显示能给用户更直观的
+    # “还能涨多少到顶” 感受。 daily 为准。
+    space_pct: float | None = None
+    if daily_row is not None and daily_row.components_json:
+        try:
+            comp = json.loads(daily_row.components_json)
+            kp = (comp.get("trend") or {}).get("key_prices") or {}
+            high_60 = kp.get("resistance_60d")
+            close = kp.get("close")
+            if (
+                isinstance(high_60, (int, float)) and high_60 and high_60 > 0
+                and isinstance(close, (int, float)) and close and close > 0
+            ):
+                space_pct = round((high_60 / close - 1) * 100, 2)
+        except (json.JSONDecodeError, TypeError, ValueError):
+            pass
+    row.space_pct = space_pct
     # as_of_date 用两条腿中较新的一个
     candidates = [r.as_of_date for r in (daily_row, weekly_row) if r and r.as_of_date]
     row.as_of_date = max(candidates) if candidates else None

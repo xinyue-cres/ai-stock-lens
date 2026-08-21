@@ -244,6 +244,8 @@ export interface CombinedItem {
   can_entry: boolean
   entry_reason: string | null
   trade_hint: string | null
+  demote_reason: string | null  // 被降级的原因（如 pct_b 贴上轨 strong_buy→buy）
+  space_pct: number | null       // 距 60 日高点的上行空间 %（越大越足）
   // 由后端 _attach_watchlist_info 附加（自选分组联动）
   in_watchlist?: boolean
   group_ids?: number[]

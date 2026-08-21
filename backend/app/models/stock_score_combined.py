@@ -34,5 +34,9 @@ class StockScoreCombined(SQLModel, table=True):
     can_entry: bool = Field(default=False, description="是否可入手（强买/买入/轻仓/深度回踩）")
     entry_reason: str | None = Field(default=None, description="操作建议主文")
     trade_hint: str | None = Field(default=None, description="仓位/止损等操作提示")
+    demote_reason: str | None = Field(default=None, description="被降级原因（如 pct_b 贴上轨）")
+
+    # 空间指标（供详情页显示参考，不入评分）
+    space_pct: float | None = Field(default=None, description="距 BOLL 上轨的空间 %，越大上方空间越足；按 daily 算")
 
     as_of_date: date | None = Field(default=None)

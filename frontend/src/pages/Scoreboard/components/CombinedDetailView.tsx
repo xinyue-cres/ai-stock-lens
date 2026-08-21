@@ -86,6 +86,15 @@ export default function CombinedDetailView({ detail, onAddWatchlist }: CombinedD
           <div style={{ textAlign: 'center', padding: '12px 8px', background: palette.bg, borderRadius: 6, border: `1px solid ${palette.border}` }}>
             <div style={{ fontWeight: 700, fontSize: 26, color: palette.color }}>{detail.combined_score.toFixed(1)}</div>
             <Text type="secondary" style={{ fontSize: 11 }}>综合分</Text>
+            {/* 空间指标：距 60 日高点的上行空间 */}
+            {detail.space_pct != null && (
+              <div style={{ marginTop: 8, borderTop: `1px dashed ${palette.border}`, paddingTop: 6 }}>
+                <div style={{ fontWeight: 700, fontSize: 13, color: detail.space_pct > 10 ? '#16a34a' : detail.space_pct > 0 ? '#d97706' : '#dc2626' }}>
+                  {detail.space_pct > 0 ? `+${detail.space_pct.toFixed(1)}%` : `${detail.space_pct.toFixed(1)}%`}
+                </div>
+                <Text type="secondary" style={{ fontSize: 10 }}>距 60 日高</Text>
+              </div>
+            )}
           </div>
           <div>
             <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 6 }}>
@@ -94,6 +103,16 @@ export default function CombinedDetailView({ detail, onAddWatchlist }: CombinedD
             <Paragraph style={{ fontSize: 13, lineHeight: 1.7, marginBottom: 8 }}>
               {detail.entry_reason}
             </Paragraph>
+            {/* 降级原因（如果有）：黄色提示条 */}
+            {detail.demote_reason && (
+              <div style={{
+                marginBottom: 8, padding: '6px 10px', borderRadius: 4,
+                background: '#fffbeb', border: '1px solid #fde68a', color: '#92400e',
+                fontSize: 12, lineHeight: 1.5,
+              }}>
+                ⚠️ {detail.demote_reason}
+              </div>
+            )}
             {detail.trade_hint && (
               <Text type="secondary" style={{ fontSize: 12, display: 'block', lineHeight: 1.6 }}>
                 <Text strong style={{ color: palette.color }}>操作提示：</Text>{detail.trade_hint}
