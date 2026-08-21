@@ -84,12 +84,13 @@ def _decide_stage(golden: bool, pct_b: float | None, dist_high: float,
         peak_top = peak_conf >= conf_strong and slope_up is True
         peak_bot = peak_conf >= conf_strong and slope_up is False
     if golden:
-        # 1. 过热度（贴上轨 BOLL > 110% 一律过热：历史中位后续收益转负）
-        #    历史 fwd_10 分布（100 只票 × 59509 个点）：pct_b >1.15 中位 -0.83%、胜率 46%；
-        #    0.95-1.05 仍 +0.99%、1.05-1.15 +1.24% mean（但中位转负）。
-        #    阈值取 1.10：处于"还有空间但需谨慎"与"已经过度" 的临界。
-        if pct_b is not None and pct_b > 1.10:
-            return "overheat"  # 贴上轨过多：继续追涨期望为负
+        # 1. 过热度（贴顶只在没有强趋势授权时才算）。
+        #    pct_b>1.10 本身不是"过热"标志——强趋势（ADX≥25）的 momentum breakout
+        #    经常以贴上轨开启主升浪，无脑拦截会错过（000703 恒逸石化 pct_b=1.14, ADX=48.7
+        #    今日突破新高 +19% 周线巨长阳，是该追不该避）。
+        #    所以贴上轨只在 ADX 弱（趋势力不足）时才 alert。
+        if pct_b is not None and pct_b > 1.10 and (adx is None or adx < _ADX_STRONG):
+            return "overheat"  # 贴顶但趋势不硬：继续追涨胜率低
         if pct_b is not None and pct_b > 0.85 and (adx is None or adx < _ADX_STRONG):
             return "overheat"  # 贴上轨、非强趋势，短期涨过头
         # 2. 强趋势中已涨一段 → 可持有·不追高·逢高减（动能未急刹）
