@@ -367,6 +367,7 @@ def combined_list(
     combined_stage: str | None = None,     # 按 7 档过滤： strong_buy/buy/watch_buy/...
     can_entry: bool | None = None,         # 只看可入手（strong_buy/buy/light_buy/deep_pullback）
     scope: str | None = None,              # 对齐最近批次；不传退化为全局最新 scan_date
+    group_ids: str | None = None,          # 逗号分隔自选分组 id（scope=group 时按组过滤）
     limit: int = 200,
 ):
     """综合评判列表。返回 (weekly + daily) 双腿核心字段 + 综合分 + 操作建议。
@@ -389,9 +390,17 @@ def combined_list(
         stmt = stmt.where(StockScoreCombined.combined_stage == combined_stage)
     if can_entry is not None:
         stmt = stmt.where(StockScoreCombined.can_entry == can_entry)
+    # 自选分组过滤：只保留这些组内的票
+    if group_ids:
+        gids = [int(g) for g in group_ids.split(",") if g.strip().isdigit()]
+        if gids:
+            codes = watchlist_codes_in_groups(session, gids)
+            if not codes:
+                return []
+            stmt = stmt.where(StockScoreCombined.code.in_(codes))  # type: ignore[attr-defined]
     stmt = stmt.order_by(StockScoreCombined.combined_score.desc()).limit(limit)
     rows = list(session.exec(stmt).all())
-    return [{
+    items = [{
         "code": r.code,
         "name": r.name,
         "is_fund": r.is_fund,
@@ -417,6 +426,9 @@ def combined_list(
         "entry_reason": r.entry_reason,
         "trade_hint": r.trade_hint,
     } for r in rows]
+    # 附加 in_watchlist + group_ids（前端 StockList 视图联动）
+    _attach_watchlist_info(session, items)
+    return items
 
 
 @router.get("/combined/{code}")

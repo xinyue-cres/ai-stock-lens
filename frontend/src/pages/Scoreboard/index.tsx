@@ -15,6 +15,7 @@ import {
   ScoreSummary as ScoreSummaryType,
   summarizeScore,
 } from '@/api/score'
+import { getCombinedDetail } from '@/api/score'
 import { getGroups } from '@/api/groups'
 import { addWatchlist } from '@/api/watchlist'
 import { useInvalidation } from '@/hooks/useInvalidation'
@@ -22,6 +23,7 @@ import ScoreboardToolbar from './components/ScoreboardToolbar'
 import ScoreRow from './components/ScoreRow'
 import ScoreDetailView from './components/ScoreDetail'
 import CombinedView from './components/CombinedView'
+import CombinedDetailView from './components/CombinedDetailView'
 import ScoreCriteriaModal from './components/ScoreCriteriaModal'
 import ScoreSummaryModal from './components/ScoreSummaryModal'
 import ScoreCommentsModal from './components/ScoreCommentsModal'
@@ -46,6 +48,15 @@ export default function ScoreboardPage() {
   // selected 变化写回 URL（replace 不堆历史），外部进入时也能定位
   const [searchParams, setSearchParams] = useSearchParams()
   const [selected, setSelected] = useState<string | null>(() => searchParams.get('code'))
+
+  // URL → selected 双向同步：浏览器后退/前进/外部分享链接也能正确选中
+  // （仅在 URL 变化与 selected 不一致时更新，避免 setState 循环）
+  useEffect(() => {
+    const urlCode = searchParams.get('code')
+    if (urlCode !== selected) setSelected(urlCode)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams])
+
   const selectStock = useCallback((code: string | null) => {
     setSelected(code)
     setSearchParams((prev) => {
@@ -123,13 +134,21 @@ export default function ScoreboardPage() {
     prevFinishedNull.current = finishedAtIsNull
   }, [scan?.running, scan?.finished_at, qc, selected])
 
-  // 详情（按当前查看的周期取数据：daily/weekly 行独立缓存；combined 不允许直接选）
+  // 详情：daily/weekly 走 score_detail
   const detailQ = useQuery({
     queryKey: ['score-detail', selected, timeframe],
-    queryFn: () => getScoreDetail(selected!, timeframe === 'combined' ? 'weekly' : timeframe),
-    enabled: !!selected,
+    queryFn: () => getScoreDetail(selected!, timeframe as 'daily' | 'weekly'),
+    enabled: !!selected && timeframe !== 'combined',
   })
   const detail: ScoreDetailType | undefined = detailQ.data
+
+  // combined detail：综合模式时单独拉
+  const combinedDetailQ = useQuery({
+    queryKey: ['combined-detail', selected],
+    queryFn: () => getCombinedDetail(selected!),
+    enabled: !!selected && timeframe === 'combined',
+  })
+  const combinedDetail = combinedDetailQ.data
 
   const scanMut = useMutation({
     mutationFn: () =>
@@ -208,18 +227,17 @@ export default function ScoreboardPage() {
         onOpenCriteria={() => setCriteriaOpen(true)}
       />
 
-      {/* 内容区：综合=卡片网格；日/周线=master-detail 列表+详情 */}
-      {timeframe === 'combined' ? (
-        <CombinedView
-          scope={scope}
-          onSelectCode={(code) => {
-            // 点击综合卡片：切回 weekly（方向层是综合的源）+ 选中该 code
-            setTimeframe('weekly')
-            selectStock(code)
-          }}
-        />
-      ) : (
-        <div style={{ display: 'flex', gap: 16, flex: 1, minHeight: 0 }}>
+      {/* 内容区：左侧列表（综合=CombinedView / 日周=ScoreRow）+ 右侧详情 */}
+      <div style={{ display: 'flex', gap: 16, flex: 1, minHeight: 0 }}>
+        {timeframe === 'combined' ? (
+          <CombinedView
+            scope={scope}
+            groupIds={groupIds}
+            selected={selected}
+            onSelect={selectStock}
+            onAddWatchlist={addMut.mutate}
+          />
+        ) : (
           <Card
             size="small"
             title={`打分排行 (${items.length})`}
@@ -249,22 +267,34 @@ export default function ScoreboardPage() {
               />
             ))}
           </Card>
+        )}
 
-          <div style={{ flex: 1, minWidth: 0, overflowY: 'auto', height: '100%' }}>
-            {!selected && (
-              <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Empty description="点击左侧股票查看打分详情" />
-              </div>
-            )}
-            {selected && detailQ.isLoading && (
-              <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Spin size="large" />
-              </div>
-            )}
-            {detail && <ScoreDetailView detail={detail} onAddWatchlist={(code) => addMut.mutate(code)} onOpenDetail={openDetail} />}
-          </div>
+        <div style={{ flex: 1, minWidth: 0, overflowY: 'auto', height: '100%' }}>
+          {!selected && (
+            <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Empty description="点击左侧股票查看打分详情" />
+            </div>
+          )}
+          {selected && (detailQ.isLoading || combinedDetailQ.isLoading) && (
+            <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Spin size="large" />
+            </div>
+          )}
+          {detail && (
+            <ScoreDetailView
+              detail={detail}
+              onAddWatchlist={(code) => addMut.mutate(code)}
+              onOpenDetail={openDetail}
+            />
+          )}
+          {combinedDetail && (
+            <CombinedDetailView
+              detail={combinedDetail}
+              onAddWatchlist={(code) => addMut.mutate(code)}
+            />
+          )}
         </div>
-      )}
+      </div>
 
       <ScoreCriteriaModal open={criteriaOpen} onClose={() => setCriteriaOpen(false)} />
       <ScoreSummaryModal

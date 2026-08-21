@@ -244,12 +244,16 @@ export interface CombinedItem {
   can_entry: boolean
   entry_reason: string | null
   trade_hint: string | null
+  // 由后端 _attach_watchlist_info 附加（自选分组联动）
+  in_watchlist?: boolean
+  group_ids?: number[]
 }
 
 export async function getCombinedList(params: {
   combined_stage?: CombinedStage
   can_entry?: boolean
   scope?: string
+  group_ids?: string  // 逗号分隔的分组 id（scope=group 时才生效）
   limit?: number
 } = {}): Promise<CombinedItem[]> {
   const { data } = await api.get('/score/combined/list', { params })

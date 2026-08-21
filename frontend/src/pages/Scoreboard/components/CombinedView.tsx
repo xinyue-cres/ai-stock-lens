@@ -1,12 +1,14 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Card, Empty, Segmented, Spin, Tag, Typography } from 'antd'
+import { Card, Empty, Segmented, Spin, Tag, Typography, message } from 'antd'
+import { PlusOutlined } from '@ant-design/icons'
+import { Button } from 'antd'
 import { getCombinedList, type CombinedItem, type CombinedStage } from '@/api/score'
 import { STAGE_PALETTE } from '../constants'
 
 const { Text } = Typography
 
-/** 7 档 combined_stage → 卡片主题色 + icon + label */
+/** 7 档 combined_stage → 标签主题色 + icon + label */
 const COMBINED_PALETTE: Record<CombinedStage, { color: string; bg: string; border: string; icon: string; label: string }> = {
   strong_buy:          { color: '#dc2626', bg: '#fef2f2', border: '#fecaca', icon: '🐂', label: '强买信号' },
   buy:                 { color: '#ea580c', bg: '#fff7ed', border: '#fed7aa', icon: '📈', label: '买入' },
@@ -17,47 +19,119 @@ const COMBINED_PALETTE: Record<CombinedStage, { color: string; bg: string; borde
   avoid:               { color: '#4b5563', bg: '#f3f4f6', border: '#d1d5db', icon: '🚫', label: '回避' },
 }
 
-/** 周期 stage 标签的小展示（卡片里一行小字） */
-function LegInfo({ label, leg }: { label: string; leg: CombinedItem['weekly'] }) {
-  const stage = leg.trend_stage ? STAGE_PALETTE[leg.trend_stage] : null
+interface CombinedRowProps {
+  item: CombinedItem
+  active: boolean
+  onClick: (code: string) => void
+  onAddWatchlist: (code: string) => void
+}
+
+/** 单行综合 item（ScoreRow 风格，宽度自适应），显示代码 + 综合分 + combined_stage 标签 */
+function CombinedRow({ item, active, onClick, onAddWatchlist }: CombinedRowProps) {
+  const palette = COMBINED_PALETTE[item.combined_stage] ?? COMBINED_PALETTE.watch
+  const wStage = item.weekly.trend_stage ? STAGE_PALETTE[item.weekly.trend_stage] : null
+  const dStage = item.daily.trend_stage ? STAGE_PALETTE[item.daily.trend_stage] : null
+
   return (
-    <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, fontSize: 12, lineHeight: '20px' }}>
-      <span style={{ color: 'rgba(0,0,0,0.45)', width: 30 }}>{label}</span>
-      <span style={{ fontWeight: 600, fontSize: 13 }}>{leg.total_score?.toFixed(1) ?? '-'}</span>
-      <Text type="secondary" style={{ fontSize: 12 }}>
-        {leg.signal_score != null ? `signal ${leg.signal_score.toFixed(0)}` : ''}
+    <div
+      onClick={() => onClick(item.code)}
+      style={{
+        padding: '10px 14px',
+        borderBottom: '1px solid #f0f0f0',
+        cursor: 'pointer',
+        background: active ? '#e6f4ff' : 'transparent',
+        borderLeft: active ? '3px solid #1677ff' : '3px solid transparent',
+        transition: 'background 0.15s ease',
+      }}
+      onMouseEnter={(e) => { if (!active) e.currentTarget.style.background = '#fafafa' }}
+      onMouseLeave={(e) => { if (!active) e.currentTarget.style.background = 'transparent' }}
+    >
+      {/* 第一行：名称 + 综合分 + combined_stage tag */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, flex: 1 }}>
+          <span style={{ fontWeight: 600, fontSize: 13 }}>{item.name || item.code}</span>
+          <Text type="secondary" style={{ fontSize: 11 }}>{item.code}</Text>
+          {item.is_fund && <Tag style={{ fontSize: 10, lineHeight: '14px', padding: '0 4px', marginInlineEnd: 0 }}>ETF</Tag>}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <span style={{ fontSize: 14 }}>{palette.icon}</span>
+          <Tag
+            style={{
+              color: palette.color, background: palette.bg, borderColor: palette.border,
+              fontSize: 11, lineHeight: '16px', padding: '0 6px', marginInlineEnd: 0,
+            }}
+          >
+            {palette.label}
+          </Tag>
+          <span style={{ fontWeight: 700, fontSize: 15, color: palette.color, minWidth: 36, textAlign: 'right' }}>
+            {item.combined_score.toFixed(1)}
+          </span>
+        </div>
+      </div>
+
+      {/* 第二行：weekly / daily 两条腿的简版状态 */}
+      <div style={{ display: 'flex', gap: 10, fontSize: 11, color: 'rgba(0,0,0,0.65)', marginBottom: 4 }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <span style={{ color: 'rgba(0,0,0,0.45)' }}>周</span>
+          <span style={{ fontWeight: 600 }}>{item.weekly.total_score?.toFixed(0) ?? '-'}</span>
+          {wStage && <span style={{ color: wStage.color }}>{wStage.label}</span>}
+        </span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <span style={{ color: 'rgba(0,0,0,0.45)' }}>日</span>
+          <span style={{ fontWeight: 600 }}>{item.daily.total_score?.toFixed(0) ?? '-'}</span>
+          {dStage && <span style={{ color: dStage.color }}>{dStage.label}</span>}
+        </span>
+        {!item.in_watchlist && (
+          <Button
+            size="small"
+            type="text"
+            icon={<PlusOutlined />}
+            style={{ padding: 0, height: '16px', lineHeight: '16px', fontSize: 11, marginLeft: 'auto' }}
+            onClick={(e) => { e.stopPropagation(); onAddWatchlist(item.code) }}
+          >
+            加自选
+          </Button>
+        )}
+      </div>
+
+      {/* 第三行：操作建议（一行截断） */}
+      <Text
+        type="secondary"
+        style={{
+          fontSize: 11, display: 'block',
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        }}
+      >
+        {item.entry_reason}
       </Text>
-      {stage && (
-        <Tag style={{ fontSize: 11, lineHeight: '16px', padding: '0 6px', color: stage.color, background: stage.bg, borderColor: stage.border, marginInlineEnd: 0 }}>
-          {stage.label}
-        </Tag>
-      )}
-      {leg.peak_signal && (
-        <Text type="secondary" style={{ fontSize: 11 }}>{leg.peak_signal}{leg.peak_conf ? `(${leg.peak_conf})` : ''}</Text>
-      )}
     </div>
   )
 }
 
 interface CombinedViewProps {
   scope: string
-  /** 点击卡片：切回 weekly + 选中改 code（父组件 discipline） */
-  onSelectCode: (code: string) => void
+  groupIds: number[]
+  selected: string | null
+  onSelect: (code: string) => void
+  onAddWatchlist: (code: string) => void
+  renderDetail?: (code: string) => React.ReactNode  // 右侧详情渲染（可选）
 }
 
-export default function CombinedView({ scope, onSelectCode }: CombinedViewProps) {
-  // 过滤 stage；undefined 表示全部
+/** 左侧列表（ScoreRow 风格，含 stage 过滤 Segmented + 自选分组过滤） */
+export function CombinedList({
+  scope, groupIds, selected, onSelect, onAddWatchlist,
+}: CombinedViewProps) {
   const [stageFilter, setStageFilter] = useState<CombinedStage | 'entry' | 'all'>('entry')
+  const groupIdsKey = groupIds.length ? groupIds.join(',') : undefined
 
   const listQ = useQuery({
-    queryKey: ['combined-list', scope, stageFilter],
+    queryKey: ['combined-list', scope, groupIdsKey, stageFilter],
     queryFn: () =>
       getCombinedList({
         scope,
         limit: 200,
-        // 'entry' 模式 = 只看可入手
+        group_ids: groupIdsKey,
         can_entry: stageFilter === 'entry' ? true : undefined,
-        // 具体 stage 过滤
         combined_stage:
           stageFilter !== 'all' && stageFilter !== 'entry' ? stageFilter : undefined,
       }),
@@ -67,98 +141,57 @@ export default function CombinedView({ scope, onSelectCode }: CombinedViewProps)
   return (
     <Card
       size="small"
-      title={`日周合并评判 (${items.length})`}
-      style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
-      styles={{ header: { flexShrink: 0, minHeight: 45, padding: '8px 16px' }, body: { padding: 16, flex: 1, overflowY: 'auto' } }}
+      title={`日周合并 (${items.length})`}
+      style={{ width: 540, flexShrink: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
+      styles={{
+        header: { flexShrink: 0, minHeight: 45, padding: '8px 16px' },
+        body: { padding: 0, flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' },
+      }}
     >
-      {/* 阶段筛选 */}
-      <div style={{ marginBottom: 12 }}>
+      {/* stage 过滤 */}
+      <div style={{ padding: '8px 12px', borderBottom: '1px solid #f0f0f0', flexShrink: 0 }}>
         <Segmented
           size="small"
           value={stageFilter}
           onChange={(v) => setStageFilter(v as typeof stageFilter)}
           options={[
-            { value: 'entry', label: '可入手' },
+            { value: 'all', label: '全部' },
+            { value: 'entry', label: '入手' },
+            { value: 'watch', label: '⏸️ 观望' },
+            { value: 'avoid', label: '🚫 回避' },
             { value: 'strong_buy', label: '🐂 强买' },
             { value: 'buy', label: '📈 买入' },
-            { value: 'watch_buy', label: '👀 观察买' },
-            { value: 'deep_pullback_entry', label: '🎯 深度回踩' },
-            { value: 'light_buy', label: '💡 轻仓试' },
-            { value: 'all', label: '全部' },
+            { value: 'deep_pullback_entry', label: '🎯 回踩' },
+            { value: 'watch_buy', label: '👀 观察' },
+            { value: 'light_buy', label: '💡 轻仓' },
           ]}
         />
       </div>
 
-      {listQ.isLoading && (
-        <div style={{ padding: 32, textAlign: 'center' }}>
-          <Spin />
-        </div>
-      )}
-      {!listQ.isLoading && items.length === 0 && (
-        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无综合评判记录，先扫一次" style={{ padding: 24 }} />
-      )}
-
-      {/* 卡片网格：3 列自适应 */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))',
-          gap: 12,
-        }}
-      >
-        {items.map((item) => {
-          const palette = COMBINED_PALETTE[item.combined_stage] ?? COMBINED_PALETTE.watch
-          return (
-            <div
-              key={item.code}
-              onClick={() => onSelectCode(item.code)}
-              style={{
-                border: `1px solid ${palette.border}`,
-                background: palette.bg,
-                borderRadius: 8,
-                padding: 12,
-                cursor: 'pointer',
-                transition: 'transform 0.15s ease, box-shadow 0.15s ease',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.transform = 'translateY(-2px)'
-                e.currentTarget.style.boxShadow = `0 4px 12px ${palette.border}66`
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.transform = ''
-                e.currentTarget.style.boxShadow = ''
-              }}
-            >
-              {/* 头部：stage chip + name + score */}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span style={{ fontSize: 16 }}>{palette.icon}</span>
-                  <span style={{ fontWeight: 700, fontSize: 13, color: palette.color }}>{palette.label}</span>
-                  <span style={{ fontSize: 14, fontWeight: 600 }}>{item.name || item.code}</span>
-                  <Text type="secondary" style={{ fontSize: 11 }}>{item.code}</Text>
-                </div>
-                <div style={{ fontWeight: 700, fontSize: 15, color: palette.color }}>{item.combined_score.toFixed(1)}</div>
-              </div>
-
-              {/* 双腿核心数据 */}
-              <div style={{ marginBottom: 10, display: 'flex', flexDirection: 'column', gap: 2 }}>
-                <LegInfo label="周线" leg={item.weekly} />
-                <LegInfo label="日线" leg={item.daily} />
-              </div>
-
-              {/* 操作建议 */}
-              <div style={{ borderTop: `1px dashed ${palette.border}`, paddingTop: 8, fontSize: 12 }}>
-                <div style={{ lineHeight: 1.5, color: 'rgba(0,0,0,0.85)' }}>{item.entry_reason}</div>
-                {item.trade_hint && (
-                  <Text type="secondary" style={{ fontSize: 11, display: 'block', marginTop: 4, lineHeight: 1.5 }}>
-                    {item.trade_hint}
-                  </Text>
-                )}
-              </div>
-            </div>
-          )
-        })}
+      <div style={{ flex: 1, overflowY: 'auto' }}>
+        {listQ.isLoading && (
+          <div style={{ padding: 32, textAlign: 'center' }}><Spin /></div>
+        )}
+        {!listQ.isLoading && items.length === 0 && (
+          <Empty
+            image={Empty.PRESENTED_IMAGE_SIMPLE}
+            description="暂无综合评判记录"
+            style={{ padding: 24 }}
+          />
+        )}
+        {items.map((item) => (
+          <CombinedRow
+            key={item.code}
+            item={item}
+            active={selected === item.code}
+            onClick={onSelect}
+            onAddWatchlist={onAddWatchlist}
+          />
+        ))}
       </div>
     </Card>
   )
 }
+
+/** 兼容老 API：不再使用卡片网格。导出别名保留向后兼容。 */
+export default CombinedList
