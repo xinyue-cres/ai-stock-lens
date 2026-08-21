@@ -27,9 +27,9 @@ export function useScoreboardState() {
   const [peakFilter, setPeakFilterState] = useState<'all' | 'exclude_up' | 'only_down'>(
     () => (localStorage.getItem('scoreboard-peak-filter') as any) || 'all',
   )
-  // 打分基于的 K 线周期：daily 日线 / weekly 周五收盘周线
-  const [timeframe, setTimeframeState] = useState<'daily' | 'weekly'>(
-    () => (localStorage.getItem('scoreboard-timeframe') as 'daily' | 'weekly') || 'daily',
+  // 打分基于的 K 线周期：daily 日线 / weekly 周五收盘周线 / combined 日周合并
+  const [timeframe, setTimeframeState] = useState<'daily' | 'weekly' | 'combined'>(
+    () => (localStorage.getItem('scoreboard-timeframe') as 'daily' | 'weekly' | 'combined') || 'daily',
   )
 
   const setScope = (v: string) => {
@@ -51,7 +51,7 @@ export function useScoreboardState() {
     localStorage.setItem('scoreboard-peak-filter', v)
   }
 
-  const setTimeframe = (v: 'daily' | 'weekly') => {
+  const setTimeframe = (v: 'daily' | 'weekly' | 'combined') => {
     setTimeframeState(v)
     localStorage.setItem('scoreboard-timeframe', v)
   }

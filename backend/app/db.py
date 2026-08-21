@@ -70,6 +70,7 @@ def init_db() -> None:
         stock_dividend,
         stock_group,
         stock_score,
+        stock_score_combined,
         sync_log,
     )
 

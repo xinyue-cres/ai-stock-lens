@@ -22,8 +22,8 @@ interface ScoreboardToolbarProps {
   setOnlyEntry: (v: boolean) => void
   peakFilter: 'all' | 'exclude_up' | 'only_down'
   setPeakFilter: (v: 'all' | 'exclude_up' | 'only_down') => void
-  timeframe: 'daily' | 'weekly'
-  setTimeframe: (v: 'daily' | 'weekly') => void
+  timeframe: 'daily' | 'weekly' | 'combined'
+  setTimeframe: (v: 'daily' | 'weekly' | 'combined') => void
   scan: ScanStatus | undefined
   running: boolean
   scanPending: boolean
@@ -66,14 +66,15 @@ export default function ScoreboardToolbar(props: ScoreboardToolbarProps) {
               { value: 'group', label: '自选分组' },
             ]}
           />
-          {/* 打分基于的 K 线周期：日线 / 周线（周五收盘 bar 重采样） */}
+          {/* 打分基于的 K 线周期：日线 / 周线 / 综合（日周合并评判） */}
           <Segmented
             size="small"
             value={timeframe}
-            onChange={(v) => setTimeframe(v as 'daily' | 'weekly')}
+            onChange={(v) => setTimeframe(v as 'daily' | 'weekly' | 'combined')}
             options={[
               { value: 'daily', label: '日线' },
               { value: 'weekly', label: '周线' },
+              { value: 'combined', label: '综合' },
             ]}
           />
           {scope === 'group' && (

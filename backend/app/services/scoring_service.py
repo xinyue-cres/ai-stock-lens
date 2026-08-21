@@ -242,6 +242,86 @@ def _upsert(session: Session, code: str, name: str, scored: dict, trend: dict,
     }, ensure_ascii=False)
     session.add(row)
     session.commit()
+    # 关键：每条腿写完后立刻尝试合并评判（需要 daily+weekly 双方都存在才有意义）
+    _combined_upsert(session, code, name, scan_date, scope)
+
+
+def _combined_upsert(session: Session, code: str, name: str,
+                     scan_date: date, scope: str | None) -> None:
+    """根据 stock_score 的 daily+weekly 两条腿计算 combined 结论并 upsert。
+
+    只有当两个 timeframe 都有当日扫描结果时才计算；否则只更新已经有的行。
+    """
+    from app.features.combined_judge import (
+        combined_entry_reason,
+        combined_meta,
+        combined_score,
+        combined_stage,
+    )
+    from app.models.stock_score_combined import StockScoreCombined
+
+    daily_row = session.get(StockScore, (code, "daily"))
+    weekly_row = session.get(StockScore, (code, "weekly"))
+    if daily_row is None and weekly_row is None:
+        return  # 一条腿都没，不算
+
+    w_total = weekly_row.total_score if weekly_row else 0.0
+    d_total = daily_row.total_score if daily_row else 0.0
+    w_stage = weekly_row.trend_stage if weekly_row else "insufficient"
+    d_stage = daily_row.trend_stage if daily_row else "insufficient"
+    # weekly/daily 的 peak 数据（从 components_json 抽出）
+    def _peak_of(r) -> tuple[str | None, int]:
+        if not r or not r.components_json:
+            return None, 0
+        try:
+            comp = json.loads(r.components_json)
+        except Exception:  # noqa: BLE001
+            return None, 0
+        sig = comp.get("signal") or {}
+        return sig.get("peak_signal"), int(sig.get("peak_conf") or 0)
+
+    w_peak, w_conf = _peak_of(weekly_row)
+    d_peak, d_conf = _peak_of(daily_row)
+
+    stage = combined_stage(w_stage, d_stage)
+    total = combined_score(w_total, d_total, stage)
+    meta = combined_meta(stage)
+    can_entry = stage in ("strong_buy", "buy", "light_buy", "deep_pullback_entry")
+    entry_reason = combined_entry_reason(
+        stage,
+        {"total_score": w_total, "signal_score": weekly_row.signal_score if weekly_row else None,
+         "trend_stage": w_stage, "peak_signal": w_peak, "peak_conf": w_conf},
+        {"total_score": d_total, "signal_score": daily_row.signal_score if daily_row else None,
+         "trend_stage": d_stage, "peak_signal": d_peak, "peak_conf": d_conf},
+    )
+
+    row = session.get(StockScoreCombined, code)
+    if row is None:
+        row = StockScoreCombined(code=code)
+    row.name = name
+    row.is_fund = is_fund_code(code)
+    row.scan_date = scan_date
+    row.scan_scope = scope
+    row.weekly_total = w_total
+    row.weekly_signal = weekly_row.signal_score if weekly_row else None
+    row.weekly_stage = w_stage
+    row.weekly_peak_signal = w_peak
+    row.weekly_peak_conf = w_conf
+    row.daily_total = d_total
+    row.daily_signal = daily_row.signal_score if daily_row else None
+    row.daily_stage = d_stage
+    row.daily_peak_signal = d_peak
+    row.daily_peak_conf = d_conf
+    row.combined_score = total
+    row.combined_stage = stage
+    row.can_entry = can_entry
+    row.entry_reason = entry_reason
+    row.trade_hint = meta.get("trade_hint")
+    # as_of_date 用两条腿中较新的一个
+    candidates = [r.as_of_date for r in (daily_row, weekly_row) if r and r.as_of_date]
+    row.as_of_date = max(candidates) if candidates else None
+    session.add(row)
+    session.commit()
 
 
 def _build_plan(session: Session, scope: str, codes: list[str] | None,

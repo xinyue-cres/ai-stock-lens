@@ -214,3 +214,49 @@ export async function analyzeBatchScore(body: {
   const { data } = await api.post('/score/analyze-batch', body, { timeout: 65_000 })
   return data
 }
+
+// ---------------------------------------------------------------------------
+// 综合评判（weekly + daily 合并）
+// ---------------------------------------------------------------------------
+
+export type CombinedStage =
+  | 'strong_buy' | 'buy' | 'watch_buy' | 'deep_pullback_entry'
+  | 'light_buy' | 'watch' | 'avoid'
+
+export interface CombinedLeg {
+  total_score: number | null
+  signal_score: number | null
+  trend_stage: TrendStage | null
+  peak_signal: '上涨过峰' | '下跌过峰' | '涨势延续' | '跌势延续' | '底部反转' | '顶部回落' | null
+  peak_conf: number | null
+}
+
+export interface CombinedItem {
+  code: string
+  name: string
+  is_fund: boolean
+  scan_date: string
+  as_of_date: string | null
+  weekly: CombinedLeg
+  daily: CombinedLeg
+  combined_score: number
+  combined_stage: CombinedStage
+  can_entry: boolean
+  entry_reason: string | null
+  trade_hint: string | null
+}
+
+export async function getCombinedList(params: {
+  combined_stage?: CombinedStage
+  can_entry?: boolean
+  scope?: string
+  limit?: number
+} = {}): Promise<CombinedItem[]> {
+  const { data } = await api.get('/score/combined/list', { params })
+  return data
+}
+
+export async function getCombinedDetail(code: string): Promise<CombinedItem> {
+  const { data } = await api.get(`/score/combined/${code}`)
+  return data
+}

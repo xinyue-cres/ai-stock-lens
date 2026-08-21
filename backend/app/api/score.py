@@ -355,3 +355,101 @@ def trend_detail(code: str, session: Session = Depends(get_session), timeframe: 
     row = session.get(StockScore, (code, tf))
     result = judge_trend(bars, signal_score=row.signal_score if row else None, timeframe=tf)
     return {"code": code, "timeframe": tf, **result}
+
+
+# ---------------------------------------------------------------------------
+# 综合评判（weekly + daily 合并）
+# ---------------------------------------------------------------------------
+
+@router.get("/combined/list")
+def combined_list(
+    session: Session = Depends(get_session),
+    combined_stage: str | None = None,     # 按 7 档过滤： strong_buy/buy/watch_buy/...
+    can_entry: bool | None = None,         # 只看可入手（strong_buy/buy/light_buy/deep_pullback）
+    scope: str | None = None,              # 对齐最近批次；不传退化为全局最新 scan_date
+    limit: int = 200,
+):
+    """综合评判列表。返回 (weekly + daily) 双腿核心字段 + 综合分 + 操作建议。
+
+    按 combined_score 降序。combined_stage 是 7 档之一（strong_buy 等）。
+    """
+    from sqlalchemy import func
+    from app.models.stock_score_combined import StockScoreCombined
+
+    # 取本 scope 最近一段时间批次（避免陈旧）
+    stmt = select(StockScoreCombined)
+    latest = session.exec(
+        select(func.max(StockScoreCombined.scan_date)).where(
+            StockScoreCombined.scan_scope == scope if scope in ("all", "watchlist", "group") else True
+        )
+    ).first()
+    if latest:
+        stmt = stmt.where(StockScoreCombined.scan_date == latest)
+    if combined_stage:
+        stmt = stmt.where(StockScoreCombined.combined_stage == combined_stage)
+    if can_entry is not None:
+        stmt = stmt.where(StockScoreCombined.can_entry == can_entry)
+    stmt = stmt.order_by(StockScoreCombined.combined_score.desc()).limit(limit)
+    rows = list(session.exec(stmt).all())
+    return [{
+        "code": r.code,
+        "name": r.name,
+        "is_fund": r.is_fund,
+        "scan_date": str(r.scan_date),
+        "as_of_date": str(r.as_of_date) if r.as_of_date else None,
+        "weekly": {
+            "total_score": r.weekly_total,
+            "signal_score": r.weekly_signal,
+            "trend_stage": r.weekly_stage,
+            "peak_signal": r.weekly_peak_signal,
+            "peak_conf": r.weekly_peak_conf,
+        },
+        "daily": {
+            "total_score": r.daily_total,
+            "signal_score": r.daily_signal,
+            "trend_stage": r.daily_stage,
+            "peak_signal": r.daily_peak_signal,
+            "peak_conf": r.daily_peak_conf,
+        },
+        "combined_score": r.combined_score,
+        "combined_stage": r.combined_stage,
+        "can_entry": r.can_entry,
+        "entry_reason": r.entry_reason,
+        "trade_hint": r.trade_hint,
+    } for r in rows]
+
+
+@router.get("/combined/{code}")
+def combined_detail(code: str, session: Session = Depends(get_session)):
+    """单只 combined 详情。"""
+    from app.models.stock_score_combined import StockScoreCombined
+
+    r = session.get(StockScoreCombined, code)
+    if not r:
+        raise HTTPException(404, "该标的还没有综合评判记录")
+    return {
+        "code": r.code,
+        "name": r.name,
+        "is_fund": r.is_fund,
+        "scan_date": str(r.scan_date),
+        "as_of_date": str(r.as_of_date) if r.as_of_date else None,
+        "weekly": {
+            "total_score": r.weekly_total,
+            "signal_score": r.weekly_signal,
+            "trend_stage": r.weekly_stage,
+            "peak_signal": r.weekly_peak_signal,
+            "peak_conf": r.weekly_peak_conf,
+        },
+        "daily": {
+            "total_score": r.daily_total,
+            "signal_score": r.daily_signal,
+            "trend_stage": r.daily_stage,
+            "peak_signal": r.daily_peak_signal,
+            "peak_conf": r.daily_peak_conf,
+        },
+        "combined_score": r.combined_score,
+        "combined_stage": r.combined_stage,
+        "can_entry": r.can_entry,
+        "entry_reason": r.entry_reason,
+        "trade_hint": r.trade_hint,
+    }
