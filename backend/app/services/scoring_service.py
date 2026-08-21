@@ -343,10 +343,27 @@ def _combined_upsert(session: Session, code: str, name: str,
     row.entry_reason = entry_reason
     row.trade_hint = meta.get("trade_hint")
     row.demote_reason = demote_reason
-    # 空间 = 距 60 日高点的上行空间 %。如果 pct_b 已经 >0.95（贴近上轨），
-    # 用 "高_60 - close" 的实际空间 percent 显示能给用户更直观的
-    # “还能涨多少到顶” 感受。 daily 为准。
+    # 空间（保留 dist_high 兼容）：距 60 日高 = 旧逻辑。
+    # 主力指标改该股历史金叉 peak（mean + median）—— 比 60 日高更能代表"这次能涨多少"。
     space_pct: float | None = None
+    hist_golden_peak_pct: float | None = None
+    hist_golden_peak_median: float | None = None
+    # 用 weekly 的 signal_summary（weekly 是揭示"该股金叉周期气质"的更稳定层次；
+    # daily bar 太敏感、把金叉冲涨幅看扁）
+    if weekly_row is not None and weekly_row.components_json:
+        try:
+            comp = json.loads(weekly_row.components_json)
+            # 历史 peak 从 signal_summary 里拿
+            sig = comp.get("signal") or {}
+            hp = sig.get("hist_golden_peak_pct")
+            hm = sig.get("hist_golden_peak_median")
+            if isinstance(hp, (int, float)):
+                hist_golden_peak_pct = hp
+            if isinstance(hm, (int, float)):
+                hist_golden_peak_median = hm
+        except (json.JSONDecodeError, TypeError, ValueError):
+            pass
+    # dist_high 副参考（daily）
     if daily_row is not None and daily_row.components_json:
         try:
             comp = json.loads(daily_row.components_json)
@@ -361,6 +378,8 @@ def _combined_upsert(session: Session, code: str, name: str,
         except (json.JSONDecodeError, TypeError, ValueError):
             pass
     row.space_pct = space_pct
+    row.hist_golden_peak_pct = hist_golden_peak_pct
+    row.hist_golden_peak_median = hist_golden_peak_median
     # as_of_date 用两条腿中较新的一个
     candidates = [r.as_of_date for r in (daily_row, weekly_row) if r and r.as_of_date]
     row.as_of_date = max(candidates) if candidates else None

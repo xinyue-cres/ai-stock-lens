@@ -86,13 +86,24 @@ export default function CombinedDetailView({ detail, onAddWatchlist }: CombinedD
           <div style={{ textAlign: 'center', padding: '12px 8px', background: palette.bg, borderRadius: 6, border: `1px solid ${palette.border}` }}>
             <div style={{ fontWeight: 700, fontSize: 26, color: palette.color }}>{detail.combined_score.toFixed(1)}</div>
             <Text type="secondary" style={{ fontSize: 11 }}>综合分</Text>
-            {/* 空间指标：距 60 日高点的上行空间 */}
-            {detail.space_pct != null && (
-              <div style={{ marginTop: 8, borderTop: `1px dashed ${palette.border}`, paddingTop: 6 }}>
-                <div style={{ fontWeight: 700, fontSize: 13, color: detail.space_pct > 10 ? '#16a34a' : detail.space_pct > 0 ? '#d97706' : '#dc2626' }}>
-                  {detail.space_pct > 0 ? `+${detail.space_pct.toFixed(1)}%` : `${detail.space_pct.toFixed(1)}%`}
+            {/* 历史金叉 peak 统计（该股气质的可预期涨幅）：中位 + 均值 */}
+            {(detail.hist_golden_peak_median != null || detail.hist_golden_peak_pct != null) && (
+              <div style={{ marginTop: 8, borderTop: `1px dashed ${palette.border}`, paddingTop: 6, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+                  <div style={{ fontWeight: 700, fontSize: 13, color: (detail.hist_golden_peak_median ?? 0) >= 15 ? '#16a34a' : (detail.hist_golden_peak_median ?? 0) >= 8 ? '#0891b2' : '#d97706' }}>
+                    {detail.hist_golden_peak_median != null ? `+${detail.hist_golden_peak_median.toFixed(1)}%` : '-'}
+                  </div>
+                  <Text type="secondary" style={{ fontSize: 10 }}>历史中位</Text>
                 </div>
-                <Text type="secondary" style={{ fontSize: 10 }}>距 60 日高</Text>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+                  <div style={{ fontWeight: 600, fontSize: 12, color: (detail.hist_golden_peak_pct ?? 0) >= 15 ? '#16a34a' : (detail.hist_golden_peak_pct ?? 0) >= 8 ? '#0891b2' : '#d97706' }}>
+                    {detail.hist_golden_peak_pct != null ? `+${detail.hist_golden_peak_pct.toFixed(1)}%` : '-'}
+                  </div>
+                  <Text type="secondary" style={{ fontSize: 10 }}>历史平均</Text>
+                </div>
+                <Text type="secondary" style={{ fontSize: 9, marginTop: 2 }}>
+                  距60高 {detail.space_pct != null ? `+${detail.space_pct.toFixed(1)}%` : '-'}
+                </Text>
               </div>
             )}
           </div>

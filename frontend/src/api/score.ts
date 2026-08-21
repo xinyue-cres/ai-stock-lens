@@ -245,7 +245,9 @@ export interface CombinedItem {
   entry_reason: string | null
   trade_hint: string | null
   demote_reason: string | null  // 被降级的原因（如 pct_b 贴上轨 strong_buy→buy）
-  space_pct: number | null       // 距 60 日高点的上行空间 %（越大越足）
+  space_pct: number | null       // 距 60 日高点的上行空间 %，副参考
+  hist_golden_peak_pct: number | null    // 该股历史金叉周期峰值涨幅均值 %（主）
+  hist_golden_peak_median: number | null // 该股历史金叉周期峰值涨幅中位数 %（主）
   // 由后端 _attach_watchlist_info 附加（自选分组联动）
   in_watchlist?: boolean
   group_ids?: number[]

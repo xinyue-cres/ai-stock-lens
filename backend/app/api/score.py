@@ -427,6 +427,8 @@ def combined_list(
         "trade_hint": r.trade_hint,
         "demote_reason": getattr(r, "demote_reason", None),
         "space_pct": getattr(r, "space_pct", None),
+        "hist_golden_peak_pct": getattr(r, "hist_golden_peak_pct", None),
+        "hist_golden_peak_median": getattr(r, "hist_golden_peak_median", None),
     } for r in rows]
     # 附加 in_watchlist + group_ids（前端 StockList 视图联动）
     _attach_watchlist_info(session, items)
@@ -468,4 +470,6 @@ def combined_detail(code: str, session: Session = Depends(get_session)):
         "trade_hint": r.trade_hint,
         "demote_reason": getattr(r, "demote_reason", None),
         "space_pct": getattr(r, "space_pct", None),
+        "hist_golden_peak_pct": getattr(r, "hist_golden_peak_pct", None),
+        "hist_golden_peak_median": getattr(r, "hist_golden_peak_median", None),
     }
