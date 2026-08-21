@@ -64,7 +64,7 @@ def migrate_one(s: Session, code: str, name: str, timeframe: Timeframe,
     scored = score_stock(bars, div_yield, is_fund_code(code), cache=cache, timeframe=timeframe)
     if scored is None:
         return False, "score_stock 返回 None"
-    trend = judge_trend(bars, signal_score=scored["signal_score"], cache=cache)
+    trend = judge_trend(bars, signal_score=scored["signal_score"], cache=cache, timeframe=timeframe)
     as_of = _parse_as_of(bars["trade_date"].iloc[-1])
 
     if dry_run:

@@ -398,7 +398,8 @@ def _run_scan(todo: list[str], name_map: dict[str, str], settings, today: date, 
                     scored = score_stock(bars, dividend_map.get(code), is_fund_code(code),
                                          cache=cache, timeframe=timeframe)
                     if scored is not None:
-                        trend = judge_trend(bars, signal_score=scored["signal_score"], cache=cache)
+                        trend = judge_trend(bars, signal_score=scored["signal_score"],
+                                            cache=cache, timeframe=timeframe)
                         as_of_date = _parse_as_of(bars["trade_date"].iloc[-1])
                         with Session(engine) as s:
                             _upsert(s, code, name_map.get(code, code), scored, trend,

@@ -36,7 +36,17 @@ _GOLDEN_HORIZONS = (5, 10, 20)  # 金叉后延续观察窗口
 # 方向由 acc_z 符号给出：acc_z < −_PEAK_Z = 动能急刹（顶部过峰）；acc_z > +_PEAK_Z = 动能急转（底部过峰）。
 # 实时版验证：|acc_z|>1.0 报警率 ~19%（bar 旧判定 ~49%），|acc_z|>1.5 ~12.5%。取 1.0（预警宁可多报）。
 _PEAK_Z = 1.0
-_PEAK_CONF_STRONG = 51  # 过峰置信度"强"档（决策树降级门槛，误报 ~57%）；弱/极弱只前端提示
+_PEAK_CONF_STRONG_DAILY = 51   # 日线：过峰置信度"强"档（决策树降级门槛，误报 ~57%）；弱/极弱只前端提示
+_PEAK_CONF_STRONG_WEEKLY = 40  # 周线：周 bar acc_z 分布系统性偏低（实测 44 个 candidate 全 conf<51，daily 下有 5 个 ≥51）。
+                              # 若沿用 daily=51 则 weekly 永远无 left_entry/overheat 触发；实测 conf>=40 能捕获顶部。
+
+_PEAK_CONF_STRONG_BY_TF: dict[str, int] = {
+    "daily": _PEAK_CONF_STRONG_DAILY,
+    "weekly": _PEAK_CONF_STRONG_WEEKLY,
+}
+
+# 兼容老代码（默认 daily）
+_PEAK_CONF_STRONG = _PEAK_CONF_STRONG_DAILY
 
 
 def _norm(x: float | None, lo: float, hi: float) -> float:

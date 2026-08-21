@@ -353,5 +353,5 @@ def trend_detail(code: str, session: Session = Depends(get_session), timeframe: 
     bars = to_bars(df, tf)
     # 传入金叉延续分（从该周期的 StockScore 行取），保持与扫描口径一致
     row = session.get(StockScore, (code, tf))
-    result = judge_trend(bars, signal_score=row.signal_score if row else None)
+    result = judge_trend(bars, signal_score=row.signal_score if row else None, timeframe=tf)
     return {"code": code, "timeframe": tf, **result}
