@@ -61,6 +61,17 @@ export default function ScoreDetail({ detail, onAddWatchlist, onOpenDetail }: Sc
             <span style={{ fontSize: 16, fontWeight: 700 }}>{detail.name || detail.code}</span>
             <Text type="secondary" style={{ marginLeft: 8 }}>{detail.code}</Text>
             {detail.is_fund && <Tag style={{ marginLeft: 6 }}>ETF/LOF</Tag>}
+            {/* 当前查看周期标识：daily 绿 / weekly 蓝，避免日/周数据混看 */}
+            <Tag
+              style={{
+                marginLeft: 6,
+                color: detail.timeframe === 'weekly' ? '#1d4ed8' : '#15803d',
+                borderColor: detail.timeframe === 'weekly' ? '#bfdbfe' : '#bbf7d0',
+                background: detail.timeframe === 'weekly' ? '#eff6ff' : '#f0fdf4',
+              }}
+            >
+              {detail.timeframe === 'weekly' ? '当前：周线' : '当前：日线'}
+            </Tag>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             {stage && <Tag style={{ color: stage.color, borderColor: stage.border, background: stage.bg }}>{stage.label}</Tag>}
@@ -121,7 +132,14 @@ export default function ScoreDetail({ detail, onAddWatchlist, onOpenDetail }: Sc
           </Field>
           <Field label="过峰信号">
             {sig.peak_signal ? (
-              <span style={{ color: sig.peak_signal === '上涨过峰' ? '#d97706' : sig.peak_signal === '下跌过峰' ? '#2563eb' : undefined }}>
+              <span style={{
+                color:
+                  sig.peak_signal === '上涨过峰' ? '#d97706' :
+                  sig.peak_signal === '下跌过峰' ? '#2563eb' :
+                  sig.peak_signal === '底部反转' ? '#16a34a' :
+                  sig.peak_signal === '顶部回落' ? '#dc2626' :
+                  undefined,
+              }}>
                 {sig.peak_signal}
                 {sig.peak_conf ? `（置信度${sig.peak_conf}）` : ''}
               </span>

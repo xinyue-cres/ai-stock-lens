@@ -13,9 +13,9 @@ function loadGroupIds(): number[] {
   }
 }
 
-/** 选股页工具栏/过滤状态：范围 + 分组 + 只看可入手 + 过峰过滤 + 强制重扫。
+/** 选股页工具栏/过滤状态：范围 + 分组 + 只看可入手 + 过峰过滤 + 周期切换 + 强制重扫。
  *
- * scope / groupIds / peakFilter 持久化到 localStorage（切页面回来不丢）；其余为会话级。
+ * scope / groupIds / peakFilter / timeframe 持久化到 localStorage（切页面回来不丢）；其余为会话级。
  * aiParams 统一 AI 点评/汇总共用的过滤口径，避免两处各拼一遍。
  */
 export function useScoreboardState() {
@@ -26,6 +26,10 @@ export function useScoreboardState() {
   // 过峰过滤：all 不过滤 / exclude_up 排除上涨过峰 / only_down 只看下跌过峰
   const [peakFilter, setPeakFilterState] = useState<'all' | 'exclude_up' | 'only_down'>(
     () => (localStorage.getItem('scoreboard-peak-filter') as any) || 'all',
+  )
+  // 打分基于的 K 线周期：daily 日线 / weekly 周五收盘周线
+  const [timeframe, setTimeframeState] = useState<'daily' | 'weekly'>(
+    () => (localStorage.getItem('scoreboard-timeframe') as 'daily' | 'weekly') || 'daily',
   )
 
   const setScope = (v: string) => {
@@ -45,6 +49,11 @@ export function useScoreboardState() {
   const setPeakFilter = (v: 'all' | 'exclude_up' | 'only_down') => {
     setPeakFilterState(v)
     localStorage.setItem('scoreboard-peak-filter', v)
+  }
+
+  const setTimeframe = (v: 'daily' | 'weekly') => {
+    setTimeframeState(v)
+    localStorage.setItem('scoreboard-timeframe', v)
   }
 
   // AI 调用参数：与列表一致的总分降序过滤口径，点评/汇总共用
@@ -69,6 +78,8 @@ export function useScoreboardState() {
     setForce,
     peakFilter,
     setPeakFilter,
+    timeframe,
+    setTimeframe,
     aiParams,
   }
 }

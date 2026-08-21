@@ -15,6 +15,7 @@ export interface ScoreItem {
   name: string
   is_fund: boolean
   scan_date: string
+  scan_timeframe?: 'daily' | 'weekly'  // 打分基于的 K 线周期（后端 scan_timeframe 字段；老数据可能无）
   as_of_date: string | null
   total_score: number
   signal_score: number
@@ -34,7 +35,7 @@ export interface ScoreItem {
   dif_slope_dir: 'up' | 'down' | 'flat' | null
   current_state: string | null
   // 过峰信号（bar|acc_z 触发 + 置信度评级，列表行标记用）
-  peak_signal?: '上涨过峰' | '下跌过峰' | '涨势延续' | '跌势延续' | null
+  peak_signal?: '上涨过峰' | '下跌过峰' | '涨势延续' | '跌势延续' | '底部反转' | '顶部回落' | null
   peak_conf?: number | null
   // 是否在自选 + 所属分组（选股页跳工作台分组视图用，由 list 接口批量注入）
   in_watchlist?: boolean
@@ -51,7 +52,7 @@ export interface SignalComponent {
   current_state?: string | null
   dif_slope?: number | null
   dif_slope_dir?: 'up' | 'down' | 'flat' | null
-  peak_signal?: '上涨过峰' | '下跌过峰' | '涨势延续' | '跌势延续' | null
+  peak_signal?: '上涨过峰' | '下跌过峰' | '涨势延续' | '跌势延续' | '底部反转' | '顶部回落' | null
   // 过峰置信度 0-100（触发类型 × 量能）与量比 vr20
   peak_conf?: number | null
   vr20?: number | null
@@ -96,6 +97,8 @@ export interface ScoreComponents {
 
 export interface ScoreDetail extends ScoreItem {
   components: ScoreComponents
+  // 详情顶部标识的查看周期（后端 _serialize 里单独透出，不在 score row 字段）
+  timeframe?: 'daily' | 'weekly'
 }
 
 export interface ScanStatus {
@@ -120,6 +123,7 @@ export interface ScoreListParams {
   group_ids?: string // 逗号分隔的自选分组 id，如 "9,10"
   scope?: string // all/watchlist/group，决定取哪个范围的最近扫描批次
   peak_filter?: 'all' | 'exclude_up' | 'only_down' // 过峰过滤
+  timeframe?: 'daily' | 'weekly' // 打分基于的 K 线周期（后端按 scan_timeframe 过滤）
 }
 
 export async function getScoreList(params: ScoreListParams = {}): Promise<ScoreItem[]> {
@@ -127,8 +131,8 @@ export async function getScoreList(params: ScoreListParams = {}): Promise<ScoreI
   return data
 }
 
-export async function getScoreDetail(code: string): Promise<ScoreDetail> {
-  const { data } = await api.get(`/score/${code}`)
+export async function getScoreDetail(code: string, timeframe: 'daily' | 'weekly' = 'daily'): Promise<ScoreDetail> {
+  const { data } = await api.get(`/score/${code}`, { params: { timeframe } })
   return data
 }
 
@@ -138,6 +142,7 @@ export async function runScan(body: {
   force?: boolean
   group_id?: number
   group_ids?: number[]
+  timeframe?: 'daily' | 'weekly'
 }) {
   const { data } = await api.post('/score/scan', body, { timeout: 30_000 })
   return data
@@ -162,8 +167,8 @@ export interface TrendResult {
   indicators: Record<string, number | string | null>
 }
 
-export async function judgeTrend(code: string): Promise<TrendResult> {
-  const { data } = await api.post(`/score/trend/${code}`, {}, { timeout: 30_000 })
+export async function judgeTrend(code: string, timeframe: 'daily' | 'weekly' = 'daily'): Promise<TrendResult> {
+  const { data } = await api.post(`/score/trend/${code}`, {}, { params: { timeframe }, timeout: 30_000 })
   return data
 }
 

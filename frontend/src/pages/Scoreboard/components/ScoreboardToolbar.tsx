@@ -22,6 +22,8 @@ interface ScoreboardToolbarProps {
   setOnlyEntry: (v: boolean) => void
   peakFilter: 'all' | 'exclude_up' | 'only_down'
   setPeakFilter: (v: 'all' | 'exclude_up' | 'only_down') => void
+  timeframe: 'daily' | 'weekly'
+  setTimeframe: (v: 'daily' | 'weekly') => void
   scan: ScanStatus | undefined
   running: boolean
   scanPending: boolean
@@ -37,7 +39,7 @@ interface ScoreboardToolbarProps {
 export default function ScoreboardToolbar(props: ScoreboardToolbarProps) {
   const {
     scope, setScope, groupIds, setGroupIds, groups, force, setForce,
-    onlyEntry, setOnlyEntry, peakFilter, setPeakFilter,
+    onlyEntry, setOnlyEntry, peakFilter, setPeakFilter, timeframe, setTimeframe,
     scan, running, scanPending, commentPending, summaryPending,
     onStartScan, onCancelScan, onAIComment, onAISummary, onOpenCriteria,
   } = props
@@ -62,6 +64,16 @@ export default function ScoreboardToolbar(props: ScoreboardToolbarProps) {
               { value: 'all', label: '全 A 股 + ETF' },
               { value: 'watchlist', label: '全部自选' },
               { value: 'group', label: '自选分组' },
+            ]}
+          />
+          {/* 打分基于的 K 线周期：日线 / 周线（周五收盘 bar 重采样） */}
+          <Segmented
+            size="small"
+            value={timeframe}
+            onChange={(v) => setTimeframe(v as 'daily' | 'weekly')}
+            options={[
+              { value: 'daily', label: '日线' },
+              { value: 'weekly', label: '周线' },
             ]}
           />
           {scope === 'group' && (

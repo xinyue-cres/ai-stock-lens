@@ -59,7 +59,7 @@ export default function ScoreboardPage() {
   const {
     onlyEntry, setOnlyEntry,
     scope, setScope, groupIds, setGroupIds, force, setForce,
-    peakFilter, setPeakFilter, aiParams,
+    peakFilter, setPeakFilter, timeframe, setTimeframe, aiParams,
   } = useScoreboardState()
   const [criteriaOpen, setCriteriaOpen] = useState(false)
   const [summaryOpen, setSummaryOpen] = useState(false)
@@ -74,10 +74,10 @@ export default function ScoreboardPage() {
   const groups = groupsQ.data ?? []
 
   // 打分排行（选了自选分组范围时，按所选分组过滤显示）
-  // scope/peakFilter 进 queryKey：切范围或过峰过滤时强制重查，避免显示上次的数据
+  // scope/peakFilter/timeframe 进 queryKey：切范围/过峰过滤/周期时强制重查，避免显示上次的数据
   const activeGroupIds = scope === 'group' && groupIds.length ? groupIds.join(',') : undefined
   const listQ = useQuery({
-    queryKey: ['score-list', scope, onlyEntry, activeGroupIds, peakFilter],
+    queryKey: ['score-list', scope, onlyEntry, activeGroupIds, peakFilter, timeframe],
     queryFn: () =>
       getScoreList({
         sort_by: 'total',
@@ -87,6 +87,7 @@ export default function ScoreboardPage() {
         group_ids: activeGroupIds,
         scope,
         peak_filter: peakFilter,
+        timeframe,
       }),
   })
   const items = listQ.data ?? []
@@ -118,10 +119,10 @@ export default function ScoreboardPage() {
     prevFinishedNull.current = finishedAtIsNull
   }, [scan?.running, scan?.finished_at, qc, selected])
 
-  // 详情
+  // 详情（按当前查看的周期取数据：daily/weekly 行独立缓存）
   const detailQ = useQuery({
-    queryKey: ['score-detail', selected],
-    queryFn: () => getScoreDetail(selected!),
+    queryKey: ['score-detail', selected, timeframe],
+    queryFn: () => getScoreDetail(selected!, timeframe),
     enabled: !!selected,
   })
   const detail: ScoreDetailType | undefined = detailQ.data
@@ -132,6 +133,7 @@ export default function ScoreboardPage() {
         scope,
         force,
         group_ids: scope === 'group' && groupIds.length ? groupIds : undefined,
+        timeframe,  // 扫什么周期 = 看什么周期，保持数据源一致
       }),
     onSuccess: (d) => {
       if (d.started === false) message.warning(d.reason || '已有扫描进行中')
@@ -188,6 +190,8 @@ export default function ScoreboardPage() {
         setOnlyEntry={setOnlyEntry}
         peakFilter={peakFilter}
         setPeakFilter={setPeakFilter}
+        timeframe={timeframe}
+        setTimeframe={setTimeframe}
         scan={scan}
         running={running}
         scanPending={scanMut.isPending}

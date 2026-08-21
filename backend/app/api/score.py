@@ -37,6 +37,7 @@ class ScanRequest(BaseModel):
     force: bool = False
     group_id: int | None = None  # 兼容旧字段：单个分组
     group_ids: list[int] | None = None  # scope=watchlist 时按多个自选分组过滤（任意匹配）
+    timeframe: str = "daily"  # daily | weekly：打分基于的 K 线周期（bar 重采样在 scoring_service 内做）
 
 
 class SummarizeRequest(BaseModel):
@@ -63,6 +64,7 @@ def _serialize(r: StockScore) -> dict:
         "name": r.name,
         "is_fund": r.is_fund,
         "scan_date": str(r.scan_date),
+        "scan_timeframe": r.scan_timeframe,
         "as_of_date": str(r.as_of_date) if r.as_of_date else None,
         "total_score": r.total_score,
         "signal_score": r.signal_score,
@@ -119,18 +121,20 @@ def _attach_watchlist_info(session: Session, items: list[dict]) -> None:
             i["group_ids"] = []
 
 
-def _latest_scan_date(session: Session, scope: str | None) -> date | None:
-    """当前范围对应的最近扫描批次日期。
+def _latest_scan_date(session: Session, scope: str | None, timeframe: str = "daily") -> date | None:
+    """当前范围对应的最近扫描批次日期（按 (scope, timeframe) 二元组精确匹配）。
 
-    按 scan_scope 精确匹配（全 A/自选/分组各自的最新批次，互不串——修复
-    "切全 A 却显示上次分组扫描批次"）；该范围无记录（如旧数据未标 scope）时回退全局最新。
+    按 (scan_scope + scan_timeframe) 共同过滤——daily/weekly 各自有独立批次，互不串。
+    该 (scope, timeframe) 组合无记录时退化为该 timeframe 全局最新日期，再退化为任意批次最新。
     """
+    stmt = select(func.max(StockScore.scan_date)).where(StockScore.scan_timeframe == timeframe)
     if scope and scope in ("all", "watchlist", "group"):
-        latest = session.exec(
-            select(func.max(StockScore.scan_date)).where(StockScore.scan_scope == scope)
-        ).first()
+        latest = session.exec(stmt.where(StockScore.scan_scope == scope)).first()
         if latest:
             return latest
+    latest = session.exec(stmt).first()
+    if latest:
+        return latest
     return session.exec(select(func.max(StockScore.scan_date))).first()
 
 
@@ -144,17 +148,20 @@ def _query_scores(
     stage: str | None = None,
     group_ids: str | None = None,
     scope: str | None = None,
+    timeframe: str = "daily",
 ) -> list[StockScore]:
     """打分查询（list 与 summarize 共用同一套过滤/排序）。
 
     group_ids：逗号分隔的自选分组 id（任意匹配），传了只显示这些分组内的标的打分。
     scope：当前查看范围（all/watchlist/group），决定取哪个范围的最近扫描批次。
+    timeframe：打分基于的周期（daily/weekly），按 (scan_date, scan_timeframe) 精确过滤。
     """
     sort_col = sort_by if sort_by in _SORTABLE else "total"
     col = getattr(StockScore, sort_col, StockScore.total_score)
     stmt = select(StockScore)
     # 只显示当前范围最近一次扫描批次，避免混入过期/旧算法残留行（scan_date 跨天时尤为关键）
-    latest = _latest_scan_date(session, scope)
+    latest = _latest_scan_date(session, scope, timeframe)
+    stmt = stmt.where(StockScore.scan_timeframe == timeframe)
     if latest:
         stmt = stmt.where(StockScore.scan_date == latest)
     if min_score is not None:
@@ -186,16 +193,20 @@ def list_scores(
     group_ids: str | None = None,  # 逗号分隔的自选分组 id，如 "9,10"（任意匹配）
     scope: str | None = None,  # all/watchlist/group，决定取哪个范围的最近扫描批次
     peak_filter: str = "all",  # all / exclude_up（排除上涨过峰）/ only_down（只看下跌过峰）
+    timeframe: str = "daily",  # daily / weekly：查哪个周期的打分批次
 ):
     """打分排行列表。按综合分或任意子维度排序，支持过滤。
 
     group_ids 传了则只显示这些自选分组内的标的打分（多选，命中任一即显示）。
     peak_filter 在 Python 层过滤（peak_signal 存于 components_json，无法 SQL 过滤）：
     先多查一批再过滤，保证过滤后仍能取满 limit 条。
+    timeframe 限 daily/weekly，其他值退化为 daily（防 SQL 注入 + 前端写错）。
     """
+    tf = timeframe if timeframe in ("daily", "weekly") else "daily"
     # 过峰过滤时多查，Python 层过滤后再截断，避免过滤后不足 limit
     sql_limit = limit if peak_filter == "all" else max(limit * 5, 1000)
-    rows = _query_scores(session, sort_by, dir, sql_limit, min_score, can_entry, stage, group_ids, scope)
+    rows = _query_scores(session, sort_by, dir, sql_limit, min_score, can_entry, stage,
+                         group_ids, scope, timeframe=tf)
     items = [_serialize(r) for r in rows]
     if peak_filter == "exclude_up":
         # 只排除强档及以上（≥51）的上涨过峰；弱/中档多为涨势中正常柱缩（历史占比 ~28%），保留不误杀
@@ -218,9 +229,10 @@ def scan_status():
 @router.post("/scan")
 def start_scan(payload: ScanRequest, session: Session = Depends(get_session)):
     gids = payload.group_ids or ([payload.group_id] if payload.group_id is not None else None)
+    tf = payload.timeframe if payload.timeframe in ("daily", "weekly") else "daily"
     return scoring_service.scan_market(
         session, scope=payload.scope, codes=payload.codes,
-        force=payload.force, group_ids=gids,
+        force=payload.force, group_ids=gids, timeframe=tf,
     )
 
 
@@ -302,12 +314,15 @@ def analyze_batch(payload: AnalyzeBatchRequest, session: Session = Depends(get_s
 
 
 @router.get("/{code}")
-def score_detail(code: str, session: Session = Depends(get_session)):
-    """单只打分详情（含各维度明细 components）。"""
-    row = session.get(StockScore, code)
+def score_detail(code: str, session: Session = Depends(get_session), timeframe: str = "daily"):
+    """单只打分详情（含各维度明细 components）。timeframe 控制取哪个周期的 cache。"""
+    tf = timeframe if timeframe in ("daily", "weekly") else "daily"
+    row = session.get(StockScore, (code, tf))
     if not row:
-        raise HTTPException(404, "该标的还没有打分记录，请先触发扫描")
+        raise HTTPException(404, f"该标的还没有 {tf} 打分记录，请先触发对应周期扫描")
     data = _serialize(row)
+    # 透出当前查看周期（前端详情顶部 Tag 标识用）
+    data["timeframe"] = row.scan_timeframe
     try:
         data["components"] = json.loads(row.components_json) if row.components_json else {}
     except json.JSONDecodeError:
@@ -316,8 +331,9 @@ def score_detail(code: str, session: Session = Depends(get_session)):
 
 
 @router.post("/trend/{code}")
-def trend_detail(code: str, session: Session = Depends(get_session)):
-    """对单只标的重新跑一次趋势判断（详情页手动触发）。"""
+def trend_detail(code: str, session: Session = Depends(get_session), timeframe: str = "daily"):
+    """对单只标的重新跑一次趋势判断（详情页手动触发）。timeframe 切换 bar 重采样。"""
+    tf = timeframe if timeframe in ("daily", "weekly") else "daily"
     df = load_kline_df(session, code)
     if df.empty:
         settings = get_settings()
@@ -326,7 +342,11 @@ def trend_detail(code: str, session: Session = Depends(get_session)):
         df = get_data_router().fetch_stock_daily(code, start, end)
     if df.empty:
         raise HTTPException(404, "无法获取该标的 K 线")
-    # 传入金叉延续分，保持与扫描口径一致（金叉驱动趋势判断）
-    row = session.get(StockScore, code)
-    result = judge_trend(df, signal_score=row.signal_score if row else None)
-    return {"code": code, **result}
+    # 周期重采样：daily→原样；weekly→周五收盘 bar，与扫描打分同源
+    from app.features.timeframe import to_bars
+
+    bars = to_bars(df, tf)
+    # 传入金叉延续分（从该周期的 StockScore 行取），保持与扫描口径一致
+    row = session.get(StockScore, (code, tf))
+    result = judge_trend(bars, signal_score=row.signal_score if row else None)
+    return {"code": code, "timeframe": tf, **result}
