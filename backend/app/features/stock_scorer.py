@@ -203,27 +203,36 @@ def _peak_features(close: pd.Series, dif: pd.Series, dea: pd.Series,
     # acc 触发
     has_acc = (acc_z < -_PEAK_Z) if slope_up else (acc_z > +_PEAK_Z)
 
-    # 边界情况：DIF 在零轴下方（dif<0，底部区域）时虽然 slope_up=True，
-    # 但语义是"底部反转/金叉启动"，绝非"上涨过峰"。acc_z 把"DIF 急跌后减速反弹"
-    # 误识为顶部急刹——dif 在负区本身就是底部证据，过峰信号不可信。
-    # 同对称的边界：DIF 在零轴上方（dif>0）且 slope_up=False 时也不是"下跌过峰"。
-    dif_last = float(dif.iloc[-1])
-    if slope_up and dif_last < 0:
-        return {"acc_z": acc_z, "slope_up": slope_up,
-                "peak_signal": "底部反转", "peak_conf": 0, "vr20": vr20}
-    if not slope_up and dif_last > 0:
-        return {"acc_z": acc_z, "slope_up": slope_up,
-                "peak_signal": "顶部回落", "peak_conf": 0, "vr20": vr20}
+    # 置信度（所有方向共用同一套规则：触发类型 + 量能加成）
+    base = 45 if (has_acc and has_bar) else (25 if has_acc else 15) if (has_acc or has_bar) else 0
+    vol_add = (30 if (vr20 is not None and vr20 >= 1.3)
+               else 15 if (vr20 is not None and vr20 >= 0.9) else 0) if (has_acc or has_bar) else 0
+    conf = base + vol_add
 
+    # 按 (dif 位置, slope_up) 四象限决定语义标签。
+    # acc_z 的判定只看方向不看位置：dif>0 高位转头才叫"过峰"，dif<0 低位反转是"启动"而非"过峰"。
+    # 关键：置信度与 has_bar/has_acc 触发证据保留（只是换标签），让前端 peak_filter
+    # 还能按 conf 阈值过滤；不要因为换了标签就把置信度吞了。
+    dif_last = float(dif.iloc[-1])
     if not (has_acc or has_bar):
+        # 无触发：只有"延续"两种，不需要位置修正
         return {"acc_z": acc_z, "slope_up": slope_up,
                 "peak_signal": "涨势延续" if slope_up else "跌势延续",
                 "peak_conf": 0, "vr20": vr20}
-    base = 45 if (has_acc and has_bar) else (25 if has_acc else 15)
-    vol_add = 30 if (vr20 is not None and vr20 >= 1.3) else (15 if (vr20 is not None and vr20 >= 0.9) else 0)
+    if slope_up and dif_last >= 0:
+        # 高位 + 动能向上转折：真·上涨过峰
+        signal = "上涨过峰"
+    elif slope_up and dif_last < 0:
+        # 低位 + 动能向上转折：底部启动，不是过峰
+        signal = "底部反转"
+    elif not slope_up and dif_last <= 0:
+        # 低位 + 动能向下转折：真·下跌过峰
+        signal = "下跌过峰"
+    else:  # not slope_up and dif_last > 0
+        # 高位 + 动能向下转折：顶部回落（DIF 还在正区但已开始走弱）
+        signal = "顶部回落"
     return {"acc_z": acc_z, "slope_up": slope_up,
-            "peak_signal": "上涨过峰" if slope_up else "下跌过峰",
-            "peak_conf": base + vol_add, "vr20": vr20}
+            "peak_signal": signal, "peak_conf": conf, "vr20": vr20}
 
 
 def _cycle_stats(close: pd.Series, signals: list[tuple[int, str]]) -> tuple[list[float], list[float], list[int]]:

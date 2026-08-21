@@ -209,13 +209,18 @@ def list_scores(
                          group_ids, scope, timeframe=tf)
     items = [_serialize(r) for r in rows]
     if peak_filter == "exclude_up":
-        # 只排除强档及以上（≥51）的上涨过峰；弱/中档多为涨势中正常柱缩（历史占比 ~28%），保留不误杀
+        # 排除"高位转折"强档信号（≥51）：包括
+        # - 上涨过峰（dif≥0 + slope_up，顶部 DIF 高位转头）
+        # - 顶部回落（dif>0 + slope_down，高位动能向下转）
+        # 弱/中档多为涨势中正常柱缩，保留不误杀
         items = [
             i for i in items
-            if not (i.get("peak_signal") == "上涨过峰" and (i.get("peak_conf") or 0) >= _PEAK_CONF_STRONG)
+            if not (i.get("peak_signal") in ("上涨过峰", "顶部回落")
+                    and (i.get("peak_conf") or 0) >= _PEAK_CONF_STRONG)
         ]
     elif peak_filter == "only_down":
-        items = [i for i in items if i.get("peak_signal") == "下跌过峰"]
+        # 看"低位转折"信号：下跌过峰（dif≤0+slope_down）+ 底部反转（dif<0+slope_up）
+        items = [i for i in items if i.get("peak_signal") in ("下跌过峰", "底部反转")]
     items = items[:limit]
     _attach_watchlist_info(session, items)
     return items
