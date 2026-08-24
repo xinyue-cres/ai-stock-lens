@@ -53,31 +53,71 @@ export default function BatchActionBar({
         </div>
         {!batchRunning && (
           <>
-            <ActionItem
-              label="移组"
+            <NavItem
+              icon={<FolderOutlined />}
+              label="加入分组"
+              dropdown={
+                <Dropdown
+                  menu={{
+                    items: groups.map(g => ({
+                      key: `g-${g.id}`,
+                      label: g.name,
+                      onClick: () => {
+                        Promise.all([...selected].map(code => {
+                          const cur = allItems.find(i => i.code === code)
+                          const curIds = cur?.group_ids || []
+                          if (curIds.includes(g.id)) return 'exists'
+                          return patchStock(code, { group_ids: [...curIds, g.id] }).then(() => 'added')
+                        })).then((rs) => {
+                          const added = rs.filter(r => r === 'added').length
+                          const exists = rs.filter(r => r === 'exists').length
+                          if (added > 0 && exists > 0) message.success(`${added} 只已加入「${g.name}」，${exists} 只已在组内跳过`)
+                          else if (added > 0) message.success(`${added} 只已加入「${g.name}」`)
+                          else message.info('所选均已在该组内，无变更')
+                          onClear()
+                          invalidateBoth()
+                        }).catch(() => message.error('批量加入分组失败'))
+                      },
+                    })),
+                  }}
+                  trigger={['click']}
+                  placement="bottomRight"
+                >
+                  <BatchItemLabel icon={<FolderOutlined />} label="加入分组" />
+                </Dropdown>
+              }
+            />
+            <NavItem
+              icon={<FolderOutlined />}
+              label="移出分组"
               dropdown={
                 <Dropdown
                   menu={{
                     items: [
                       ...groups.map(g => ({
                         key: `g-${g.id}`,
-                        label: `加入「${g.name}」`,
+                        label: g.name,
                         onClick: () => {
                           Promise.all([...selected].map(code => {
                             const cur = allItems.find(i => i.code === code)
                             const curIds = cur?.group_ids || []
-                            if (curIds.includes(g.id)) return Promise.resolve()
-                            return patchStock(code, { group_ids: [...curIds, g.id] })
-                          })).then(() => {
-                            message.success(`${selected.size} 只已加入「${g.name}」`)
+                            if (!curIds.includes(g.id)) return 'not-in'
+                            return patchStock(code, { group_ids: curIds.filter(id => id !== g.id) }).then(() => 'removed')
+                          })).then((rs) => {
+                            const removed = rs.filter(r => r === 'removed').length
+                            const notIn = rs.filter(r => r === 'not-in').length
+                            if (removed > 0 && notIn > 0) message.success(`${removed} 只已移出「${g.name}」，${notIn} 只不在组内跳过`)
+                            else if (removed > 0) message.success(`${removed} 只已移出「${g.name}」`)
+                            else message.info('所选均不在该组内，无变更')
                             onClear()
                             invalidateBoth()
-                          }).catch(() => message.error('批量移组失败'))
+                          }).catch(() => message.error('批量移出分组失败'))
                         },
                       })),
+                      { type: 'divider' as const },
                       { key: 'g-none', label: '清除所有分组', onClick: () => {
                         Promise.all([...selected].map(code => patchStock(code, { group_ids: [] }))).then(() => {
-                          message.success('已清除分组')
+                          message.success('已清除所有分组')
                           onClear()
                           invalidateBoth()
                         }).catch(() => message.error('清除分组失败'))
@@ -87,12 +127,7 @@ export default function BatchActionBar({
                   trigger={['click']}
                   placement="bottomRight"
                 >
-                  <div style={{ padding: '7px 14px', cursor: 'pointer', fontSize: 14, color: '#374151', transition: 'background 0.1s' }}
-                    onMouseEnter={e => (e.currentTarget.style.background = '#f9fafb')}
-                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-                  >
-                    <FolderOutlined style={{ marginRight: 6 }} />移组
-                  </div>
+                  <BatchItemLabel icon={<FolderOutlined />} label="移出分组" />
                 </Dropdown>
               }
             />
@@ -117,7 +152,7 @@ export default function BatchActionBar({
               }}
             />
             <div style={{ borderTop: '1px solid #f0f0f0', margin: '4px 0' }} />
-            <NavItem icon={<DeleteOutlined />} label="移除" danger onClick={() => {
+            <NavItem icon={<DeleteOutlined />} label="移除自选" danger onClick={() => {
               Modal.confirm({
                 title: `批量移除 ${selected.size} 只自选？`,
                 okText: '移除',
@@ -139,13 +174,15 @@ export default function BatchActionBar({
   )
 }
 
-function NavItem({ icon, label, onClick, danger, muted }: {
+function NavItem({ icon, label, onClick, dropdown, danger, muted }: {
   icon?: React.ReactNode
   label: string
-  onClick: () => void
+  onClick?: () => void
+  dropdown?: React.ReactNode
   danger?: boolean
   muted?: boolean
 }) {
+  if (dropdown) return <>{dropdown}</>
   return (
     <div
       onClick={onClick}
@@ -165,6 +202,15 @@ function NavItem({ icon, label, onClick, danger, muted }: {
   )
 }
 
-function ActionItem({ label, dropdown }: { label: string; dropdown: React.ReactNode }) {
-  return <>{dropdown}</>
+/** Dropdown 触发器：统一外观与 NavItem 一致的左侧菜单项（菜单里的菜单）。 */
+function BatchItemLabel({ icon, label }: { icon?: React.ReactNode; label: string }) {
+  return (
+    <div style={{ padding: '7px 14px', cursor: 'pointer', fontSize: 14, color: '#374151', transition: 'background 0.1s' }}
+      onMouseEnter={e => (e.currentTarget.style.background = '#f9fafb')}
+      onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+    >
+      {icon && <span style={{ marginRight: 6 }}>{icon}</span>}
+      {label}
+    </div>
+  )
 }
