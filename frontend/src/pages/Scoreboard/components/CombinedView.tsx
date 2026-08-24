@@ -128,51 +128,88 @@ interface CombinedViewProps {
 export function CombinedList({
   scope, groupIds, selected, onSelect, onAddWatchlist,
 }: CombinedViewProps) {
-  const [stageFilter, setStageFilter] = useState<'all' | 'entry' | 'buy_side' | 'sell_side' | 'hold' | 'avoid' | CombinedStage>('entry')
+  const [coarse, setCoarse] = useState<'all' | 'buy_side' | 'sell_side' | 'hold' | 'avoid'>('buy_side')
+  const [fine, setFine] = useState<CombinedStage | null>(null)
   const groupIdsKey = groupIds.length ? groupIds.join(',') : undefined
 
-  // 基准拉全量，前端按聚合/单档过滤——避免 12 档频繁打后端
+  // 基准拉全量，前端按粗过滤 + 细分档位两级过滤
   const listQ = useQuery({
     queryKey: ['combined-list', scope, groupIdsKey],
     queryFn: () => getCombinedList({ scope, limit: 500, group_ids: groupIdsKey }),
   })
   const items = useMemo(() => {
     const all = listQ.data ?? []
-    if (stageFilter === 'all') return all
-    if (stageFilter === 'entry' || stageFilter === 'buy_side')
-      return all.filter((i) => BUY_SIDE_STAGES.includes(i.combined_stage))
-    if (stageFilter === 'sell_side')
-      return all.filter((i) => SELL_SIDE_STAGES.includes(i.combined_stage))
-    if (stageFilter === 'hold') return all.filter((i) => i.combined_stage === 'hold')
-    if (stageFilter === 'avoid') return all.filter((i) => i.combined_stage === 'avoid')
-    return all.filter((i) => i.combined_stage === stageFilter)
-  }, [listQ.data, stageFilter])
+    let arr = all
+    if (coarse === 'buy_side') arr = arr.filter((i) => BUY_SIDE_STAGES.includes(i.combined_stage))
+    else if (coarse === 'sell_side') arr = arr.filter((i) => SELL_SIDE_STAGES.includes(i.combined_stage))
+    else if (coarse === 'hold') arr = arr.filter((i) => i.combined_stage === 'hold')
+    else if (coarse === 'avoid') arr = arr.filter((i) => i.combined_stage === 'avoid')
+    if (fine) arr = arr.filter((i) => i.combined_stage === fine)
+    return arr
+  }, [listQ.data, coarse, fine])
+
+  // 细分档位点击 → 联动粗排跳到对应侧
+  const pickFine = (stage: CombinedStage, checked: boolean) => {
+    if (!checked) { setFine(null); return }
+    if (BUY_SIDE_STAGES.includes(stage)) setCoarse('buy_side')
+    else if (SELL_SIDE_STAGES.includes(stage)) setCoarse('sell_side')
+    else if (stage === 'hold') setCoarse('hold')
+    else setCoarse('avoid')
+    setFine(stage)
+  }
+
+  // 细分 tag：只保留 10 个买卖档，买侧/卖侧对称两行（持有/回避由粗排承担）
 
   return (
     <Card
       size="small"
       title={`日周合并 (${items.length})`}
+      extra={
+        <Segmented
+          size="small"
+          value={coarse}
+          onChange={(v) => { setCoarse(v as typeof coarse); setFine(null) }}
+          options={[
+            { value: 'all', label: '全部' },
+            { value: 'buy_side', label: '买侧' },
+            { value: 'sell_side', label: '卖侧' },
+            { value: 'hold', label: '中性' },
+            { value: 'avoid', label: '回避' },
+          ]}
+        />
+      }
       style={{ width: 540, flexShrink: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
       styles={{
-        header: { flexShrink: 0, minHeight: 45, padding: '8px 16px' },
+        header: { flexShrink: 0, padding: '6px 12px', alignItems: 'center' },
         body: { padding: 0, flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' },
       }}
     >
-      {/* stage 过滤 */}
-      <div style={{ padding: '8px 12px', borderBottom: '1px solid #f0f0f0', flexShrink: 0 }}>
-        <Segmented
-          size="small"
-          value={stageFilter}
-          onChange={(v) => setStageFilter(v as typeof stageFilter)}
-          options={[
-            { value: 'all', label: '全部' },
-            { value: 'entry', label: '可入手' },
-            { value: 'buy_side', label: '买侧' },
-            { value: 'sell_side', label: '卖侧' },
-            { value: 'hold', label: '持有' },
-            { value: 'avoid', label: '场外' },
-          ]}
-        />
+      {/* 第二、三排：细分档位 tag，买侧/卖侧对称两行 */}
+      <div style={{ padding: '4px 12px 8px', borderBottom: '1px solid #f0f0f0', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
+        {[
+          { key: '买', stages: BUY_SIDE_STAGES },
+          // 卖侧镜像反转：从强到轻排，与买侧逐档对称（强卖↔强买、卖出↔买入…）
+          { key: '卖', stages: [...SELL_SIDE_STAGES].reverse() },
+        ].map(({ key, stages }) => (
+          <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ fontSize: 11, color: '#9ca3af', flexShrink: 0, width: 12 }}>{key}</span>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+              {stages.map((stage) => {
+                const p = COMBINED_PALETTE[stage]
+                return (
+                  <Tag.CheckableTag
+                    key={stage}
+                    checked={fine === stage}
+                    onChange={(c: boolean) => pickFine(stage, c)}
+                    style={{ fontSize: 11, color: p.color }}
+                  >
+                    {p.label}
+                  </Tag.CheckableTag>
+                )
+              })}
+            </div>
+          </div>
+        ))}
       </div>
 
       <div style={{ flex: 1, overflowY: 'auto' }}>
