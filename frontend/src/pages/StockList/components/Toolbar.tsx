@@ -1,6 +1,7 @@
 import { AutoComplete, Button, Dropdown, Input, Segmented, Typography } from 'antd'
 import { ArrowDownOutlined, ArrowUpOutlined, PlusOutlined, ReloadOutlined, SearchOutlined, SortAscendingOutlined } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
+import { useEffect, useState } from 'react'
 import { searchStocks, StockInfo } from '@/api/stocks'
 import { StockGroup } from '@/api/groups'
 import { SortKey, SortDir, sortLabels } from '../constants'
@@ -42,10 +43,19 @@ export default function Toolbar(props: ToolbarProps) {
     selectMode, onSelectModeToggle, onSelectAll, onSelectInvert,
   } = props
 
+  // 搜索联想防抖：拼音输入中间态（t/tia/tian'j）每键都会发请求，
+  // 曾把后端连接池打爆（本地 miss 的拉丁字母每个都走 10-30s 远程兜底）。
+  // 300ms 停顿才算一次输入；且 queryKey 用防抖值，未停顿的键不触发请求。
+  const [debounced, setDebounced] = useState(addValue)
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(addValue), 300)
+    return () => clearTimeout(t)
+  }, [addValue])
+
   const suggestQ = useQuery({
-    queryKey: ['search', addValue],
-    queryFn: () => searchStocks(addValue),
-    enabled: addValue.length >= 1,
+    queryKey: ['search', debounced],
+    queryFn: () => searchStocks(debounced),
+    enabled: debounced.length >= 1,
   })
 
   return (

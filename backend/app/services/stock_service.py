@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import logging
+import threading
 from datetime import date, timedelta
 
 from sqlmodel import Session, select
@@ -12,6 +13,11 @@ from app.datasource.router import get_data_router
 from app.models.stock import Stock
 
 logger = logging.getLogger(__name__)
+
+# 远程列表拉取互斥锁：lru_cache 不去重并发调用——联想栏连续请求会同时
+# 进入 get_stock_list，各自拉一遍 10-30s 远程列表（缓存踩踏），
+# 慢请求各自占住一个 DB 连接等网络，直接打爆 QueuePool（曾致 500）。
+_remote_list_lock = threading.Lock()
 
 
 def ensure_stock(session: Session, code: str) -> Stock:
@@ -99,17 +105,24 @@ def search_stocks(session: Session, keyword: str, limit: int = 20) -> list[Stock
     if results:
         return results
 
-    # 本地没找到，从远程列表搜索（覆盖 ETF/LOF 等本地未入库的品种）。
+    # 本地没找到。拉丁字母（拼音输入中间态 t/tia/tian'j）直接返回空：
+    # A 股名是中文、代码是数字，拉丁字符必然无匹配，远程拉 10-30s
+    # 纯浪费还会占满连接池（曾导致 QueuePool 耗尽 500）。
+    if keyword.isascii() and not keyword.isdigit():
+        return []
+
+    # 远程列表搜索（覆盖 ETF/LOF 等本地未入库的品种）。
     # 注意清洗市场前缀：东财 ETF 列表返回 "sz159998" 这类带前缀 code，
     # 直接入库会与业务用的 6 位 code 形成两条独立记录（曾经污染过 42 行）。
     try:
         remote_matches = []
-        for s in get_data_router().get_stock_list():
-            clean_code = s.code[-6:]
-            if keyword in clean_code or keyword in (s.name or ""):
-                remote_matches.append((clean_code, s.name, s.market))
-            if len(remote_matches) >= limit:
-                break
+        with _remote_list_lock:  # 全 A 列表只拉一次：并发请求排队等第一个结果（lru_cache 命中后锁零成本）
+            for s in get_data_router().get_stock_list():
+                clean_code = s.code[-6:]
+                if keyword in clean_code or keyword in (s.name or ""):
+                    remote_matches.append((clean_code, s.name, s.market))
+                if len(remote_matches) >= limit:
+                    break
         for code, name, market in remote_matches:
             if not session.get(Stock, code):
                 session.add(Stock(code=code, name=name, market=market))
