@@ -1,3 +1,4 @@
+import { forwardRef } from 'react'
 import { Button, Dropdown, Modal, Typography, message } from 'antd'
 import { DeleteOutlined, ExperimentOutlined, FolderOutlined, SwapOutlined, SyncOutlined, ThunderboltOutlined } from '@ant-design/icons'
 import { useQueryClient } from '@tanstack/react-query'
@@ -202,15 +203,20 @@ function NavItem({ icon, label, onClick, dropdown, danger, muted }: {
   )
 }
 
-/** Dropdown 触发器：统一外观与 NavItem 一致的左侧菜单项（菜单里的菜单）。 */
-function BatchItemLabel({ icon, label }: { icon?: React.ReactNode; label: string }) {
-  return (
-    <div style={{ padding: '7px 14px', cursor: 'pointer', fontSize: 14, color: '#374151', transition: 'background 0.1s' }}
-      onMouseEnter={e => (e.currentTarget.style.background = '#f9fafb')}
-      onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-    >
-      {icon && <span style={{ marginRight: 6 }}>{icon}</span>}
-      {label}
-    </div>
-  )
-}
+/** Dropdown 触发器：统一外观与 NavItem 一致的左侧菜单项（菜单里的菜单）。
+ * 必须 forwardRef + 透传 HTML props —— AntD Dropdown 以 cloneElement 注入 onClick/onPointerDown
+ * 等事件处理；若自定义组件不把这些 props 转发到根节点，点击完全无反应（曾踩过的坑）。
+ */
+const BatchItemLabel = forwardRef<HTMLDivElement, {
+  icon?: React.ReactNode
+  label: string
+} & React.HTMLAttributes<HTMLDivElement>>(({ icon, label, ...rest }, ref) => (
+  <div ref={ref} {...rest} style={{ padding: '7px 14px', cursor: 'pointer', fontSize: 14, color: '#374151', transition: 'background 0.1s', ...rest.style }}
+    onMouseEnter={e => (e.currentTarget.style.background = '#f9fafb')}
+    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+  >
+    {icon && <span style={{ marginRight: 6 }}>{icon}</span>}
+    {label}
+  </div>
+))
+BatchItemLabel.displayName = 'BatchItemLabel'
