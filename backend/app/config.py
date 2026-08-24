@@ -29,7 +29,7 @@ class Settings(BaseSettings):
     datasource_primary: str = "akshare"
     tushare_token: str = ""
 
-    sync_enabled: bool = True
+    sync_enabled: bool = False  # 默认关闭：同步/复盘定时任务全部不启动（环境变量 SYNC_ENABLED=true 可局部打开）
     sync_cron_hour: int = 16
     sync_cron_minute: int = 10
 
