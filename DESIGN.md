@@ -29,58 +29,22 @@
 ## 2. 系统架构
 
 ```
-┌────────────────────────────────────────────────────────────────┐
-│                    浏览器（React + Ant Design）                  │
-│                                                                │
-│  ┌─ 列表页 (/) ─────────────────────────────────────────────┐ │
-│  │  [GroupNav]  [SummaryBar] [Toolbar] [StockRow×N]          │ │
-│  │  (悬浮左)    [BatchActionBar] (悬浮右)                     │ │
-│  └───────────────────────────────────────────────────────────┘ │
-│  ┌─ 详情页 (/stock/:code) ──────────────────────────────────┐ │
-│  │  [Sidebar]  │  [AI分析] [操作指示] [K线] [日志] [指标] [对话]│ │
-│  └─────────────┴─────────────────────────────────────────────┘ │
-└──────────────────────────┬─────────────────────────────────────┘
-                           │ HTTP / SSE
-                           ▼
-┌────────────────────────────────────────────────────────────────┐
-│                    FastAPI (Python 3.12)                        │
-│                                                                │
-│  ┌─────────────────── AI 层 ───────────────────────┐           │
-│  │ ai/prompts/  (按 Agent 分文件)                  │           │
-│  │   bull_bear.py · quant.py · reflexivity.py      │           │
-│  │   trader.py · chat.py · _common.py              │           │
-│  │ ai/normalizers.py · ai/analyzer.py              │           │
-│  └─────────────────────────────────────────────────┘           │
-│                                                                │
-│  ┌─────── Services ─────────────────────────────────────────┐  │
-│  │ analysis_service  (K线加载 + 指标计算 + AI 输入构建)     │  │
-│  │ signals_service   (列表聚合 + stance/verdict/times map)  │  │
-│  │ trader_service    (操作指示生成)                          │  │
-│  │ sync_service      (数据同步调度)                          │  │
-│  │ market_service    (大盘数据)                              │  │
-│  │ stock_service     (自选 CRUD + group_ids)                │  │
-│  │ position_service  (持仓)                                 │  │
-│  │ chat_service · review_service · settings_service         │  │
-│  └──────────────────────────────────────────────────────────┘  │
-│                                                                │
-│  ┌─── DataRouter ───────────────┐  ┌─── 指标引擎 ─────────┐  │
-│  │ EastMoney → BaoStock → Sina  │  │ MA/BOLL/MACD/RSI/KDJ │  │
-│  │ → Tencent (fallback+熔断)    │  │ 量能/形态/强度/周线   │  │
-│  └──────────────────────────────┘  │ signals 信号扫描      │  │
-│                                     └──────────────────────┘  │
-│  ┌─── SQLite ───────┐  ┌─── APScheduler ───┐                 │
-│  │ stock/stock_group │  │ 默认关闭            │                 │
-│  │ kline_daily       │  │ (SYNC_ENABLED=false)│                │
-│  │ ai_report         │  └────────────────────┘                 │
-│  │ position/setting  │                                         │
-│  └───────────────────┘                                         │
-└────────────────────────────────────────────────────────────────┘
-                           │
-                           ▼
-               ┌───────────────────────┐
-               │ OpenAI 兼容 API       │
-               │ (DeepSeek/通义/智谱)  │
-               └───────────────────────┘
+浏览器（React + Ant Design）
+  ├─ 列表页 (/)          GroupNav · Toolbar · StockRow · BatchActionBar
+  ├─ 详情页 (/stock/:code)  Sidebar + AI分析/操作指示/K线/指标/对话 Tabs
+  └─ 打分页 (/scoreboard)   打分排行（日/周/综合 三视图）
+        │ HTTP / SSE
+        ▼
+FastAPI (Python 3.12)
+  ├─ AI 层：ai/prompts/（bull_bear·quant·reflexivity·trader·chat）+ normalizers + analyzer
+  ├─ Services：analysis · signals · trader · sync · market · stock · position · chat · review
+  ├─ features/：scoring 打分包 · trend_judge 决策树 · combined_judge 合并评判 · timeframe 周期层
+  ├─ DataRouter：EastMoney → BaoStock → Sina → Tencent（fallback + 熔断）
+  ├─ APScheduler：定时任务默认全关（SYNC_ENABLED=false）
+  └─ SQLite：stock/stock_group/kline_daily/ai_report/position/setting/stock_score*/sync_log
+        │
+        ▼
+     OpenAI 兼容 API（DeepSeek/通义/智谱）
 ```
 
 ---
@@ -91,66 +55,40 @@
 
 ```
 frontend/src/
-├── App.tsx                 # 路由 + 顶部导航
-├── api/                    # HTTP 层（一文件一领域：score/compare/positions/sync/...）
-├── hooks/                  # 全局共享 hooks
-│   └── useSignalsQuery     # signals-today (列表+侧栏共享)
-├── shared/                 # 纯工具 (theme, timeAgo)
-├── pages/
-│   ├── StockList/          # 首页列表（含分组/批量操作）
-│   ├── StockDetail/        # 详情页
-│   ├── Scoreboard/         # 选股打分页（趋势状态机排行 + AI 点评/汇总）
-│   ├── Positions/          # 持仓页
-│   ├── Compare/            # 对比页
-│   └── SyncLogs/           # 同步日志
-└── features/
-    ├── stock-context/      # 当前股票 context（仅 code 管理）
-    ├── analysis/           # 详情页分析功能
-    │   ├── hooks/          # useAiReport, useStockAnalysis
-    │   ├── panels/         # panelRegistry + 6 个 Tab 面板
-    │   ├── ai/             # AI 报告子组件
-    │   ├── action-plan/    # 操作指示子组件
-    │   ├── indicators/     # 指标条 + 大盘条
-    │   ├── kline/          # K 线图
-    │   └── chat/           # 对话面板
-    ├── watchlist/          # 详情页左栏 sidebar
-    ├── settings/           # 设置抽屉
-    └── status-bar/         # 顶部状态栏
+├── api/         # HTTP 层（一文件一领域）
+├── hooks/       # useSignalsQuery（signals-today，列表+侧栏共享）/ useInvalidation / global state
+├── shared/      # 纯工具 (theme, timeAgo)
+├── pages/       # StockList / StockDetail / Scoreboard / Positions / Compare / SyncLogs
+│   └── Scoreboard/hooks/  # useScoreboardData · useScoreboardActions（页面=布局组装）
+├── features/    # analysis(详情 Tabs) · watchlist · settings · status-bar
+└── stock-context # 当前股票 code context
 ```
 
 ### 3.2 路由与导航
 
 ```
-/              → StockListPage (全宽列表 + 悬浮分组/批量面板)
+/              → StockListPage (列表 + 悬浮分组/批量面板)
 /stock/:code   → StockDetail   (左栏 sidebar + 右栏分析 Tabs)
-/scoreboard    → Scoreboard    (选股打分排行 + 趋势状态机)
+/scoreboard    → Scoreboard    (打分排行 + 日/周/综合 三视图 + AI 点评)
 /positions     → Positions     (持仓管理)
 /compare       → Compare       (多股对比)
 /sync          → SyncLogs
 ```
 
-- 列表页 → 详情页：携带 `?group=N` 保持分组上下文
-- 详情页左栏只显示当前分组内的股票
-- 返回列表时恢复分组选中状态
+列表页 → 详情页携带 `?group=N` 保持分组上下文；返回时恢复选中。
 
 ### 3.3 状态管理
 
-- **TanStack Query**：所有服务端状态（报告/指标/持仓/信号）
-- **useSignalsQuery**：唯一的 signals-today query 源，列表页和侧栏共享
-- **mutationKey 共享**：跨组件同步 AI 生成的 loading 状态
-- **URL searchParams**：分组筛选持久化（刷新保留）
-- **批量任务状态**：页面级 state + per-item Map 传递给 StockRow
+- **TanStack Query**：所有服务端状态
+- **useSignalsQuery**：signals-today 唯一 query 源，列表页和侧栏共享
+- **mutationKey 共享**：跨组件同步 AI 生成 loading
+- **URL searchParams**：分组筛选/选中股票持久化（刷新/分享保留）
+- **乐观刷新**：分组操作 `qc.setQueryData` 即时更新缓存，列表与 toast 同步
+- **批量任务状态**：页面级 state + per-item Map 传给 StockRow
 
 ### 3.4 面板注册
 
-```typescript
-// panelRegistry.ts — 声明式数组，加面板 = 加一行
-const registry: PanelDef[] = [
-  { id: 'ai-report',   label: 'AI 分析',   order: 10, Component: AiReportPanel },
-  { id: 'action-plan', label: '操作指示', order: 15, Component: ActionPlanPanel },
-  ...
-]
-```
+`panelRegistry.ts` 声明式数组，新增详情页 Tab 面板 = 加一行配置。
 
 ---
 
@@ -440,44 +378,29 @@ index_chain = [EastMoney, Sina]
 
 ## 9. 部署
 
-### Docker Compose
-
-```yaml
-services:
-  backend:
-    build: ./backend
-    volumes: [./backend/data:/app/data]
-    env_file: ./backend/.env
-    ports: ["8000:8000"]
-
-  frontend:
-    build: ./frontend
-    ports: ["8080:80"]
-    depends_on: [backend]
+```bash
+# Docker（生产用）—— backend + frontend 服务，数据持久化到 ./backend/data
+docker compose up -d
 ```
 
-### 本地开发
-
 ```bash
-# 后端
-cd backend && source .venv/bin/activate
-uvicorn app.main:app --reload --port 8000
-
-# 前端
+# 本地开发
+cd backend && source .venv/bin/activate && uvicorn app.main:app --reload --port 8000
 cd frontend && pnpm dev
 ```
 
+打包（Windows 可执行版）：`packaging/AI-Stock-Lens.spec`，CI（`.github/workflows/build-windows.yml`）
+打 tag 自动构建 → Release。构建前跑 `backend/scripts/build_seed_db.py` 生成内置全 A 元数据种子库。
+
 ---
 
-## 10. 已知技术债
+## 10. 已记录但未做的技术债
 
-| 项目 | 影响 | 优先级 |
-|------|------|--------|
-| `stock.group_id` 废弃字段 | 无功能影响，占空间 | 低 |
-| 自选信号扫描逐股票 load_kline_df | 已优化记忆体复用 + 单连接缓存读；80 只仍可能 2-3s | 中 |
-| Toolbar 19 个 props | 可读性差 | 低 |
-| 对话历史仅 sessionStorage | 关页丢失 | 设计决策 |
-| 趋势状态机阈值（ADX/涨幅/胜率）为经验值 | 上线后可据此前的数据回放校准 | 中 |
+| 项目 | 影响 |
+|------|------|
+| `stock.group_id` 废弃字段 | 占空间，无功能影响 |
+| 自选 signals 查询逐票 load_kline_df | 80 只 ~2s，可以二级缓存 |
+| 阈值参数（信号可靠线 / ADX / 涨幅）为经验值 | 上线后可回放校准 |
 
 ---
 
