@@ -23,26 +23,17 @@ def _parse_as_of(value) -> date | None:
 
 
 def _load_cached_kline(session: Session, code: str, start: date, min_bars: int = 1000) -> object | None:
-    """从 KlineDaily 读 K 线缓存。
+    """从 KlineDaily 读 K 线缓存（已并入 analysis_service.load_kline_df 的 pd.read_sql 快路径）。
 
-    覆盖扫描窗口（≥ min_bars × 0.9，容忍自然日/交易日换算误差）直接返回，否则 None 走网络拉取。
-    用 pandas.read_sql 直连读（比 SQLModel ORM 逐行构造对象快 ~5 倍，扫描 1000+ 只时节省数秒）。
-    session 参数仅用于保持一致签名（真实查询走 engine 连接池）。
+    保留旧签名兼容 scan/runner 与 scripts/（migrate_score_components.py /
+    compare_daily_vs_weekly.py）的调用；`min_bars` 决定"覆盖不够 → None 走网络"的行为。
+
+    覆盖扫描窗口（≥ min_bars × 0.9，容忍自然日/交易日换算误差）直接返回，否则 None。
     """
-    sql = text("""
-        SELECT trade_date, open, high, low, close, volume, amount, turnover, pct_chg
-        FROM kline_daily
-        WHERE code = :code AND trade_date >= :start
-        ORDER BY trade_date ASC
-    """)
-    with engine.connect() as conn:
-        df = pd.read_sql(sql, conn, params={"code": code, "start": start})
-    if len(df) < int(min_bars * 0.9):
-        return None
-    # read_sql 把 date 列读成 str；转回 date 以保持与 ORM 版一致（下游 _is_stale/排序/快照都用真日期）
-    if len(df) and not isinstance(df["trade_date"].iloc[0], date):
-        df["trade_date"] = pd.to_datetime(df["trade_date"]).dt.date
-    return df
+    from app.services.analysis_service import load_kline_df
+
+    df = load_kline_df(session, code, start=start, min_bars=int(min_bars * 0.9))
+    return None if df.empty else df
 
 
 def _latest_db_dates(session: Session, codes: list[str]) -> dict[str, date | None]:
