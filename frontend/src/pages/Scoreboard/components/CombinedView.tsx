@@ -1,10 +1,10 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Card, Empty, Segmented, Spin, Tag, Typography, message } from 'antd'
 import { PlusOutlined } from '@ant-design/icons'
 import { Button } from 'antd'
 import { getCombinedList, type CombinedItem, type CombinedStage } from '@/api/score'
-import { COMBINED_PALETTE, STAGE_PALETTE } from '../constants'
+import { BUY_SIDE_STAGES, COMBINED_PALETTE, SELL_SIDE_STAGES, STAGE_PALETTE } from '../constants'
 
 const { Text } = Typography
 
@@ -17,7 +17,7 @@ interface CombinedRowProps {
 
 /** 单行综合 item（ScoreRow 风格，宽度自适应），显示代码 + 综合分 + combined_stage 标签 */
 function CombinedRow({ item, active, onClick, onAddWatchlist }: CombinedRowProps) {
-  const palette = COMBINED_PALETTE[item.combined_stage] ?? COMBINED_PALETTE.watch
+  const palette = COMBINED_PALETTE[item.combined_stage] ?? COMBINED_PALETTE.hold
   const wStage = item.weekly.trend_stage ? STAGE_PALETTE[item.weekly.trend_stage] : null
   const dStage = item.daily.trend_stage ? STAGE_PALETTE[item.daily.trend_stage] : null
 
@@ -43,7 +43,6 @@ function CombinedRow({ item, active, onClick, onAddWatchlist }: CombinedRowProps
           {item.is_fund && <Tag style={{ fontSize: 10, lineHeight: '14px', padding: '0 4px', marginInlineEnd: 0 }}>ETF</Tag>}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          <span style={{ fontSize: 14 }}>{palette.icon}</span>
           <Tag
             style={{
               color: palette.color, background: palette.bg, borderColor: palette.border,
@@ -129,22 +128,25 @@ interface CombinedViewProps {
 export function CombinedList({
   scope, groupIds, selected, onSelect, onAddWatchlist,
 }: CombinedViewProps) {
-  const [stageFilter, setStageFilter] = useState<CombinedStage | 'entry' | 'all'>('entry')
+  const [stageFilter, setStageFilter] = useState<'all' | 'entry' | 'buy_side' | 'sell_side' | 'hold' | 'avoid' | CombinedStage>('entry')
   const groupIdsKey = groupIds.length ? groupIds.join(',') : undefined
 
+  // 基准拉全量，前端按聚合/单档过滤——避免 12 档频繁打后端
   const listQ = useQuery({
-    queryKey: ['combined-list', scope, groupIdsKey, stageFilter],
-    queryFn: () =>
-      getCombinedList({
-        scope,
-        limit: 200,
-        group_ids: groupIdsKey,
-        can_entry: stageFilter === 'entry' ? true : undefined,
-        combined_stage:
-          stageFilter !== 'all' && stageFilter !== 'entry' ? stageFilter : undefined,
-      }),
+    queryKey: ['combined-list', scope, groupIdsKey],
+    queryFn: () => getCombinedList({ scope, limit: 500, group_ids: groupIdsKey }),
   })
-  const items = listQ.data ?? []
+  const items = useMemo(() => {
+    const all = listQ.data ?? []
+    if (stageFilter === 'all') return all
+    if (stageFilter === 'entry' || stageFilter === 'buy_side')
+      return all.filter((i) => BUY_SIDE_STAGES.includes(i.combined_stage))
+    if (stageFilter === 'sell_side')
+      return all.filter((i) => SELL_SIDE_STAGES.includes(i.combined_stage))
+    if (stageFilter === 'hold') return all.filter((i) => i.combined_stage === 'hold')
+    if (stageFilter === 'avoid') return all.filter((i) => i.combined_stage === 'avoid')
+    return all.filter((i) => i.combined_stage === stageFilter)
+  }, [listQ.data, stageFilter])
 
   return (
     <Card
@@ -165,13 +167,10 @@ export function CombinedList({
           options={[
             { value: 'all', label: '全部' },
             { value: 'entry', label: '可入手' },
-            { value: 'strong_buy', label: '🐂 强买' },
-            { value: 'buy', label: '📈 买入' },
-            { value: 'light_buy', label: '💡 轻仓' },
-            { value: 'deep_pullback_entry', label: '🎯 回踩' },
-            { value: 'watch_buy', label: '👀 观察' },
-            { value: 'watch', label: '⏸️ 观望' },
-            { value: 'avoid', label: '🚫 回避' },
+            { value: 'buy_side', label: '买侧' },
+            { value: 'sell_side', label: '卖侧' },
+            { value: 'hold', label: '持有' },
+            { value: 'avoid', label: '场外' },
           ]}
         />
       </div>

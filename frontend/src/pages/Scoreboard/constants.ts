@@ -50,16 +50,30 @@ export const STAGE_PALETTE: Record<TrendStage, StagePalette> = {
 import type { CombinedStage } from '@/api/score'
 
 export interface CombinedStagePalette extends StagePalette {
-  icon: string
   action?: string
 }
 
+// 12 档综合状态（v1.4.0 对称化，docs/state-machine-redesign.md）：
+// 买侧 5 + hold（中央）+ 卖侧 5 + avoid（场外）。与后端 combined_judge._STAGE_META 同步。
 export const COMBINED_PALETTE: Record<CombinedStage, CombinedStagePalette> = {
-  strong_buy:          { label: '强买信号', color: '#dc2626', bg: '#fef2f2', border: '#fecaca', icon: '🐂', action: '重仓买入' },
-  buy:                 { label: '买入',     color: '#ea580c', bg: '#fff7ed', border: '#fed7aa', icon: '📈', action: '可买入' },
-  watch_buy:           { label: '观察买',   color: '#d97706', bg: '#fffbeb', border: '#fde68a', icon: '👀', action: '加自选盯日线' },
-  deep_pullback_entry: { label: '深度回踩', color: '#65a30d', bg: '#f7fee7', border: '#d9f99d', icon: '🎯', action: '轻仓分批' },
-  light_buy:           { label: '轻仓试',   color: '#0891b2', bg: '#ecfeff', border: '#a5f3fc', icon: '💡', action: '轻仓试仓' },
-  watch:               { label: '观望',     color: '#6b7280', bg: '#f9fafb', border: '#e5e7eb', icon: '⏸️', action: '不动' },
-  avoid:               { label: '回避',     color: '#4b5563', bg: '#f3f4f6', border: '#d1d5db', icon: '🚫', action: '回避' },
+  strong_buy:          { label: '强买信号', color: '#dc2626', bg: '#fef2f2', border: '#fecaca', action: '重仓买入' },
+  buy:                 { label: '买入',     color: '#ea580c', bg: '#fff7ed', border: '#fed7aa', action: '可买入' },
+  deep_pullback_entry: { label: '深度回踩', color: '#65a30d', bg: '#f7fee7', border: '#d9f99d', action: '轻仓分批' },
+  watch_buy:           { label: '观察买',   color: '#d97706', bg: '#fffbeb', border: '#fde68a', action: '先盯' },
+  light_buy:           { label: '轻仓试',   color: '#0891b2', bg: '#ecfeff', border: '#a5f3fc', action: '轻仓' },
+  hold:                { label: '持有',     color: '#6b7280', bg: '#f9fafb', border: '#e5e7eb', action: '不动' },
+  watch_sell:          { label: '观察卖',   color: '#d97706', bg: '#fffbeb', border: '#fde68a', action: '先盯' },
+  light_sell:          { label: '轻仓减',   color: '#0891b2', bg: '#ecfeff', border: '#a5f3fc', action: '减仓' },
+  deep_rally_exit:     { label: '反弹离场', color: '#65a30d', bg: '#f7fee7', border: '#d9f99d', action: '分批减仓' },
+  sell:                { label: '卖出',     color: '#ea580c', bg: '#fff7ed', border: '#fed7aa', action: '中大仓减' },
+  strong_sell:         { label: '强卖信号', color: '#dc2626', bg: '#fef2f2', border: '#fecaca', action: '清仓' },
+  avoid:               { label: '场外回避', color: '#4b5563', bg: '#f3f4f6', border: '#d1d5db', action: '不介入' },
 }
+
+// 买侧 / 卖侧聚合（前端侧过滤用）
+export const BUY_SIDE_STAGES: CombinedStage[] = [
+  'strong_buy', 'buy', 'watch_buy', 'deep_pullback_entry', 'light_buy',
+]
+export const SELL_SIDE_STAGES: CombinedStage[] = [
+  'watch_sell', 'light_sell', 'deep_rally_exit', 'sell', 'strong_sell',
+]

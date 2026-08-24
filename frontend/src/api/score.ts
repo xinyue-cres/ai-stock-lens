@@ -220,8 +220,10 @@ export async function analyzeBatchScore(body: {
 // ---------------------------------------------------------------------------
 
 export type CombinedStage =
-  | 'strong_buy' | 'buy' | 'watch_buy' | 'deep_pullback_entry'
-  | 'light_buy' | 'watch' | 'avoid'
+  | 'strong_buy' | 'buy' | 'watch_buy' | 'deep_pullback_entry' | 'light_buy'
+  | 'hold'
+  | 'watch_sell' | 'light_sell' | 'deep_rally_exit' | 'sell' | 'strong_sell'
+  | 'avoid'
 
 export interface CombinedLeg {
   total_score: number | null

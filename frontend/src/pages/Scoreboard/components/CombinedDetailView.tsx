@@ -38,7 +38,7 @@ interface CombinedDetailViewProps {
 
 /** 综合详情视图：放在综合模式 master-detail 的右侧 */
 export default function CombinedDetailView({ detail, onAddWatchlist }: CombinedDetailViewProps) {
-  const palette = COMBINED_PALETTE[detail.combined_stage] ?? COMBINED_PALETTE.watch
+  const palette = COMBINED_PALETTE[detail.combined_stage] ?? COMBINED_PALETTE.hold
 
   return (
     <Space direction="vertical" size={14} style={{ width: '100%' }}>
@@ -59,7 +59,6 @@ export default function CombinedDetailView({ detail, onAddWatchlist }: CombinedD
             </Tag>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span style={{ fontSize: 18 }}>{palette.icon}</span>
             <Tag style={{ fontSize: 13, padding: '2px 8px', color: palette.color, background: palette.bg, borderColor: palette.border }}>
               {palette.label}
             </Tag>
