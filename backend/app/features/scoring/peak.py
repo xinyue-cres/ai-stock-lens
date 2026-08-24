@@ -65,15 +65,18 @@ def _peak_features(close: pd.Series, dif: pd.Series, dea: pd.Series,
     vol_add = 30 if (vr20 is not None and vr20 >= 1.3) else (15 if (vr20 is not None and vr20 >= 0.9) else 0)
     peak_conf = base + vol_add
 
-    # 四象限标签：slope_up × dif 位置（dif 是 DIF 当前值，反映 MACD 负/正区）
-    # acc_z 只看方向不看位置：dif<0 底部抬头被借误为顶部 → 改成"底部翻转"
+    # 标签（修正：以"动能方向"为语义，不以位置分象限）。
+    # acc 触发语义：
+    #   slope_up=True + acc_z < -PEAK_Z → DIF 上升但急刹（真顶部减速）
+    #   slope_up=False + acc_z > +PEAK_Z → DIF 下跌但急转向上（底部反弹）
+    # 所以 !slope_up 的触发一律是"下跌过峰"，与 dif 在正/负区无关——
+    # 之前按位置给 (!slope_up + dif>0) 细分出 "顶部回落" 是语义错位：
+    # 该情形本质还是"从高位开始下跌但在减速"，不应该落到 "顶部回落" 用户语义上。
     dif_last = float(dif.iloc[-1])
     if slope_up and dif_last < 0:
+        # DIF 从负区抬头（金叉前兆）单独叫"底部反转"，比"上涨过峰"更贴近发散
         return {"acc_z": acc_z, "slope_up": slope_up,
                 "peak_signal": "底部反转", "peak_conf": peak_conf, "vr20": vr20}
-    if not slope_up and dif_last > 0:
-        return {"acc_z": acc_z, "slope_up": slope_up,
-                "peak_signal": "顶部回落", "peak_conf": peak_conf, "vr20": vr20}
 
     return {"acc_z": acc_z, "slope_up": slope_up,
             "peak_signal": "上涨过峰" if slope_up else "下跌过峰",
