@@ -212,11 +212,16 @@ def sync_one_stock(session: Session, code: str, full: bool = False) -> int:
 
 
 def _refresh_score_snapshot(session: Session, code: str) -> None:
-    """用 K 线库最新行刷新打分快照行情字段（当日波动/收盘/换手/as_of_date）。
+    """用 K 线库最新行刷新打分快照行情字段（当日波动/收盘/换手）。
 
     排行页 pct_chg 来自 StockScore 快照，而扫描时 as_of 常停在前一天（扫描在同步前）。
     同步后即使 K 线已最新（start>end 无新数据可拉），快照也须追上 K 线库，故这里
     查 K 线库最新行刷新。评分字段（total_score/各维度分）不动，那需要重扫。
+
+    注意：as_of_date 不在此刷新——它的语义是"打分所用 K 线的截止日"，必须与
+    components_json 同生同死。之前把它一起刷成最新，会掩盖"评分还停在旧数据"的事实，
+    更致命的是扫描计划的自愈判断（runner: db_latest > snap_asof 则重算）读的就是它，
+    被刷平后重算永远不触发，盘中旧打分从此无法被收盘新数据覆盖（2026-08-24 实录）。
     """
     from app.models.stock_score import StockScore
 
@@ -250,12 +255,10 @@ def _refresh_score_snapshot(session: Session, code: str) -> None:
 
     new_pct_chg = round(pct_chg, 2) if pct_chg is not None else None
     new_turnover = _safe_float(latest_row.turnover)
-    new_as_of = latest_row.trade_date
     for score in scores:
         score.close = new_close
         score.pct_chg = new_pct_chg
         score.turnover = new_turnover
-        score.as_of_date = new_as_of
         session.add(score)
     session.commit()
 
