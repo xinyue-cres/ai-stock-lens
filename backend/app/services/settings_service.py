@@ -95,10 +95,9 @@ def public_ai_config() -> dict[str, Any]:
     }
 
 
-def get_total_capital() -> float | None:
+def get_total_capital(session: Session) -> float | None:
     """获取用户设置的总资金（元）。未设置返回 None。"""
-    with Session(engine) as session:
-        row = session.exec(select(AppSetting).where(AppSetting.key == KEY_TOTAL_CAPITAL)).first()
+    row = session.exec(select(AppSetting).where(AppSetting.key == KEY_TOTAL_CAPITAL)).first()
     if not row:
         return None
     try:
@@ -108,14 +107,13 @@ def get_total_capital() -> float | None:
         return None
 
 
-def save_total_capital(amount: float) -> float:
+def save_total_capital(session: Session, amount: float) -> float:
     """保存总资金。"""
-    with Session(engine) as session:
-        existing = session.exec(select(AppSetting).where(AppSetting.key == KEY_TOTAL_CAPITAL)).first()
-        if existing:
-            existing.value = str(amount)
-            session.add(existing)
-        else:
-            session.add(AppSetting(key=KEY_TOTAL_CAPITAL, value=str(amount)))
-        session.commit()
+    existing = session.exec(select(AppSetting).where(AppSetting.key == KEY_TOTAL_CAPITAL)).first()
+    if existing:
+        existing.value = str(amount)
+        session.add(existing)
+    else:
+        session.add(AppSetting(key=KEY_TOTAL_CAPITAL, value=str(amount)))
+    session.commit()
     return amount

@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from openai import OpenAI
 from pydantic import BaseModel
+from sqlmodel import Session
 
+from app.db import get_session
 from app.services import settings_service
 
 logger = logging.getLogger(__name__)
@@ -118,14 +120,14 @@ class CapitalPayload(BaseModel):
 
 
 @router.get("/capital")
-def get_capital():
-    val = settings_service.get_total_capital()
+def get_capital(session: Session = Depends(get_session)):
+    val = settings_service.get_total_capital(session)
     return {"total_capital": val}
 
 
 @router.put("/capital")
-def put_capital(payload: CapitalPayload):
+def put_capital(payload: CapitalPayload, session: Session = Depends(get_session)):
     if payload.amount <= 0:
         raise HTTPException(400, "总资金必须大于 0")
-    settings_service.save_total_capital(payload.amount)
+    settings_service.save_total_capital(session, payload.amount)
     return {"total_capital": payload.amount}
