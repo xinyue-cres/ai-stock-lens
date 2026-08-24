@@ -20,13 +20,13 @@ from app.indicators.signals import scan_signals
 from app.indicators.weekly import aggregate_weekly
 from app.models.kline import KlineDaily
 from app.models.stock import Stock
+from app.shared.fingerprint_cache import FingerprintedCache
 
 logger = logging.getLogger(__name__)
 
 # 进程内缓存：{code: (fingerprint, result_dict)}
 # fingerprint = 最近 5 行关键字段的内容 hash，任何一个字段变化都失效
-_ANALYSIS_CACHE: dict[str, tuple[str, dict]] = {}
-_CACHE_MAX_SIZE = 200
+_ANALYSIS_CACHE = FingerprintedCache(capacity=200)
 _FINGERPRINT_TAIL = 5  # 只 hash 最后 N 行；老数据只在回填后短暂不一致，风险可控
 
 
@@ -87,10 +87,10 @@ def analyze(session: Session, code: str) -> dict:
         }
 
     fingerprint = _fingerprint(df)
-    cached = _ANALYSIS_CACHE.get(code)
-    if cached and cached[0] == fingerprint:
+    cached = _ANALYSIS_CACHE.get(code, fingerprint)
+    if cached is not None:
         logger.debug("analyze cache hit for %s", code)
-        return cached[1]
+        return cached
 
     indicators = compute_all(df)
     series = build_chart_series(df)
@@ -104,22 +104,14 @@ def analyze(session: Session, code: str) -> dict:
         "signals": signals,
     }
 
-    _ANALYSIS_CACHE[code] = (fingerprint, result)
-    # 粗糙 LRU：超过阈值随便清一半
-    if len(_ANALYSIS_CACHE) > _CACHE_MAX_SIZE:
-        for k in list(_ANALYSIS_CACHE.keys())[: _CACHE_MAX_SIZE // 2]:
-            _ANALYSIS_CACHE.pop(k, None)
-
+    _ANALYSIS_CACHE.set(code, fingerprint, result)
     return result
 
 
 def invalidate_analysis_cache(code: str | None = None) -> None:
     """通常不需要手动调 —— 指纹是内容 hash，K 线一变自动失效。保留仅为特殊场景（如
     调试、跨进程外部改库后强制刷新单进程缓存）。"""
-    if code is None:
-        _ANALYSIS_CACHE.clear()
-    else:
-        _ANALYSIS_CACHE.pop(code, None)
+    _ANALYSIS_CACHE.invalidate(code)
 
 
 def build_ai_input(session: Session, code: str) -> tuple[dict, dict] | None:
