@@ -1,7 +1,7 @@
-import { useMemo, useState } from 'react'
+import { Fragment, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Card, Empty, Segmented, Spin, Tag, Typography, message } from 'antd'
-import { PlusOutlined } from '@ant-design/icons'
+import { Card, Empty, Popover, Segmented, Spin, Tag, Typography, message } from 'antd'
+import { PlusOutlined, QuestionCircleOutlined } from '@ant-design/icons'
 import { Button } from 'antd'
 import { getCombinedList, type CombinedItem, type CombinedStage } from '@/api/score'
 import { BUY_SIDE_STAGES, COMBINED_PALETTE, SELL_SIDE_STAGES, STAGE_PALETTE } from '../constants'
@@ -159,24 +159,66 @@ export function CombinedList({
   }
 
   // 细分 tag：只保留 10 个买卖档，买侧/卖侧对称两行（持有/回避由粗排承担）
+  // 卖侧显式镜像顺序，与买侧逐档对应（强卖↔强买、卖出↔买入、观察卖↔观察买…）
+  const SELL_MIRROR_ORDER: CombinedStage[] = [
+    'strong_sell', 'sell', 'watch_sell', 'deep_rally_exit', 'light_sell',
+  ]
+  // 各档信号含义（问号提示用）
+  const STAGE_MEANING: Record<CombinedStage, string> = {
+    strong_buy: '日周线同向看多共振，重仓买入',
+    buy: '周线看好 + 日线已反弹，可买入',
+    watch_buy: '周看多但日线整理，等升级',
+    deep_pullback_entry: '周趋势内日超跌，轻仓分批',
+    light_buy: '周中性 + 日线有起涨信号，轻仓试',
+    hold: '可交易但无明确方向，不动',
+    watch_sell: '周定调偏坏，日线未确认走坏，先盯',
+    light_sell: '周走弱但日线未确认，先减仓',
+    deep_rally_exit: '周已走坏，日线反弹是离场窗口',
+    sell: '日周均走坏，尽快出清',
+    strong_sell: '双周共振走弱，清仓',
+    avoid: '系统不评估（数据不足/双周假弱），不介入',
+  }
+  const stageHelp = (
+    <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '5px 12px', maxWidth: 360 }}>
+      {[...BUY_SIDE_STAGES, ...SELL_MIRROR_ORDER].map((stage) => {
+        const p = COMBINED_PALETTE[stage]
+        return (
+          <Fragment key={stage}>
+            <span style={{ color: p.color, fontWeight: 600, fontSize: 12, whiteSpace: 'nowrap' }}>{p.label}</span>
+            <span style={{ color: 'rgba(0,0,0,0.65)', fontSize: 12 }}>{STAGE_MEANING[stage]}</span>
+          </Fragment>
+        )
+      })}
+    </div>
+  )
 
   return (
     <Card
       size="small"
       title={`日周合并 (${items.length})`}
       extra={
-        <Segmented
-          size="small"
-          value={coarse}
-          onChange={(v) => { setCoarse(v as typeof coarse); setFine(null) }}
-          options={[
-            { value: 'all', label: '全部' },
-            { value: 'buy_side', label: '买侧' },
-            { value: 'sell_side', label: '卖侧' },
-            { value: 'hold', label: '中性' },
-            { value: 'avoid', label: '回避' },
-          ]}
-        />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <Popover
+            title="信号含义"
+            content={stageHelp}
+            trigger="click"
+            placement="bottomRight"
+          >
+            <QuestionCircleOutlined style={{ fontSize: 14, color: '#999', cursor: 'pointer' }} />
+          </Popover>
+          <Segmented
+            size="small"
+            value={coarse}
+            onChange={(v) => { setCoarse(v as typeof coarse); setFine(null) }}
+            options={[
+              { value: 'all', label: '全部' },
+              { value: 'buy_side', label: '买侧' },
+              { value: 'sell_side', label: '卖侧' },
+              { value: 'hold', label: '中性' },
+              { value: 'avoid', label: '回避' },
+            ]}
+          />
+        </div>
       }
       style={{ width: 540, flexShrink: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
       styles={{
@@ -188,20 +230,24 @@ export function CombinedList({
       <div style={{ padding: '4px 12px 8px', borderBottom: '1px solid #f0f0f0', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
         {[
           { key: '买', stages: BUY_SIDE_STAGES },
-          // 卖侧镜像反转：从强到轻排，与买侧逐档对称（强卖↔强买、卖出↔买入…）
-          { key: '卖', stages: [...SELL_SIDE_STAGES].reverse() },
+          { key: '卖', stages: SELL_MIRROR_ORDER },
         ].map(({ key, stages }) => (
           <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <span style={{ fontSize: 11, color: '#9ca3af', flexShrink: 0, width: 12 }}>{key}</span>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
               {stages.map((stage) => {
                 const p = COMBINED_PALETTE[stage]
+                const active = fine === stage
                 return (
                   <Tag.CheckableTag
                     key={stage}
-                    checked={fine === stage}
+                    checked={active}
                     onChange={(c: boolean) => pickFine(stage, c)}
-                    style={{ fontSize: 11, color: p.color }}
+                    style={{
+                      fontSize: 11,
+                      color: p.color,
+                      backgroundColor: active ? '#e0e0e0' : 'transparent',
+                    }}
                   >
                     {p.label}
                   </Tag.CheckableTag>
