@@ -54,13 +54,20 @@ def ensure_stock(session: Session, code: str) -> Stock:
 
 
 def refresh_stock_index(session: Session) -> int:
-    """从数据源拉全 A 股列表填充到 stock 表，返回新增数量。"""
+    """从数据源拉全 A 股列表填充到 stock 表，返回新增数量。
+
+    code 统一清洗为 6 位（sina/东财 ETF 源返回 "sh600519"/"sz159998" 带前缀格式，
+    直接入库会与业务用的 6 位 code 形成两条独立记录）。
+    """
     infos = get_data_router().get_stock_list()
     added = 0
     for info in infos:
-        existing = session.get(Stock, info.code)
+        code = info.code[-6:]
+        if len(code) != 6 or not code.isdigit():
+            continue
+        existing = session.get(Stock, code)
         if existing is None:
-            session.add(Stock(code=info.code, name=info.name, market=info.market))
+            session.add(Stock(code=code, name=info.name, market=info.market))
             added += 1
         elif existing.name != info.name:
             existing.name = info.name
@@ -92,18 +99,23 @@ def search_stocks(session: Session, keyword: str, limit: int = 20) -> list[Stock
     if results:
         return results
 
-    # 本地没找到，从远程列表搜索（覆盖 ETF/LOF 等本地未入库的品种）
+    # 本地没找到，从远程列表搜索（覆盖 ETF/LOF 等本地未入库的品种）。
+    # 注意清洗市场前缀：东财 ETF 列表返回 "sz159998" 这类带前缀 code，
+    # 直接入库会与业务用的 6 位 code 形成两条独立记录（曾经污染过 42 行）。
     try:
-        remote_matches = [
-            s for s in get_data_router().get_stock_list()
-            if keyword in s.code or keyword in s.name
-        ][:limit]
-        for info in remote_matches:
-            if not session.get(Stock, info.code):
-                session.add(Stock(code=info.code, name=info.name, market=info.market))
+        remote_matches = []
+        for s in get_data_router().get_stock_list():
+            clean_code = s.code[-6:]
+            if keyword in clean_code or keyword in (s.name or ""):
+                remote_matches.append((clean_code, s.name, s.market))
+            if len(remote_matches) >= limit:
+                break
+        for code, name, market in remote_matches:
+            if not session.get(Stock, code):
+                session.add(Stock(code=code, name=name, market=market))
         if remote_matches:
             session.commit()
-        return [session.get(Stock, m.code) for m in remote_matches if session.get(Stock, m.code)]
+        return [session.get(Stock, c) for c, _, _ in remote_matches if session.get(Stock, c)]
     except Exception:
         logger.exception("远程搜索失败")
         return []
