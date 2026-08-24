@@ -134,7 +134,7 @@ def _run_scan(todo: list[str], name_map: dict[str, str], settings, today: date, 
                     if df is None:
                         need_net.append(code)
                         continue
-                    if _cache_needs_pull(df, end, grace=1 if is_fund_code(code) else 0,
+                    if _cache_needs_pull(df, end, grace=2 if is_fund_code(code) else 0,
                                          intraday_relax=intraday):
                         pull_codes.append(code)  # 收集，稍后统一并发补拉（不在此串行原地拉）
                     else:

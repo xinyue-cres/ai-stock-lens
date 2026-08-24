@@ -29,11 +29,30 @@ def _load_cached_kline(session: Session, code: str, start: date, min_bars: int =
     compare_daily_vs_weekly.py）的调用；`min_bars` 决定"覆盖不够 → None 走网络"的行为。
 
     覆盖扫描窗口（≥ min_bars × 0.9，容忍自然日/交易日换算误差）直接返回，否则 None。
+    次新股兜底：库内根数不足 min_bars 但数据已是最新（>= 上一交易日）且够打分下限
+    （score_stock 需 60 根）时直接返回现有数据——数据源全量也就这么多，走网络只会
+    每次白拉一遍（002155 湖南黄金 290 根死循环实录）。
     """
     from app.services.analysis_service import load_kline_df
 
     df = load_kline_df(session, code, start=start, min_bars=int(min_bars * 0.9))
-    return None if df.empty else df
+    if not df.empty:
+        return df
+    # 次新兜底：拉全量看实际有多少（不经 min_bars 截断）
+    full = load_kline_df(session, code, start=start)
+    if full.empty or len(full) < 60:
+        return None  # 连打分下限都不够，只能走网络
+    end = date.today()
+    from datetime import datetime, time as dtime
+    from zoneinfo import ZoneInfo
+    now = datetime.now(ZoneInfo("Asia/Shanghai"))
+    # 盘中允许止于上一交易日；收盘后要求已到最近交易日（当日或上一交易日，
+    # 与 _cache_needs_pull 的 grace=0 个股口径对齐）
+    grace = 1 if (end == now.date() and now.time() < dtime(15, 0)) else 0
+    if _trading_days_between(full["trade_date"].iloc[-1], end) > grace:
+        return None  # 数据落后 → 走网络补拉（能拉到新的）
+    # 数据已最新但根数天然不足 → 直接用，别再拉
+    return full
 
 
 def _latest_db_dates(session: Session, codes: list[str]) -> dict[str, date | None]:
@@ -59,7 +78,7 @@ def _is_stale(latest: date | None, today: date, grace: int = 0) -> bool:
 
     - 周五收盘数据在周六/周日不判落后；周一开盘后再扫描才会触发补拉。
     - grace=0（个股）：落后今天 ≥1 交易日即算旧 → 需补拉。
-    - grace=1（ETF：数据源天然晚一天）：允许滞后再 1 个交易日，昨日数据仍视为最新 → 不补拉。
+    - grace=2（ETF：港股通/慢源数据源天然晚 1-2 天）：滞后 ≤2 个交易日仍视为最新 → 不补拉。
     latest 为 None（库无该股）时视为需补拉。
     """
     if latest is None:
@@ -81,7 +100,8 @@ def _cache_needs_pull(df: object | None, today: date, grace: int = 0,
     """缓存窗口是否需要补拉：无数据或 K 线落后到今天超过 grace（沿用 _is_stale）。
 
     仅做判定（不执行任何网络/写库），把"是否要补拉"交给调用方并发处理。
-    grace 透传给 _is_stale：ETF 传 1（允许昨日），个股传 0。
+    grace 透传给 _is_stale：ETF 传 2（允许滞后 2 个交易日——港股通/慢源 ETF
+    数据源天然晚 1-2 天，反复补拉也拿不到更新的，等于每次白拉），个股传 0。
     intraday_relax：当前时刻未到收盘（15:00 前）时，对个股额外 +1 天宽限——
     盘中扫描时"昨天收盘"就应该视为最新（今天的 bar 根本还不存在，
     数据源强拉也只返回昨收，照样不更新），否则全候选池都被错判 stale。

@@ -68,9 +68,9 @@ def _decide_stage(golden: bool, pct_b: float | None, dist_high: float,
       距高点过近或历史差→下跌回避
     peak_winrate：历史金叉冲过 +5% 的占比；peak_conf：过峰置信度 0-100（bar|acc_z × 量能），
     强档以上(≥_PEAK_CONF_STRONG)才认定"动能急刹/急转"；slope_up：动能方向（顶/底）。
-    peak_signal：完整位置标签（上涨过峰/下跌过峰/底部反转/顶部回落）。slope_up 单看方向
-    会把"dif<0 底部抬头β"误判为顶部，所以 peak_bot/peak_top 优先看位置标签；
-    兼容老调用方回退到 slope_up 判定。
+    peak_signal：完整位置标签（四象限：上涨过峰/顶部回落=水上衰竭偏空预警，
+    下跌过峰/底部反转=水下衰竭偏多预警）。peak_top 组=水上（拦金叉追入），
+    peak_bot 组=水下（喂 left_entry）；兼容老调用方回退到 slope_up 判定。
     adx：ADX 趋势强度；signal_gain_pct：当前信号期间累计涨幅%（% 为单位，如 10.5 表示 10.5%）
     """
     # 顶/底判定：优先按 peak_signal 位置标签（含 dif 位置语义），slope_up 仅作方向
@@ -134,7 +134,9 @@ def _entry_reason(stage: str, golden: bool, peak_conf: int, slope_up: bool | Non
         peak_top = peak_conf >= conf_strong and slope_up is True
         peak_bot = peak_conf >= conf_strong and slope_up is False
     if golden and peak_top:
-        return "金叉态·动能急刹（顶部过峰预警），别追等回踩"
+        if peak_signal == "顶部回落":
+            return "金叉态·高位回落首波（顶部回落预警），别追等企稳"
+        return "金叉态·动能急刹（上涨过峰预警），别追等回踩"
     if golden and slope_up is False:
         return "金叉态·动能走弱（金叉衰减），随时可能死叉，别追等动能修复"
     if golden and adx is not None and adx >= _ADX_STRONG \
