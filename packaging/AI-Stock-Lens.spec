@@ -35,6 +35,12 @@ for pkg in ("baostock", "py_mini_racer"):
 if os.path.isdir(FRONTEND_DIST):
     datas += [(FRONTEND_DIST, "frontend_dist")]
 
+# 种子库（CI 打包前 scripts/build_seed_db.py 生成；首启动复制为 data/app.db，
+# 让搜索联想首搜即命中本地全 A 元数据）
+SEED_DB = os.path.join(BACKEND, "seed.sqlite")
+if os.path.exists(SEED_DB):
+    datas += [(SEED_DB, ".")]
+
 a = Analysis(
     [os.path.join(BACKEND, "run.py")],
     pathex=[BACKEND],

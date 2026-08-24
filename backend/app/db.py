@@ -1,5 +1,6 @@
 import logging
 from collections.abc import Generator
+from pathlib import Path
 
 from sqlalchemy import event, text
 from sqlmodel import Session, SQLModel, create_engine
@@ -54,7 +55,35 @@ def _migrate_drop_column(table: str, column: str) -> None:
             logger.info("迁移：删除 %s.%s 残留列", table, column)
 
 
+def _seed_from_bundle() -> None:
+    """打包态首启动：data/app.db 不存在时，从打进包里的种子库（全 A 元数据）复制。
+
+    让"添加股票"搜索联想首搜即命中本地，不用现场拉 20s 远程列表。
+    种子随构建时间过时（新股/改名）由 search_stocks 的远程兜底自然补齐。
+    源码开发态没有 _MEIPASS，直接跳过。
+    """
+    import shutil
+    import sys
+
+    if not getattr(sys, "frozen", False):
+        return
+    from app.config import get_settings
+
+    db_path = Path(get_settings().db_path)
+    if db_path.exists():
+        return  # 已有库（老用户升级），不动
+    seed = Path(getattr(sys, "_MEIPASS", "")) / "seed.sqlite"
+    if not seed.exists():
+        logger.warning("打包内未找到 seed.sqlite，首搜将走远程兜底")
+        return
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(seed, db_path)
+    logger.info("首启动：已从种子库初始化 %s（全 A 元数据）", db_path)
+
+
 def init_db() -> None:
+    # 打包态首启动：从包内 seed.sqlite 复制出带全 A 元数据的初始库
+    _seed_from_bundle()
     # 先做迁移，因为 create_all 不会修改老表的约束
     _migrate_ai_report_horizon()
     _migrate_ai_report_unique_created_at()

@@ -48,3 +48,4 @@ Thumbs.db
 data/
 .backend.pid
 .frontend.pid
+backend/seed.sqlite

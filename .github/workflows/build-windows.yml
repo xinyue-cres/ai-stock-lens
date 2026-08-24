@@ -39,6 +39,12 @@ jobs:
           pnpm install --frozen-lockfile
           pnpm build
 
+      - name: Build seed DB (stock metadata)
+        shell: bash
+        run: |
+          cd backend
+          python scripts/build_seed_db.py
+
       - name: PyInstaller package
         run: pyinstaller packaging/AI-Stock-Lens.spec
 
