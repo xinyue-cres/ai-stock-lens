@@ -37,6 +37,24 @@ export default function BatchActionBar({
     qc.invalidateQueries({ queryKey: ['groups'] })
   }
 
+  /** 乐观更新：patchStock 成功后先把 signals-today 缓存里的 group_ids 改了，
+   * 让列表和 toast 同时翻新——否则等 /api/signals/today 慢拉（~2.15s）期间
+   * 用户看到的是 toast "提示已消失，数据刚变" 的滞后感。invalidate 正常后台走。 */
+  const applyOptimisticGroupIds = (codes: string[], computeIds: (cur: number[]) => number[]) => {
+    const set = new Set(codes)
+    qc.setQueryData(['signals-today'], (old: any) => {
+      if (!old?.items) return old
+      return {
+        ...old,
+        items: old.items.map((it: any) => {
+          if (!set.has(it.code)) return it
+          return { ...it, group_ids: computeIds(it.group_ids || []) }
+        }),
+      }
+    })
+    invalidateBoth()
+  }
+
   if (selected.size === 0 && !batchRunning) return null
 
   return (
@@ -76,7 +94,8 @@ export default function BatchActionBar({
                           else if (added > 0) message.success(`${added} 只已加入「${g.name}」`)
                           else message.info('所选均已在该组内，无变更')
                           onClear()
-                          invalidateBoth()
+                          if (added > 0) applyOptimisticGroupIds([...selected], (ids) => [...new Set([...ids, g.id])])
+                          else invalidateBoth()
                         }).catch(() => message.error('批量加入分组失败'))
                       },
                     })),
@@ -111,7 +130,8 @@ export default function BatchActionBar({
                             else if (removed > 0) message.success(`${removed} 只已移出「${g.name}」`)
                             else message.info('所选均不在该组内，无变更')
                             onClear()
-                            invalidateBoth()
+                            if (removed > 0) applyOptimisticGroupIds([...selected], (ids) => ids.filter(id => id !== g.id))
+                            else invalidateBoth()
                           }).catch(() => message.error('批量移出分组失败'))
                         },
                       })),
@@ -120,7 +140,7 @@ export default function BatchActionBar({
                         Promise.all([...selected].map(code => patchStock(code, { group_ids: [] }))).then(() => {
                           message.success('已清除所有分组')
                           onClear()
-                          invalidateBoth()
+                          applyOptimisticGroupIds([...selected], () => [])
                         }).catch(() => message.error('清除分组失败'))
                       }},
                     ],
