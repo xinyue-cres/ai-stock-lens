@@ -11,7 +11,7 @@ from datetime import date, timedelta
 import numpy as np
 import pandas as pd
 
-from app.features.stock_scorer import compute_indicator_cache
+from app.features.scoring import compute_indicator_cache
 from app.features.trend_judge import _decide_stage, judge_trend
 
 

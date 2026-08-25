@@ -1,6 +1,6 @@
 """打分引擎入口：compute_indicator_cache（单指标预计算）+ score_stock（总分编排）。
 
-拆分自原 stock_scorer.py 的组装层：将 golden/band/dividend 三因子合成综合分并暴露 components。
+总分编排：将 golden/band/dividend 三因子按权重合成综合分并暴露 components。
 """
 from __future__ import annotations
 

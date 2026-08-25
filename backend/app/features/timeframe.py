@@ -1,6 +1,6 @@
 """打分/趋势算法的周期层：把算法（bar 级运算）与 K 线原始粒度（日/周/月）解耦。
 
-stock_scorer / trend_judge 全部以"bar"做单位运算，不感知 trade_date 是日还是周；
+scoring（打分引擎）/ trend_judge 全部以"bar"做单位运算，不感知 trade_date 是日还是周；
 本模块只负责把数据源的日线 DataFrame resample 成目标周期，让上层 scan/query 通过
 timeframe 参数选择输入哪种 bar。
 

@@ -6,7 +6,8 @@ from datetime import date, timedelta
 import numpy as np
 import pandas as pd
 
-from app.features.stock_scorer import _norm, _tri, score_stock
+from app.features.scoring import score_stock
+from app.features.scoring.base import _norm, _tri
 
 
 def _mk_df(closes: list[float]) -> pd.DataFrame:

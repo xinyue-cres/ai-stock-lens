@@ -16,7 +16,7 @@ from app.config import get_settings
 from app.datasource.base_provider import is_fund_code
 from app.datasource.router import get_data_router
 from app.db import engine
-from app.features.stock_scorer import compute_indicator_cache, score_stock
+from app.features.scoring import compute_indicator_cache, score_stock
 from app.features.timeframe import Timeframe, to_bars
 from app.features.trend_judge import judge_trend
 from app.models.stock_score import StockScore

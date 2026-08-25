@@ -1,6 +1,6 @@
 """打分引擎包：按职责拆为 rates / base / golden / peak / band / engine 六个模块。
 
-对外公开接口与原 features/stock_scorer.py 完全一致：
+对外公开接口：
 - score_stock / compute_indicator_cache                      打分 + 指标缓存
 - _PEAK_CONF_STRONG / _PEAK_CONF_STRONG_BY_TF               过峰置信度阈值
 - _post_golden_gain / _golden_life_score / _golden_continuation  金叉延续性

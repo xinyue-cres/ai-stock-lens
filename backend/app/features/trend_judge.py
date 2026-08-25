@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from app.features.stock_scorer import _PEAK_CONF_STRONG, _signal_summary, compute_indicator_cache
+from app.features.scoring import _PEAK_CONF_STRONG, _PEAK_CONF_STRONG_BY_TF, _signal_summary, compute_indicator_cache
 from app.indicators.ma import compute_ma
 
 _MIN_ROWS = 60  # MACD EMA26 预热需要 ~60 根
@@ -75,7 +75,6 @@ def _decide_stage(golden: bool, pct_b: float | None, dist_high: float,
     """
     # 顶/底判定：优先按 peak_signal 位置标签（含 dif 位置语义），slope_up 仅作方向
     # 强档阈值按 timeframe 校准：weekly 的 acc_z 分布系统性偏低，沿用 daily=51 会无人触发
-    from app.features.stock_scorer import _PEAK_CONF_STRONG_BY_TF
     conf_strong = _PEAK_CONF_STRONG_BY_TF.get(timeframe, _PEAK_CONF_STRONG)
     if peak_signal:
         peak_top = peak_conf >= conf_strong and peak_signal in ("上涨过峰", "顶部回落")
@@ -125,7 +124,6 @@ def _entry_reason(stage: str, golden: bool, peak_conf: int, slope_up: bool | Non
     """细化 entry_reason：覆盖决策树降级的具体原因。"""
     # 顶/底判定优先按 peak_signal 位置标签（含 dif 位置语义）；
     # 老调用方未传 peak_signal 时回退到 slope_up 单方向判定
-    from app.features.stock_scorer import _PEAK_CONF_STRONG_BY_TF
     conf_strong = _PEAK_CONF_STRONG_BY_TF.get(timeframe, _PEAK_CONF_STRONG)
     if peak_signal:
         peak_top = peak_conf >= conf_strong and peak_signal in ("上涨过峰", "顶部回落")

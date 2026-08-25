@@ -4,7 +4,7 @@
 金叉 = DIF 上穿 DEA，死叉 = DIF 下穿 DEA。
 
 本模块提供全历史序列 + 交叉信号列表 + 当前斜率，供打分引擎
-（features/stock_scorer）与趋势判断（features/trend_judge）共用；
+（features/scoring）与趋势判断（features/trend_judge）共用；
 oscillators.compute_macd 的快照也基于 macd_series 计算 DIF/DEA——
 同一指标只有一份实现。
 """

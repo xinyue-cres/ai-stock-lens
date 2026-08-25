@@ -23,8 +23,8 @@ from app.models.stock import Stock
 from app.services.scoring_service import _load_cached_kline
 from app.config import get_settings
 
-from app.features.stock_scorer import macd_series, _cycle_stats, _peak_features, compute_indicator_cache
-from app.indicators.macd import is_golden, dif_slope as compute_dif_slope
+from app.features.scoring import _cycle_stats, _peak_features, compute_indicator_cache
+from app.indicators.macd import dif_slope as compute_dif_slope, is_golden, macd_series
 from app.indicators.adx import compute_adx
 from app.indicators.oscillators import compute_boll
 from app.indicators.risk import compute_risk

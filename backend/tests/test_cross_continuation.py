@@ -6,7 +6,7 @@ from datetime import date, timedelta
 import numpy as np
 import pandas as pd
 
-from app.features.stock_scorer import _golden_continuation, _golden_life_score, _post_golden_gain
+from app.features.scoring import _golden_continuation, _golden_life_score, _post_golden_gain
 
 
 def _mk_df(closes: list[float]) -> pd.DataFrame:
