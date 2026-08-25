@@ -7,6 +7,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { message } from 'antd'
 import { useQueryClient } from '@tanstack/react-query'
 import { batchRun, BatchItemStatus, BatchState, BatchTaskType } from '@/api/batchTask'
+import { runScan } from '@/api/score'
 import { useInvalidation } from '@/hooks/useInvalidation'
 
 export function useBatchTask(
@@ -46,6 +47,13 @@ export function useBatchTask(
         }
         if (type === 'sync') {
           globalInv.afterSync()
+          // 批量同步只走 sync_one_stock（K 线入库），不触发打分重算——
+          // 快照会滞后（002155 实录）。与右上全局同步的 sync_watchlist 自动补扫
+          // 对齐：完成后静默触发两周期补扫（当日已扫/未脏的票秒过，成本=脏票数；
+          // 已有扫描进行中时后端拒绝启动，无冲突）。
+          for (const tf of ['daily', 'weekly'] as const) {
+            runScan({ scope: 'watchlist', timeframe: tf }).catch(() => {})
+          }
         } else if (type === 'ai') {
           globalInv.afterAiReport(codes[0])
           qc.invalidateQueries({ queryKey: ['ai-report-cached'] })
