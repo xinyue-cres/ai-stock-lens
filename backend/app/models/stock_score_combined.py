@@ -45,8 +45,13 @@ class StockScoreCombined(SQLModel, table=True):
     # 历史金叉周期涨幅（该股的"气质"，比 60 日高更能代表预期空间；来自 signal_summary）
     hist_golden_peak_pct: float | None = Field(default=None, description="该股历史金叉周期峰值涨幅均值 %")
     hist_golden_peak_median: float | None = Field(default=None, description="该股历史金叉周期峰值涨幅中位 %")
-    # 当前金叉已涨幅（这周 K 上的当前信号累计涨跌；供"剩余涨幅"推导）
-    weekly_signal_gain_pct: float | None = Field(default=None, description="weekly 当前金叉状态下累计已涨幅 %")
+    # 历史死叉周期跌幅（周线死叉时详情页显示"预期跌幅"用；与金叉涨幅对称）
+    hist_death_trough_pct: float | None = Field(default=None, description="该股历史死叉周期谷值跌幅均值 %（负数）")
+    hist_death_trough_median: float | None = Field(default=None, description="该股历史死叉周期谷值跌幅中位 %（负数）")
+    # 当前信号已涨幅（这周 K 上的当前信号累计涨跌；供"剩余涨幅"推导）
+    weekly_signal_gain_pct: float | None = Field(default=None, description="weekly 当前信号累计涨跌 %（金叉=已涨/死叉=已跌）")
+    # 周线信号方向（决定详情页预期区块显示"上涨预期"还是"下跌预期"）
+    weekly_is_golden: bool | None = Field(default=None, description="周线当前信号态：True=金叉/False=死叉")
     # 当日行情（来自 daily 腿；排行页同步后即时刷新的口径一致）
     daily_close: float | None = Field(default=None, description="最新收盘价（daily 腿）")
     daily_pct_chg: float | None = Field(default=None, description="当日涨跌幅 %（daily 腿）")

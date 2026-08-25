@@ -13,7 +13,9 @@ from app.datasource.base_provider import is_fund_code
 from app.models.stock_score import StockScore
 from app.schemas.score_components import (
     dist_high_of,
+    hist_death_of,
     hist_golden_of,
+    is_golden,
     peak_of,
     pct_b_of,
 )
@@ -141,13 +143,18 @@ def _combined_upsert(session: Session, code: str, name: str,
     row.trade_hint = meta.get("trade_hint")
     row.demote_reason = demote_reason
     # 空间（保留 dist_high 兼容）：距 60 日高 = 旧逻辑。
-    # 主力指标改该股历史金叉 peak（mean + median）—— 比 60 日高更能代表"这次能涨多少"。
+    # 主力指标改该股历史信号周期幅度（比 60 日高更能代表"这次能涨/跌多少"）。
     hist_golden_peak_pct, hist_golden_peak_median, weekly_signal_gain_pct = hist_golden_of(weekly_row)
+    hist_death_trough_pct, hist_death_trough_median = hist_death_of(weekly_row)
+    weekly_is_golden = is_golden(weekly_row)
     space_pct = dist_high_of(daily_row)
     row.space_pct = space_pct
     row.hist_golden_peak_pct = hist_golden_peak_pct
     row.hist_golden_peak_median = hist_golden_peak_median
+    row.hist_death_trough_pct = hist_death_trough_pct
+    row.hist_death_trough_median = hist_death_trough_median
     row.weekly_signal_gain_pct = weekly_signal_gain_pct
+    row.weekly_is_golden = weekly_is_golden
     # 当日行情（daily 腿；排行页口径一致——快照行情字段由 snapshot_service 同步后刷新）
     row.daily_close = daily_row.close if daily_row else None
     row.daily_pct_chg = daily_row.pct_chg if daily_row else None

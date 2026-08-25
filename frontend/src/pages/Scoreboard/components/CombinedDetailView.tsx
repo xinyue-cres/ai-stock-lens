@@ -120,39 +120,75 @@ export default function CombinedDetailView({ detail, onAddWatchlist }: CombinedD
           </div>
         </div>
 
-        {/* 第二行：涨幅空间（整宽 4 列网格大字）*/}
-        {(detail.hist_golden_peak_median != null || detail.weekly_signal_gain_pct != null) && (() => {
+        {/* 第二行：信号周期预期（整宽 4 列网格大字）。
+            周线金叉 → 上涨预期（当前已涨/剩余中位/剩余平均/历史中位/平均）
+            周线死叉 → 下跌预期（当前已跌/剩余跌幅中位/平均/历史中位/平均，均为负数） */}
+        {(detail.weekly_is_golden === true || detail.weekly_is_golden === false) && (() => {
+          const isGolden = detail.weekly_is_golden!
           const cur = detail.weekly_signal_gain_pct ?? 0
-          const med = detail.hist_golden_peak_median ?? 0
-          const avg = detail.hist_golden_peak_pct ?? 0
-          const remain_med = med - cur
-          const remain_avg = avg - cur
           const Item = ({ val, label, hint }: { val: string; label: string; hint: string }) => (
             <div style={{ textAlign: 'center', padding: '10px 8px', background: '#fafafa', borderRadius: 6, border: '1px solid #f0f0f0' }}>
               <div style={{ fontWeight: 700, fontSize: 18, color: hint }}>{val}</div>
               <Text type="secondary" style={{ fontSize: 11 }}>{label}</Text>
             </div>
           )
+          if (isGolden) {
+            const med = detail.hist_golden_peak_median ?? 0
+            const avg = detail.hist_golden_peak_pct ?? 0
+            const remain_med = med - cur
+            const remain_avg = avg - cur
+            return (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, borderTop: '1px dashed #e5e7eb', paddingTop: 12 }}>
+                <Item
+                  val={cur > 0 ? `+${cur.toFixed(1)}%` : `${cur.toFixed(1)}%`}
+                  label="当前已涨"
+                  hint={cur > 0 ? '#16a34a' : '#dc2626'}
+                />
+                <Item
+                  val={remain_med > 0 ? `+${remain_med.toFixed(1)}%` : `${remain_med.toFixed(1)}%`}
+                  label="剩余中位预期"
+                  hint={remain_med >= 10 ? '#16a34a' : remain_med > 0 ? '#0891b2' : '#d97706'}
+                />
+                <Item
+                  val={remain_avg > 0 ? `+${remain_avg.toFixed(1)}%` : `${remain_avg.toFixed(1)}%`}
+                  label="剩余平均预期"
+                  hint={remain_avg >= 10 ? '#16a34a' : remain_avg > 0 ? '#0891b2' : '#d97706'}
+                />
+                <Item
+                  val={`${med > 0 ? `+${med.toFixed(1)}` : '-'} / ${avg > 0 ? `+${avg.toFixed(1)}` : '-'}%`}
+                  label="历史中位 / 平均"
+                  hint="#6b7280"
+                />
+              </div>
+            )
+          }
+          // 死叉：历史谷值跌幅为负数；剩余跌幅 = 谷值 - 当前已跌（更负 = 还有下跌空间）
+          const med = detail.hist_death_trough_median ?? 0
+          const avg = detail.hist_death_trough_pct ?? 0
+          const remain_med = med - cur
+          const remain_avg = avg - cur
+          // A 股红涨绿跌：跌得越深越绿
+          const downHint = (v: number) => (v <= -10 ? '#059669' : v < 0 ? '#0891b2' : '#d97706')
           return (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, borderTop: '1px dashed #e5e7eb', paddingTop: 12 }}>
               <Item
-                val={cur > 0 ? `+${cur.toFixed(1)}%` : `${cur.toFixed(1)}%`}
-                label="当前已涨"
-                hint={cur > 0 ? '#16a34a' : '#dc2626'}
+                val={`${cur.toFixed(1)}%`}
+                label="当前已跌"
+                hint={cur < 0 ? '#059669' : '#d97706'}
               />
               <Item
-                val={remain_med > 0 ? `+${remain_med.toFixed(1)}%` : `${remain_med.toFixed(1)}%`}
-                label="剩余中位预期"
-                hint={remain_med >= 10 ? '#16a34a' : remain_med > 0 ? '#0891b2' : '#d97706'}
+                val={`${remain_med.toFixed(1)}%`}
+                label="剩余跌幅中位"
+                hint={downHint(remain_med)}
               />
               <Item
-                val={remain_avg > 0 ? `+${remain_avg.toFixed(1)}%` : `${remain_avg.toFixed(1)}%`}
-                label="剩余平均预期"
-                hint={remain_avg >= 10 ? '#16a34a' : remain_avg > 0 ? '#0891b2' : '#d97706'}
+                val={`${remain_avg.toFixed(1)}%`}
+                label="剩余跌幅平均"
+                hint={downHint(remain_avg)}
               />
               <Item
-                val={`${med > 0 ? `+${med.toFixed(1)}` : '-'} / ${avg > 0 ? `+${avg.toFixed(1)}` : '-'}%`}
-                label="历史中位 / 平均"
+                val={`${med < 0 ? med.toFixed(1) : '-'} / ${avg < 0 ? avg.toFixed(1) : '-'}%`}
+                label="历史谷值中位 / 平均"
                 hint="#6b7280"
               />
             </div>

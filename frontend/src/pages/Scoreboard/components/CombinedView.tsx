@@ -82,11 +82,28 @@ function CombinedRow({ item, active, onClick, onAddWatchlist }: CombinedRowProps
             {item.weekly.signal_score?.toFixed(0) ?? '-'}/{item.daily.signal_score?.toFixed(0) ?? '-'}
           </span>
         </span>
-        {/* 历史可预期： 剩余中位（hist_med - signal_gain）*/}
-        {item.hist_golden_peak_median != null && item.weekly_signal_gain_pct != null && (() => {
-          const remain = item.hist_golden_peak_median - item.weekly_signal_gain_pct
+        {/* 历史可预期：金叉=剩余上涨中位 / 死叉=剩余下跌中位（谷值 - 当前已跌，更负=还有得跌） */}
+        {(() => {
+          const cur = item.weekly_signal_gain_pct
+          if (cur == null) return null
+          if (item.weekly_is_golden === false) {
+            const med = item.hist_death_trough_median
+            if (med == null) return null
+            const remain = med - cur
+            return (
+              <span style={{ display: 'flex', alignItems: 'center', gap: 2 }} title="剩余跌幅中位（历史死叉谷值 − 当前已跌）">
+                <span style={{ color: 'rgba(0,0,0,0.45)' }}>余跌</span>
+                <span style={{ fontWeight: 600, color: remain <= -10 ? '#059669' : remain < 0 ? '#0891b2' : '#d97706' }}>
+                  {remain.toFixed(0)}%
+                </span>
+              </span>
+            )
+          }
+          const med = item.hist_golden_peak_median
+          if (med == null) return null
+          const remain = med - cur
           return (
-            <span style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 2 }} title="剩余上涨中位（历史金叉峰值 − 当前已涨）">
               <span style={{ color: 'rgba(0,0,0,0.45)' }}>余中</span>
               <span style={{ fontWeight: 600, color: remain >= 10 ? '#16a34a' : remain > 0 ? '#0891b2' : '#d97706' }}>
                 {remain > 0 ? `+${remain.toFixed(0)}%` : `${remain.toFixed(0)}%`}

@@ -61,6 +61,24 @@ def hist_golden_of(weekly_score: StockScore | None) -> tuple[float | None, float
     )
 
 
+def hist_death_of(weekly_score: StockScore | None) -> tuple[float | None, float | None]:
+    """weekly signal 里的 (hist_death_trough_pct, hist_death_trough_median)——历史死叉周期
+    谷值跌幅（负数）。周线死叉时详情页显示"预期跌幅"用，与金叉涨幅对称。"""
+    sig = signal_of(weekly_score)
+    dp = sig.get("hist_death_trough_pct")
+    dm = sig.get("hist_death_trough_median")
+    return (
+        dp if isinstance(dp, (int, float)) else None,
+        dm if isinstance(dm, (int, float)) else None,
+    )
+
+
+def is_golden(weekly_score: StockScore | None) -> bool | None:
+    """周线当前信号态（True=金叉 / False=死叉）；决定预期方向的口径。"""
+    g = signal_of(weekly_score).get("current_golden")
+    return bool(g) if isinstance(g, bool) else None
+
+
 def dist_high_of(daily_score: StockScore | None) -> float | None:
     """距 60 日高的上行空间 %（副参考；主力指标是 hist_golden_*）。"""
     kp = (parse(daily_score).get("trend") or {}).get("key_prices") or {}
