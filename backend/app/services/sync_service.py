@@ -105,14 +105,19 @@ def _validate_row(row: dict, code: str) -> bool:
 
 
 
-def _latest_date_in_db(session: Session, code: str) -> date | None:
+def _latest_date_in_db(session: Session, code: str) -> tuple[date | None, bool]:
+    """库内最新 K 线的 (日期, 是否定稿)。finalized=False 表示那是盘中拉的实时快照。"""
     stmt = (
-        select(KlineDaily.trade_date)
+        select(KlineDaily.trade_date, KlineDaily.finalized)
         .where(KlineDaily.code == code)
         .order_by(KlineDaily.trade_date.desc())
         .limit(1)
     )
-    return session.exec(stmt).first()
+    row = session.exec(stmt).first()
+    if row is None:
+        return None, True
+    # 老行（迁移前无此列）值为 NULL：历史日期天然定稿，None 视为 True
+    return row[0], bool(row[1]) if row[1] is not None else True
 
 
 def sync_one_stock(session: Session, code: str, full: bool = False) -> int:
@@ -123,15 +128,17 @@ def sync_one_stock(session: Session, code: str, full: bool = False) -> int:
     if full:
         start = end - timedelta(days=365 * 5)
     else:
-        latest = _latest_date_in_db(session, code)
+        latest, latest_finalized = _latest_date_in_db(session, code)
         if latest:
-            # 已收盘且无新交易日（latest==今天，或周末/节假日 latest=上个交易日）→
-            # 数据已最新，跳过远程拉取。之前每次同步都发请求（+2 天窗口含"今天"
-            # 堵死了 start>end 跳过分支），返回数据与库里一模一样、merge 幂等写入
-            # = 251 次纯浪费请求。快照行情仍刷新，自动补扫链路照常工作。
+            # 已收盘且无新交易日（latest==今天，或周末/节假日 latest=上个交易日）
+            # 且最新 bar 是定稿数据 → 跳过远程拉取。之前每次同步都发请求
+            # （+2 天窗口含"今天"堵死了 start>end 跳过分支），返回数据与库里
+            # 一模一样、merge 幂等写入 = 纯浪费请求。
+            # finalized 必须查：盘中拉过的今日 bar 是实时快照，收盘后第一次同步
+            # 必须重拉定稿（否则半成品被定格成收盘价——用户推演发现的 bug）。
             # 用交易日差而非 latest>=end：周五收盘后周末连点两次同步也不空跑。
             from app.services.trader_service import _trading_days_between
-            if _trading_days_between(latest, end) == 0 and not _is_intraday(end):
+            if _trading_days_between(latest, end) == 0 and not _is_intraday(end) and latest_finalized:
                 refresh_score_snapshot(session, code)
                 return 0
             # 增量拉取多带 2 天窗口：sina/etf/指数 的 pct_chg = close.pct_change() 需要
@@ -198,6 +205,9 @@ def sync_one_stock(session: Session, code: str, full: bool = False) -> int:
             amount=float(row["amount"]),
             turnover=_safe_float(row.get("turnover")),
             pct_chg=_safe_float(row.get("pct_chg")),
+            # 盘中拉取的当日 bar 是实时快照（价格随时间变），标记未定稿——
+            # 同步跳过判断只信 finalized 的今日 bar；历史日期天然定稿
+            finalized=(trade_date != end) or (not _is_intraday(end)),
         )
         session.merge(kline)
         inserted += 1

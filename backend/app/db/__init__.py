@@ -150,3 +150,7 @@ def init_db() -> None:
     _migrate_add_column("stock", "group_id", "INTEGER")
     _migrate_add_column("stock", "note", "TEXT")
     _migrate_add_column("stock", "group_ids", "TEXT")
+
+    # kline_daily.finalized：该 bar 是否收盘后写入的定稿数据（盘中快照 False）。
+    # 存量行全部默认 1（历史 bar 天然定稿）。
+    _migrate_add_column("kline_daily", "finalized", "BOOLEAN DEFAULT 1")
