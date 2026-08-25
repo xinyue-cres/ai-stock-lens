@@ -119,9 +119,14 @@ def _decide_stage(golden: bool, pct_b: float | None, dist_high: float,
 def _entry_reason(stage: str, golden: bool, peak_conf: int, slope_up: bool | None,
                   signal_score: float | None, peak_winrate: float | None,
                   adx: float | None = None, signal_gain_pct: float | None = None,
-                  peak_signal: str | None = None,
+                  peak_signal: str | None = None, dist_high: float | None = None,
                   timeframe: str = "daily") -> str:
-    """细化 entry_reason：覆盖决策树降级的具体原因。"""
+    """细化 entry_reason：分支条件与 _decide_stage 决策树逐条对齐。
+
+    注意：两棵树必须同步改——决策树加分支时文案树必须加对应分支，
+    否则落到 _REASONS[stage] 兜底时描述的是"通往该 stage 的另一条路径"，
+    会与事实矛盾（603833 金叉态被判 downtrend 却显示"死叉态·回避"实录）。
+    """
     # 顶/底判定优先按 peak_signal 位置标签（含 dif 位置语义）；
     # 老调用方未传 peak_signal 时回退到 slope_up 单方向判定
     conf_strong = _PEAK_CONF_STRONG_BY_TF.get(timeframe, _PEAK_CONF_STRONG)
@@ -141,6 +146,11 @@ def _entry_reason(stage: str, golden: bool, peak_conf: int, slope_up: bool | Non
             and signal_gain_pct is not None and signal_gain_pct > _STRONG_TREND_GAIN \
             and not peak_top:
         return "金叉态·强趋势已涨，可持有·不追高·逢高减"
+    # 深跌中刚金叉且历史不可靠（与决策树分支逐字对齐：dist_high<-0.4 且 signal<72；
+    # 之前条件误用 signal_gain_pct 漏判，也漏接 dist_high 参数根本写不准）
+    if golden and dist_high is not None and dist_high < -0.4 \
+            and (signal_score is None or signal_score < _SIGNAL_RELIABLE):
+        return "金叉态·深跌中刚金叉且历史延续差，反弹不可信，回避等右侧确认"
     if not golden and peak_bot and signal_score is not None and signal_score >= _LEFT_ENTRY_SIGNAL:
         return "死叉态·下跌动能急转（底部过峰）+ 历史尚可，左侧机会·建议轻仓"
     if golden and signal_score is not None and signal_score >= _SIGNAL_RELIABLE \
@@ -219,6 +229,7 @@ def judge_trend(df: pd.DataFrame, signal_score: float | None = None,
         "entry_reason": _entry_reason(stage, golden, peak_conf, slope_up, signal_score, peak_winrate,
                                       adx=adx_info.get("adx"), signal_gain_pct=signal_gain_pct,
                                       peak_signal=cache.get("peak_signal"),
+                                      dist_high=dist_high,
                                       timeframe=timeframe),
         "key_prices": {
             "close": round(close, 3),
