@@ -137,6 +137,8 @@ def init_db() -> None:
     _migrate_add_column("stock_score_combined", "hist_golden_peak_pct", "FLOAT")
     _migrate_add_column("stock_score_combined", "hist_golden_peak_median", "FLOAT")
     _migrate_add_column("stock_score_combined", "weekly_signal_gain_pct", "FLOAT")
+    _migrate_add_column("stock_score_combined", "daily_close", "FLOAT")
+    _migrate_add_column("stock_score_combined", "daily_pct_chg", "FLOAT")
 
     # stock 扩展字段
     _migrate_add_column("stock", "pinned", "BOOLEAN DEFAULT 0")

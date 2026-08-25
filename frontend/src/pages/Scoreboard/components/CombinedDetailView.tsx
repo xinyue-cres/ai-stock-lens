@@ -39,13 +39,16 @@ interface CombinedDetailViewProps {
 /** 综合详情视图：放在综合模式 master-detail 的右侧 */
 export default function CombinedDetailView({ detail, onAddWatchlist }: CombinedDetailViewProps) {
   const palette = COMBINED_PALETTE[detail.combined_stage] ?? COMBINED_PALETTE.hold
+  const pct = detail.daily_pct_chg
+  // A 股红涨绿跌
+  const pctColor = pct == null ? '#9ca3af' : pct > 0 ? '#dc2626' : pct < 0 ? '#059669' : '#9ca3af'
 
   return (
     <Space direction="vertical" size={14} style={{ width: '100%' }}>
-      {/* 头部：名称 + 综合 stage + 加自选 */}
+      {/* 头部：名称 + 当日行情 + 综合 stage + 加自选 */}
       <Card size="small">
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div>
+          <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', rowGap: 4 }}>
             <span style={{ fontSize: 16, fontWeight: 700 }}>{detail.name || detail.code}</span>
             <Text type="secondary" style={{ marginLeft: 8 }}>{detail.code}</Text>
             {detail.is_fund && <Tag style={{ marginLeft: 6 }}>ETF/LOF</Tag>}
@@ -57,6 +60,15 @@ export default function CombinedDetailView({ detail, onAddWatchlist }: CombinedD
             >
               综合
             </Tag>
+            {/* 当日行情（daily 腿） */}
+            {detail.daily_close != null && (
+              <span style={{ marginLeft: 10, display: 'inline-flex', alignItems: 'baseline', gap: 6 }}>
+                <span style={{ fontWeight: 600, fontSize: 14 }}>{detail.daily_close.toFixed(2)}</span>
+                <span style={{ fontWeight: 600, fontSize: 13, color: pctColor }}>
+                  {pct != null && pct > 0 ? '+' : ''}{pct != null ? `${pct.toFixed(2)}%` : '-'}
+                </span>
+              </span>
+            )}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <Tag style={{ fontSize: 13, padding: '2px 8px', color: palette.color, background: palette.bg, borderColor: palette.border }}>

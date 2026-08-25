@@ -76,6 +76,8 @@ def _serialize_combined(r) -> dict:
         "hist_golden_peak_pct": getattr(r, "hist_golden_peak_pct", None),
         "hist_golden_peak_median": getattr(r, "hist_golden_peak_median", None),
         "weekly_signal_gain_pct": getattr(r, "weekly_signal_gain_pct", None),
+        "daily_close": getattr(r, "daily_close", None),
+        "daily_pct_chg": getattr(r, "daily_pct_chg", None),
     }
 
 

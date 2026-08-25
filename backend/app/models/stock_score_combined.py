@@ -43,5 +43,8 @@ class StockScoreCombined(SQLModel, table=True):
     hist_golden_peak_median: float | None = Field(default=None, description="该股历史金叉周期峰值涨幅中位 %")
     # 当前金叉已涨幅（这周 K 上的当前信号累计涨跌；供"剩余涨幅"推导）
     weekly_signal_gain_pct: float | None = Field(default=None, description="weekly 当前金叉状态下累计已涨幅 %")
+    # 当日行情（来自 daily 腿；排行页同步后即时刷新的口径一致）
+    daily_close: float | None = Field(default=None, description="最新收盘价（daily 腿）")
+    daily_pct_chg: float | None = Field(default=None, description="当日涨跌幅 %（daily 腿）")
 
     as_of_date: date | None = Field(default=None)

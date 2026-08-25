@@ -137,6 +137,9 @@ def _combined_upsert(session: Session, code: str, name: str,
     row.hist_golden_peak_pct = hist_golden_peak_pct
     row.hist_golden_peak_median = hist_golden_peak_median
     row.weekly_signal_gain_pct = weekly_signal_gain_pct
+    # 当日行情（daily 腿；排行页口径一致——快照行情字段由 snapshot_service 同步后刷新）
+    row.daily_close = daily_row.close if daily_row else None
+    row.daily_pct_chg = daily_row.pct_chg if daily_row else None
     # as_of_date 用两条腿中较新的一个
     candidates = [r.as_of_date for r in (daily_row, weekly_row) if r and r.as_of_date]
     row.as_of_date = max(candidates) if candidates else None
