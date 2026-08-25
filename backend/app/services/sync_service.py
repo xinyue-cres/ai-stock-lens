@@ -125,6 +125,15 @@ def sync_one_stock(session: Session, code: str, full: bool = False) -> int:
     else:
         latest = _latest_date_in_db(session, code)
         if latest:
+            # 已收盘且无新交易日（latest==今天，或周末/节假日 latest=上个交易日）→
+            # 数据已最新，跳过远程拉取。之前每次同步都发请求（+2 天窗口含"今天"
+            # 堵死了 start>end 跳过分支），返回数据与库里一模一样、merge 幂等写入
+            # = 251 次纯浪费请求。快照行情仍刷新，自动补扫链路照常工作。
+            # 用交易日差而非 latest>=end：周五收盘后周末连点两次同步也不空跑。
+            from app.services.trader_service import _trading_days_between
+            if _trading_days_between(latest, end) == 0 and not _is_intraday(end):
+                refresh_score_snapshot(session, code)
+                return 0
             # 增量拉取多带 2 天窗口：sina/etf/指数 的 pct_chg = close.pct_change() 需要
             # 上一天 close 作基准。只拉 1 根时 pct_change 是 NaN 被 fillna(0) → 显示 0%。
             # 加 2 天后 df ≥3 根，pct_change 能算对；多余行用 session.merge 幂等更新，不重复入库。
