@@ -49,6 +49,16 @@ def macd_series(
     return dif, dea, signals
 
 
+def dif_slope_series(dif: pd.Series) -> pd.Series:
+    """DIF 斜率全序列：slope = dif − (dif.shift(1) + dif.shift(2)) / 2，未 round。
+
+    供"需要整列 slope 继续派生 acc（slope 的 diff）"的场景使用（过峰判定）；
+    单点值的展示版见 `dif_slope`（round 到 6 位）。公式与 dif_slope 同源，改平滑
+    窗口时只需改这里和 dif_slope 两端。
+    """
+    return dif - (dif.shift(1) + dif.shift(2)) / 2
+
+
 def dif_slope(dif: pd.Series) -> float | None:
     """DIF 当前斜率：当日 DIF −（昨日 + 前日）/2。
 

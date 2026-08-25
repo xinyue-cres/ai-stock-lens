@@ -82,16 +82,14 @@ class DataRouter:
 
     def get_health(self) -> list[dict]:
         """各 provider 当前健康状态。"""
-        import time
-        now = time.time()
         result = []
         for p in self._stock_chain:
-            cooldown = p._cooldown_until
+            snap = p.health_snapshot()
             result.append({
                 "name": p.name,
-                "healthy": p.is_healthy(),
-                "failures": p._failures,
-                "cooldown_remaining": max(0, int(cooldown - now)) if cooldown > 0 else 0,
+                "healthy": snap["healthy"],
+                "failures": snap["failures"],
+                "cooldown_remaining": int(snap["cooldown_remain"]),
             })
         return result
 

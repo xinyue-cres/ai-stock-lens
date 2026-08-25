@@ -195,7 +195,7 @@ def build_action_plan_input(session: Session, code: str) -> dict[str, Any]:
         "reports": reports,
         "position": position_payload,
         "warnings": warnings,
-        "total_capital": settings_service.get_total_capital(),
+        "total_capital": settings_service.get_total_capital(session),
     }
 
 

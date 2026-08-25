@@ -25,8 +25,8 @@ def _fetch_stock_list_direct() -> pd.DataFrame | None:
     """手工 requests 直连东财 spot API 拉全 A 列表（不走 akshare wrapper）。
 
     akshare 的 `stock_info_a_code_name` 底层其实是 szse.cn xlsx 经常被系统代理封；
-    `stock_zh_a_spot_em` 是标准 akshare 实现鸭子但内部 session 不能注入代理绕掘。手工
-    requests + verify=False（系统代理 SSL 拦截）+ 关 proxy（绕开 Whistle 阻拦）百毫秒拿满。
+    `stock_zh_a_spot_em` 是标准 akshare 实现但内部 session 不能注入代理绕过。手工
+    requests + verify=False（绕系统代理 SSL 拦截）+ 关 proxy（绕开抓包工具阻拦）百毫秒拿满。
 
     东财 list API：push2.eastmoney.com/api/qt/clist/get，pn 分页每页 ~100。命中后重置分页。
     """
@@ -87,8 +87,8 @@ class EastmoneyProvider(BaseProvider):
 
         # A 股股票。优先东财 direct requests（不走 akshare）：akshare 的 stock_info_a_code_name
         # 底层其实是 szse.cn xlsx，常被系统代理封；akshare_spot_em 分页封装偶发 502。手工
-        # requests 直连 + 绕系统代理 + 解随便 SSL 拦截（verify=False），百毫秒拿满 5899 只。
-        # 偶发 ConnectionError（二级配对负载， 稍纵即逝）  - retry 3 次 backoff
+        # requests 直连 + 绕系统代理 + 关闭 SSL 拦截（verify=False），百毫秒拿满 5899 只。
+        # 偶发 ConnectionError（负载对偶瞬时抖动）→ 退避重试 3 次
         df: pd.DataFrame | None = None
         import time as _time  # noqa: PLC0415
         for attempt in range(3):

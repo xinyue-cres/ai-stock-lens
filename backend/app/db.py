@@ -61,6 +61,9 @@ def _seed_from_bundle() -> None:
     让"添加股票"搜索联想首搜即命中本地，不用现场拉 20s 远程列表。
     种子随构建时间过时（新股/改名）由 search_stocks 的远程兜底自然补齐。
     源码开发态没有 _MEIPASS，直接跳过。
+
+    假设：单实例启动（桌面应用双击启动一次）。双进程并发的 exists→copyfile 竞态
+    未加文件锁——当前使用场景（桌面单机）不出现，若将来做分布式/服务化需补锁。
     """
     import shutil
     import sys

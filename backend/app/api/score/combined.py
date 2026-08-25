@@ -13,7 +13,7 @@ from app.db import get_session
 from app.models.stock_score_combined import StockScoreCombined
 from app.services.stock_service import watchlist_codes_in_groups
 
-from .utils import _attach_watchlist_info
+from .utils import _attach_watchlist_info, _serialize_combined
 
 router = APIRouter()
 
@@ -53,37 +53,7 @@ def combined_list(
             stmt = stmt.where(StockScoreCombined.code.in_(codes))  # type: ignore[attr-defined]
     stmt = stmt.order_by(StockScoreCombined.combined_score.desc()).limit(limit)
     rows = list(session.exec(stmt).all())
-    items = [{
-        "code": r.code,
-        "name": r.name,
-        "is_fund": r.is_fund,
-        "scan_date": str(r.scan_date),
-        "as_of_date": str(r.as_of_date) if r.as_of_date else None,
-        "weekly": {
-            "total_score": r.weekly_total,
-            "signal_score": r.weekly_signal,
-            "trend_stage": r.weekly_stage,
-            "peak_signal": r.weekly_peak_signal,
-            "peak_conf": r.weekly_peak_conf,
-        },
-        "daily": {
-            "total_score": r.daily_total,
-            "signal_score": r.daily_signal,
-            "trend_stage": r.daily_stage,
-            "peak_signal": r.daily_peak_signal,
-            "peak_conf": r.daily_peak_conf,
-        },
-        "combined_score": r.combined_score,
-        "combined_stage": r.combined_stage,
-        "can_entry": r.can_entry,
-        "entry_reason": r.entry_reason,
-        "trade_hint": r.trade_hint,
-        "demote_reason": getattr(r, "demote_reason", None),
-        "space_pct": getattr(r, "space_pct", None),
-        "hist_golden_peak_pct": getattr(r, "hist_golden_peak_pct", None),
-        "hist_golden_peak_median": getattr(r, "hist_golden_peak_median", None),
-        "weekly_signal_gain_pct": getattr(r, "weekly_signal_gain_pct", None),
-    } for r in rows]
+    items = [_serialize_combined(r) for r in rows]
     # 附加 in_watchlist + group_ids（前端 StockList 视图联动）
     _attach_watchlist_info(session, items)
     return items
@@ -95,34 +65,4 @@ def combined_detail(code: str, session: Session = Depends(get_session)):
     r = session.get(StockScoreCombined, code)
     if not r:
         raise HTTPException(404, "该标的还没有综合评判记录")
-    return {
-        "code": r.code,
-        "name": r.name,
-        "is_fund": r.is_fund,
-        "scan_date": str(r.scan_date),
-        "as_of_date": str(r.as_of_date) if r.as_of_date else None,
-        "weekly": {
-            "total_score": r.weekly_total,
-            "signal_score": r.weekly_signal,
-            "trend_stage": r.weekly_stage,
-            "peak_signal": r.weekly_peak_signal,
-            "peak_conf": r.weekly_peak_conf,
-        },
-        "daily": {
-            "total_score": r.daily_total,
-            "signal_score": r.daily_signal,
-            "trend_stage": r.daily_stage,
-            "peak_signal": r.daily_peak_signal,
-            "peak_conf": r.daily_peak_conf,
-        },
-        "combined_score": r.combined_score,
-        "combined_stage": r.combined_stage,
-        "can_entry": r.can_entry,
-        "entry_reason": r.entry_reason,
-        "trade_hint": r.trade_hint,
-        "demote_reason": getattr(r, "demote_reason", None),
-        "space_pct": getattr(r, "space_pct", None),
-        "hist_golden_peak_pct": getattr(r, "hist_golden_peak_pct", None),
-        "hist_golden_peak_median": getattr(r, "hist_golden_peak_median", None),
-        "weekly_signal_gain_pct": getattr(r, "weekly_signal_gain_pct", None),
-    }
+    return _serialize_combined(r)

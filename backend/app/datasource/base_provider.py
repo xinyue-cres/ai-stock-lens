@@ -68,6 +68,16 @@ class BaseProvider:
         """是否可用：不处于冷却期。"""
         return time.time() >= self._cooldown_until
 
+    def health_snapshot(self) -> dict:
+        """只读健康快照：供诊断界面展示（不暴露私有字段给 external caller）。"""
+        cooldown_until = self._cooldown_until
+        cooldown_remain = max(0.0, cooldown_until - time.time())
+        return {
+            "healthy": self.is_healthy(),
+            "failures": self._failures,
+            "cooldown_remain": round(cooldown_remain, 1),
+        }
+
     def record_success(self) -> None:
         self._failures = 0
         self._cooldown_until = 0.0

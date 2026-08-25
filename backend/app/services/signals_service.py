@@ -37,7 +37,8 @@ def scan_watchlist_signals(session: Session, group_id: int | None = None) -> lis
     report_times_map = _latest_report_times_map(session, codes, get_model_name())
 
     group_names: dict[int, str] = {}
-    group_ids = {s.group_id for s in stocks if s.group_id}
+    # 分组 ID 从 JSON 列读（单一事实源）；旧 group_id 单列仅作迁移兼容写入，禁止再读
+    group_ids = {gid for s in stocks for gid in stock_service.get_group_ids(s)}
     if group_ids:
         for g in session.exec(select(StockGroup).where(StockGroup.id.in_(group_ids))):  # type: ignore[attr-defined]
             group_names[g.id] = g.name

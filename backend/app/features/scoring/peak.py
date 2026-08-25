@@ -9,6 +9,8 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
+from app.indicators.macd import dif_slope_series
+
 from .rates import _PEAK_Z
 
 
@@ -25,7 +27,7 @@ def _peak_features(close: pd.Series, dif: pd.Series, dea: pd.Series,
     或（无触发时）涨势延续/跌势延续。
     """
     empty = {"acc_z": None, "slope_up": None, "peak_signal": None, "peak_conf": 0, "vr20": None}
-    slope = dif - (dif.shift(1) + dif.shift(2)) / 2
+    slope = dif_slope_series(dif)
     acc = slope.diff()
     fv = acc.dropna()
     if len(fv) < 30:

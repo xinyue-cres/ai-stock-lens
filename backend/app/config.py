@@ -35,13 +35,17 @@ class Settings(BaseSettings):
 
     # 选股打分扫描（仅手动触发；scan_enabled/scan_cron_* 已移除，不再定时自动扫全 A）
     # scan 网络拉取并发：12+ 会触发东财 rate limit 连续失败进入 300s cooldown，
-    # 触发 fallback 到 baostock/sina（全局锁串行），扫描全程卡死。保持 6 保守保瑜
+    # 触发 fallback 到 baostock/sina（全局锁串行），扫描全程卡死。保持 6 保守保稳
     scan_concurrency: int = 6
     scan_kline_bars: int = 1000  # 扫描拉取约 4 年（覆盖完整牛熊周期，避免 2 年窗口只含单边牛市）
 
     @property
     def scan_kline_days(self) -> int:
         """扫描拉取的自然日窗口：1000 交易日 ≈ 1.5 倍自然日 ≈ 4.1 年。
+
+        派生属性（不可配置）：从 scan_kline_bars ×1.5 换算，
+        `.env` 里写 SCAN_KLINE_DAYS 会被 pydantic-settings 静默忽略（extra="ignore"），
+        改这个值请改 SCAN_KLINE_BARS。
 
         1.4 只够 ~960 交易日（自然日含周末节假日，交易日占比 ~0.66），
         会导致 _load_cached_kline 的 ≥1000 根判定永远不足 → 缓存命中失效全走网络。

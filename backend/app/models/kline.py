@@ -12,7 +12,7 @@ class KlineDaily(SQLModel, table=True):
     high: float
     low: float
     close: float
-    volume: int = Field(description="成交量，单位：手")
+    volume: int = Field(description="成交量，单位：股（全链路统一为股，东财*100换算）")
     amount: float = Field(description="成交额，单位：元")
     turnover: float | None = Field(default=None, description="换手率 %")
     pct_chg: float | None = Field(default=None, description="涨跌幅 %")

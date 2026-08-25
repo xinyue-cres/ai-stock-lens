@@ -71,28 +71,53 @@ def _combined_upsert(session: Session, code: str, name: str,
     d_total = daily_row.total_score if daily_row else 0.0
     w_stage = weekly_row.trend_stage if weekly_row else "insufficient"
     d_stage = daily_row.trend_stage if daily_row else "insufficient"
-    # weekly/daily 的 peak 数据（从 components_json 抽出）
-    def _peak_of(r) -> tuple[str | None, int]:
+
+    def _load_comp(r) -> dict:
+        """解析 components_json，出错返回空 dict。单一解析点（P2-2）。"""
         if not r or not r.components_json:
-            return None, 0
+            return {}
         try:
-            comp = json.loads(r.components_json)
-        except Exception:  # noqa: BLE001
-            return None, 0
-        sig = comp.get("signal") or {}
-        return sig.get("peak_signal"), int(sig.get("peak_conf") or 0)
+            return json.loads(r.components_json) or {}
+        except (json.JSONDecodeError, TypeError):
+            return {}
+
+    def _peak_of(r) -> tuple[str | None, int]:
+        sig = (_load_comp(r).get("signal") or {})
+        ps = sig.get("peak_signal")
+        conf = sig.get("peak_conf")
+        return ps, int(conf) if isinstance(conf, (int, float)) else 0
 
     def _pct_b_of(r) -> float | None:
         """从 components_json 提取 BOLL pct_b（trend.indicators.pct_b）。"""
-        if not r or not r.components_json:
-            return None
-        try:
-            comp = json.loads(r.components_json)
-        except Exception:  # noqa: BLE001
-            return None
-        ind = (comp.get("trend") or {}).get("indicators") or {}
+        ind = (_load_comp(r).get("trend") or {}).get("indicators") or {}
         v = ind.get("pct_b")
         return float(v) if isinstance(v, (int, float)) else None
+
+    def _hist_from(weekly_r) -> tuple[float | None, float | None, float | None]:
+        """weekly signal_summary 里的 hist 三件套（golden peak mean/median + signal_gain）。
+
+        用 weekly 而非 daily：weekly 的"金叉周期气质"更稳定，daily bar 太敏感。
+        """
+        sig = (_load_comp(weekly_r).get("signal") or {})
+        hp = sig.get("hist_golden_peak_pct")
+        hm = sig.get("hist_golden_peak_median")
+        sg = sig.get("signal_gain_pct")
+        return (
+            hp if isinstance(hp, (int, float)) else None,
+            hm if isinstance(hm, (int, float)) else None,
+            round(sg, 2) if isinstance(sg, (int, float)) else None,
+        )
+
+    def _dist_high_of(daily_r) -> float | None:
+        """距 60 日高的上行空间 %（副参考；主力指标是 hist_golden_*）。"""
+        kp = (_load_comp(daily_r).get("trend") or {}).get("key_prices") or {}
+        high60 = kp.get("resistance_60d")
+        close = kp.get("close")
+        if not (isinstance(high60, (int, float)) and high60 and high60 > 0):
+            return None
+        if not (isinstance(close, (int, float)) and close and close > 0):
+            return None
+        return round((high60 / close - 1) * 100, 2)
 
     w_peak, w_conf = _peak_of(weekly_row)
     d_peak, d_conf = _peak_of(daily_row)
@@ -147,43 +172,8 @@ def _combined_upsert(session: Session, code: str, name: str,
     row.demote_reason = demote_reason
     # 空间（保留 dist_high 兼容）：距 60 日高 = 旧逻辑。
     # 主力指标改该股历史金叉 peak（mean + median）—— 比 60 日高更能代表"这次能涨多少"。
-    space_pct: float | None = None
-    hist_golden_peak_pct: float | None = None
-    hist_golden_peak_median: float | None = None
-    weekly_signal_gain_pct: float | None = None
-    # 用 weekly 的 signal_summary（weekly 是揭示"该股金叉周期气质"的更稳定层次；
-    # daily bar 太敏感、把金叉冲涨幅看扁）
-    if weekly_row is not None and weekly_row.components_json:
-        try:
-            comp = json.loads(weekly_row.components_json)
-            # 历史 peak 从 signal_summary 里拿
-            sig = comp.get("signal") or {}
-            hp = sig.get("hist_golden_peak_pct")
-            hm = sig.get("hist_golden_peak_median")
-            if isinstance(hp, (int, float)):
-                hist_golden_peak_pct = hp
-            if isinstance(hm, (int, float)):
-                hist_golden_peak_median = hm
-            # 当前金叉已涨幅（这周 K 上 signal_gain_pct，供 "剩余涨幅" 推导）
-            sg = sig.get("signal_gain_pct")
-            if isinstance(sg, (int, float)):
-                weekly_signal_gain_pct = round(sg, 2)
-        except (json.JSONDecodeError, TypeError, ValueError):
-            pass
-    # dist_high 副参考（daily）
-    if daily_row is not None and daily_row.components_json:
-        try:
-            comp = json.loads(daily_row.components_json)
-            kp = (comp.get("trend") or {}).get("key_prices") or {}
-            high_60 = kp.get("resistance_60d")
-            close = kp.get("close")
-            if (
-                isinstance(high_60, (int, float)) and high_60 and high_60 > 0
-                and isinstance(close, (int, float)) and close and close > 0
-            ):
-                space_pct = round((high_60 / close - 1) * 100, 2)
-        except (json.JSONDecodeError, TypeError, ValueError):
-            pass
+    hist_golden_peak_pct, hist_golden_peak_median, weekly_signal_gain_pct = _hist_from(weekly_row)
+    space_pct = _dist_high_of(daily_row)
     row.space_pct = space_pct
     row.hist_golden_peak_pct = hist_golden_peak_pct
     row.hist_golden_peak_median = hist_golden_peak_median

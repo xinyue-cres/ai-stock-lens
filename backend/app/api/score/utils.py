@@ -62,6 +62,45 @@ def _sig(r: StockScore) -> dict:
         return {}
 
 
+def _serialize_combined(r) -> dict:
+    """StockScoreCombined ORM 行 → API 返回结构（combined/list + combined/{code} 共用）。
+
+    字段与前端 CombinedItem 一一对应；demote_reason/space_pct 等非主键字段
+    用 getattr 兼容旧 schema（迁移期兜底）。
+    """
+    return {
+        "code": r.code,
+        "name": r.name,
+        "is_fund": r.is_fund,
+        "scan_date": str(r.scan_date),
+        "as_of_date": str(r.as_of_date) if r.as_of_date else None,
+        "weekly": {
+            "total_score": r.weekly_total,
+            "signal_score": r.weekly_signal,
+            "trend_stage": r.weekly_stage,
+            "peak_signal": r.weekly_peak_signal,
+            "peak_conf": r.weekly_peak_conf,
+        },
+        "daily": {
+            "total_score": r.daily_total,
+            "signal_score": r.daily_signal,
+            "trend_stage": r.daily_stage,
+            "peak_signal": r.daily_peak_signal,
+            "peak_conf": r.daily_peak_conf,
+        },
+        "combined_score": r.combined_score,
+        "combined_stage": r.combined_stage,
+        "can_entry": r.can_entry,
+        "entry_reason": r.entry_reason,
+        "trade_hint": r.trade_hint,
+        "demote_reason": getattr(r, "demote_reason", None),
+        "space_pct": getattr(r, "space_pct", None),
+        "hist_golden_peak_pct": getattr(r, "hist_golden_peak_pct", None),
+        "hist_golden_peak_median": getattr(r, "hist_golden_peak_median", None),
+        "weekly_signal_gain_pct": getattr(r, "weekly_signal_gain_pct", None),
+    }
+
+
 def _scope_desc(session: Session, scope: str, group_ids: str | None) -> str:
     """把查看范围转成给 AI 说明的文字（summarize 场景）。仅展示用。"""
     if scope == "group" and group_ids:
