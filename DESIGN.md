@@ -1,7 +1,7 @@
 # AI Stock Lens · 架构设计
 
-> 版本：v3.4
-> 更新：2026-08-24（v1.3.1 之后文档对齐：weekly/combined/元数据种子/调度默认关/fs 重构）
+> 版本：v3.5
+> 更新：2026-08-25（v1.5.1 之后文档对齐：12 档对称状态机 / 前后端结构重构 / seed 随版本提交 / peak 四象限）
 > 定位：个人自用、本地部署的 A 股多视角 AI 技术分析工作台
 
 ---
@@ -55,13 +55,14 @@ FastAPI (Python 3.12)
 
 ```
 frontend/src/
-├── api/         # HTTP 层（一文件一领域）
+├── api/         # HTTP 层（一文件一领域；score.ts 是打分资源完整契约）
 ├── hooks/       # useSignalsQuery（signals-today，列表+侧栏共享）/ useInvalidation / global state
 ├── shared/      # 纯工具 (theme, timeAgo)
 ├── pages/       # StockList / StockDetail / Scoreboard / Positions / Compare / SyncLogs
-│   └── Scoreboard/hooks/  # useScoreboardData · useScoreboardActions（页面=布局组装）
-├── features/    # analysis(详情 Tabs) · watchlist · settings · status-bar
-└── stock-context # 当前股票 code context
+│   ├── Scoreboard/hooks/    # useScoreboardData · useScoreboardActions（页面=布局组装）
+│   ├── StockList/hooks/     # useStockListData · useBatchTask · useBatchGroupOps（v1.5 拆出）
+│   └── Positions/{components,hooks,utils}/  # 表格/资金卡/汇总卡/aggregate（v1.5 拆出）
+└── features/    # analysis(详情 Tabs) · watchlist · settings · status-bar · stock-context
 ```
 
 ### 3.2 路由与导航
@@ -84,6 +85,8 @@ frontend/src/
 - **mutationKey 共享**：跨组件同步 AI 生成 loading
 - **URL searchParams**：分组筛选/选中股票持久化（刷新/分享保留）
 - **乐观刷新**：分组操作 `qc.setQueryData` 即时更新缓存，列表与 toast 同步
+- **过滤投后端（v1.5）**：综合列表 coarse/fine 过滤进 queryKey + `combined_stages`
+  SQL 参数（原前端 limit=500 全拉再客户端 filter）
 - **批量任务状态**：页面级 state + per-item Map 传给 StockRow
 
 ### 3.4 面板注册
@@ -108,32 +111,37 @@ models/        → 数据模型（SQLModel）
 ### 4.2 Service 职责划分
 
 v1.2 重构：`services/scoring_service.py`(599行 god object) 拆为 `services/scan/` 包，
-`features/stock_scorer.py`(605行) 拆为 `features/scoring/` 包，公开接口保持不变（re-export shim）。
+`features/stock_scorer.py`(605行) 拆为 `features/scoring/` 包。v1.5 又补三刀：
+stock_scorer shim 删除（所有 import 走 `features.scoring` 正式入口）、
+`db.py` 拆为 `db/` 包（engine/migrations/seed）、`sync_service` 的快照维护切分到
+`snapshot_service`（sync 专注拉数据入库）。
 
 | Service / 包 | 职责 | 结构 |
 |---------|------|------|
-| `analysis_service` | K 线加载 + 指标计算 + 缓存 + AI 输入构建 | 单文件 |
+| `analysis_service` | K 线加载 + 指标计算 + 指纹缓存 + AI 输入构建 | 单文件 |
 | `signals_service` | 列表信号聚合 + stance/verdict/report-times 批量查询 | 单文件 |
 | `trader_service` | 操作指示生成编排 | 单文件 |
-| `sync_service` | 数据同步（全量/增量/指数/冷却） | 单文件 |
+| `sync_service` | 数据同步（全量/增量/指数/冷却），拉数据入库 | 单文件 |
+| `snapshot_service` | 同步后快照行情刷新（close/pct_chg/turnover）+ turnover 补算 | 单文件（v1.5 从 sync 切分） |
 | `market_service` | 大盘指数同步 + 市场摘要 | 单文件 |
-| `stock_service` | 自选 CRUD + group_ids JSON 读写 + 全 A 元数据搜索 | 单文件 |
+| `stock_service` | 自选 CRUD + group_ids JSON 读写 + 全 A 元数据搜索 + 分组业务 | 单文件 |
 | `position_service` | 持仓 CRUD + 盈亏计算 | 单文件 |
-| `services/scan/` | 打分扫描编排 | `state`(进度) `pool`(候选池) `kline_cache`(缓存/新鲜度) `writer`(upsert) `runner`(编排) |
+| `services/scan/` | 打分扫描编排 | `state`(进度) `pool`(候选池) `kline_cache`(缓存/新鲜度) `writer`(upsert+combined 合成) `runner`(编排) |
+| `schemas/score_components` | components_json 唯一解析点（peak/pct_b/hist 等字段访问收口） | 单文件（v1.5 新增） |
 
 ### 4.3 features 包结构
 
 ```
 features/
-├── scoring/           # 打分引擎包（v1.2 拆分自 stock_scorer.py）
-│   ├── rates.py       # 权重 + 阈值/周期校准常量（SIGMA_SCALE/_PEAK_CONF_STRONG_BY_TF）
+├── scoring/           # 打分引擎包（v1.2 拆分自 stock_scorer.py，v1.5 删 shim 全部走此入口）
+│   ├── rates.py       # 权重 + 阈值/周期校准常量（SIGMA_SCALE/_PEAK_CONF_STRONG_BY_TF/_PEAK_CONF_HINT）
 │   ├── base.py        # _norm/_tri 工具
 │   ├── golden.py      # 金叉延续性：post_gain + life_score + cycle_stats + signal_summary
 │   ├── peak.py        # _peak_features 过峰信号（四象限标签 + 置信度分级）
 │   ├── band.py        # _band_score（幅度+节奏、含 timeframe 折换）+ _dividend_score
 │   └── engine.py      # compute_indicator_cache（指标快照复用）+ score_stock 总编排
 ├── trend_judge.py     # 8 态决策树（金叉/死叉 驱动）
-├── combined_judge.py  # 日周合并：28 态矩阵 → 7 档 combined_stage + combined_score
+├── combined_judge.py  # 日周合并：8×8 状态矩阵 → 12 档对称 combined_stage + combined_score
 └── timeframe.py       # to_bars（日→周五收盘周重采样）+ SIGMA_SCALE 注册表
 ```
 
@@ -210,10 +218,15 @@ features/
 为单位运算、不感知 K 线粒度；`_MIN_ROWS=60` 两周期同义（60 bar）。
 `stock_score` 复合主键 `(code, scan_timeframe)`，daily/weekly 各占一行互不覆盖。
 
-**日周综合评判（v1.2）**：`features/combined_judge.py`——按状态矩阵把 (weekly_stage, daily_stage)
-合并成 7 档 `combined_stage`：`strong_buy / buy / deep_pullback_entry / light_buy / watch_buy / watch / avoid`。
-- 周线=方向层（该不该碰），日线=时机层（什么时候进）；
-- 综合分 = `0.6·weekly_total + 0.4·daily_total + 阶段加成`（strong_buy+8 / buy+4 / deep/light+2 / avoid-99）；
+**日周综合评判（v1.4 对称化，详见 docs/state-machine-redesign.md）**：`features/combined_judge.py`——
+按 8×8 状态矩阵把 (weekly_stage, daily_stage) 合并成 **12 档对称 combined_stage**：
+- 买侧 5 档 `strong_buy / buy / watch_buy / deep_pullback_entry / light_buy`
+  + 中央 `hold`（可买可卖的混沌持有态）+ 卖侧 5 档 `watch_sell / light_sell / deep_rally_exit / sell / strong_sell`
+  + 场外 `avoid`（系统不评估：数据不足/双周假弱，与"明确看空"的 strong_sell 区分）；
+- 对称轴 = 仓位操作视角中点（5 对镜像档 + hold 不动点 + avoid 系统外）；
+- 周线=方向层（该不该碰），日线=时机层（什么时候进/出）；
+- 综合分 = `0.6·weekly_total + 0.4·daily_total + 阶段加成`（对称 ±8/±4/±2/±1，hold=0，avoid-99
+  沉底；卖侧保留 base 梯度不一刀切 0）；
 - **strong_buy 位置约束**：双腿 pct_b 任一 ≥0.8 则降级 buy（历史 fwd5 数据显示 0.5-0.8 是
   最佳入场 sweet spot），降级原因存 `demote_reason` 并在详情页黄条显示；
 - 详情页三维可预期涨幅：`当前已涨（weekly signal_gain_pct）/ 剩余中位 / 剩余平均预期
@@ -238,8 +251,9 @@ features/
 
 **过峰信号评级**：`_peak_features` 用 `bar`（柱缩/柱回升）× `acc_z`（动能二阶导 z-score）触发，
 按「触发类型（bar 15 / acc 25 / 双 45）+ 量能（缩 0 / 中 15 / 放 30）」产出 `peak_conf` 0-100 五档
-（极弱≤20 / 弱21-35 / 中36-50 / 强51-65 / 极强≥66）。**强档以上才进决策树降级**，
-弱/中档只做前端提示（避免误伤涨势中正常柱缩）。
+（极弱≤20 / 弱21-35 / 中36-50 / 强51-65 / 极强≥66）。**四象限标签**（按 dif 位置 × slope 方向）：
+水上衰竭偏空预警（上涨过峰/顶部回落）、水下衰竭偏多预警（下跌过峰/底部反转）——peak_top 组拦金叉追入，
+peak_bot 组喂 left_entry。**强档以上才进决策树降级**，弱/中档只做前端提示（避免误伤涨势中正常柱缩）。
 **周期校准阈值**（`_PEAK_CONF_STRONG_BY_TF`）：daily=51 / weekly=40——weekly acc_z 分布系统性偏低
 （44 个 candidate 全部 <51），沿用 daily 阈值会永远无 left_entry/overheat 触发。
 
@@ -282,7 +296,7 @@ index_chain = [EastMoney, Sina]
 | `position` | 持仓 (quantity, cost_price, opened_at) |
 | `app_setting` | 应用配置 (AI config / total_capital) |
 | `stock_score` | 选股打分结果；**复合主键 (code, scan_timeframe)**，daily/weekly 各占一行互不覆盖 |
-| `stock_score_combined` | 日周合并评判结果（weekly/daily 双腿核心字段 + 7 档 combined_stage + demote_reason + hist_golden_peak_*/weekly_signal_gain_pct） |
+| `stock_score_combined` | 日周合并评判结果（weekly/daily 双腿核心字段 + 12 档 combined_stage + demote_reason + hist_golden_peak_*/weekly_signal_gain_pct） |
 | `capital_flow_daily` | 资金流数据（对比/分析用） |
 | `stock_dividend` | 个股股息数据 |
 | `sync_log` | 同步日志 |
@@ -294,21 +308,17 @@ index_chain = [EastMoney, Sina]
 - 前端全量获取 + 本地筛选；批量「加入/移出分组」经 `PATCH /api/watchlist/{code}` 整体覆盖 group_ids
 - v1.3 乐观刷新：分组操作后 `qc.setQueryData(['signals-today'])` 即时改缓存，列表与 toast 同步更新
 
-### 6.6 全 A 元数据与种子库（v1.3）
+### 6.6 全 A 元数据与种子库
 
-- **本地 stock 表灌满全 A + ETF + LOF**（7569 条），搜索联想/添加永远不远程（2ms）；
+- **本地 stock 表灌满全 A**，搜索联想/添加永远不远程（2ms）；
 - **code 统一 6 位清洗**（sina/东财 ETF 源返回 "sh600519"/"sz159998" 带前缀，直接入库会与业务 6 位 code 重复）；
 - **拼音中间态不查远程**：拉丁字母且非数字（t/tia/tian'j）本地必然 miss，直接返回空——
   避免每键 10-30s 远程拉列打爆连接池（曾致 QueuePool 500）；
 - **远程拉取互斥锁**：缓存未命中时并发请求经 `threading.Lock` 排队，只拉一次；
-- **打包种子库 (`seed.sqlite`)**：CI 构建时预生成（约 1MB）随 exe 打进包，
-  release 用户首启动 data/app.db 不存在时直接复制——首搜零等待。
-
-### 6.3 分组设计
-
-- 多对多通过 `stock.group_ids` JSON 数组实现（如 `[1,2]`）
-- 避免 junction table 复杂度，适合个人规模
-- 前端全量获取 + 本地筛选，保证分组切换时"全部"计数不变
+- **打包种子库 (`seed.sqlite`) 随版本提交进 git**（v1.4.3 改策：CI runner 访问不了
+  东财/新浪等国内源，现场重建必失败）：本地网络畅通时跑 `scripts/build_seed_db.py`
+  重建后提交；release 用户首启动 data/app.db 不存在时直接复制——首搜零等待。
+  种子会随版本过时（新股/改名），由 search_stocks 远程兜底自然补齐。
 
 ---
 
@@ -371,7 +381,7 @@ index_chain = [EastMoney, Sina]
 | GET/POST | `/api/score/scan/status` | 扫描进度轮询 / 取消 |
 | POST | `/api/score/summarize` | AI 整组汇总 |
 | POST | `/api/score/analyze-batch` | AI 逐股点评 |
-| GET | `/api/score/combined/list` | 日周合并评判列表（combined_stage/scope/group_ids/can_entry 过滤） |
+| GET | `/api/score/combined/list` | 日周合并评判列表（combined_stage 单档 / combined_stages 多档 / scope / group_ids / can_entry 过滤） |
 | GET | `/api/score/combined/{code}` | 单只 combined 详情 |
 
 ---
@@ -390,7 +400,8 @@ cd frontend && pnpm dev
 ```
 
 打包（Windows 可执行版）：`packaging/AI-Stock-Lens.spec`，CI（`.github/workflows/build-windows.yml`）
-打 tag 自动构建 → Release。构建前跑 `backend/scripts/build_seed_db.py` 生成内置全 A 元数据种子库。
+打 tag 自动构建 → Release。seed.sqlite 已随版本提交进仓库（CI 网络访问不了国内数据源，
+无法现场重建）；更新种子时在本地网络畅通环境跑 `backend/scripts/build_seed_db.py` 后提交。
 
 ---
 
@@ -398,9 +409,11 @@ cd frontend && pnpm dev
 
 | 项目 | 影响 |
 |------|------|
-| `stock.group_id` 废弃字段 | 占空间，无功能影响 |
+| `stock.group_id` 废弃字段 | 占空间，无功能影响（读取已统一走 group_ids JSON） |
 | 自选 signals 查询逐票 load_kline_df | 80 只 ~2s，可以二级缓存 |
 | 阈值参数（信号可靠线 / ADX / 涨幅）为经验值 | 上线后可回放校准 |
+| seed.sqlite 缺 ETF/LOF | 本地构建时东财不可达；远程兜底可补，仅首搜 ETF 略慢 |
+| 12 档卖侧决策矩阵未回放验证 | fwd 收益数据只在设计时抽查过 80 只，上线后可全量回放 |
 
 ---
 
