@@ -285,4 +285,17 @@ def sync_watchlist(session: Session) -> SyncLog:
         "同步完成 status=%s success=%d/%d rows=%d (并发%d)",
         log.status, log.stocks_synced, len(stocks), total, _SYNC_WORKERS,
     )
+
+    # 同步后自动补扫：K 线库刚更新，打分快照可能落后（同步不触发重算——
+    # 002155 实录：扫描时还是死叉、收盘同步后已金叉，页面仍显示旧判断）。
+    # scan_market 的当日去重按 (scan_date, scope, timeframe) + 自愈判断
+    # （K 线新于快照 as_of 才重算）双保险：已新鲜的票直接 skip，成本=脏票数；
+    # 用户手动扫描进行中时会拒绝启动（防并发冲突）。两个周期都补。
+    try:
+        from app.services.scan.runner import scan_market as _scan_market
+        for tf in ("daily", "weekly"):
+            _scan_market(session, scope="watchlist", timeframe=tf)
+    except Exception:  # noqa: BLE001
+        logger.exception("同步后自动补扫失败（不影响同步结果）")
+
     return log, total, len(stocks)
