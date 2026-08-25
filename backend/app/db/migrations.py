@@ -1,164 +1,17 @@
+"""历史迁移：把老库 schema 升级到当前模型。
+
+只在 init_db 启动期跑一次；新库由 SQLModel.metadata.create_all 直接创建最新结构，
+这些函数检测旧形态并升级（幂等：已迁移则跳过）。SQLite 表级约束无法 ALTER，多数需重建表。
+"""
+from __future__ import annotations
+
 import logging
-from collections.abc import Generator
-from pathlib import Path
 
-from sqlalchemy import event, text
-from sqlmodel import Session, SQLModel, create_engine
+from sqlalchemy import text
 
-from app.config import get_settings
+from app.db import engine
 
 logger = logging.getLogger(__name__)
-
-_settings = get_settings()
-
-engine = create_engine(
-    _settings.db_url,
-    echo=False,
-    connect_args={"check_same_thread": False},
-)
-
-
-@event.listens_for(engine, "connect")
-def _set_sqlite_pragma(dbapi_conn, _connection_record) -> None:
-    """SQLite 并发优化：
-    - WAL：读写可并发（选股扫描 8 worker 并发写 K 线/打分，前端同时读列表不互斥）
-    - busy_timeout=30s：写锁冲突时等待而非立刻抛 "database is locked"（默认 5s 太短）
-    """
-    cur = dbapi_conn.cursor()
-    cur.execute("PRAGMA journal_mode=WAL")
-    cur.execute("PRAGMA busy_timeout=30000")
-    cur.close()
-
-
-def _migrate_add_column(table: str, column: str, ddl: str) -> None:
-    """幂等的 ALTER TABLE ADD COLUMN（SQLite 简单迁移）。"""
-    with engine.connect() as conn:
-        rows = conn.execute(text(f"PRAGMA table_info({table})")).all()
-        existing = {r[1] for r in rows}
-        if column not in existing:
-            conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}"))
-            conn.commit()
-
-
-def _migrate_drop_column(table: str, column: str) -> None:
-    """删除模型已移除的表冗余列（SQLite 3.35+ 支持 DROP COLUMN）。
-
-    例：stock_score.lift_score 是旧算法遗留列，模型已删除但表结构没迁移，
-    NOT NULL 约束导致"首次新建快照"的股票 INSERT 必然失败（老股票 UPDATE 不受影响）。
-    """
-    with engine.connect() as conn:
-        rows = conn.execute(text(f"PRAGMA table_info({table})")).all()
-        existing = {r[1] for r in rows}
-        if column in existing:
-            conn.execute(text(f"ALTER TABLE {table} DROP COLUMN {column}"))
-            conn.commit()
-            logger.info("迁移：删除 %s.%s 残留列", table, column)
-
-
-def _seed_from_bundle() -> None:
-    """打包态首启动：data/app.db 不存在时，从打进包里的种子库（全 A 元数据）复制。
-
-    让"添加股票"搜索联想首搜即命中本地，不用现场拉 20s 远程列表。
-    种子随构建时间过时（新股/改名）由 search_stocks 的远程兜底自然补齐。
-    源码开发态没有 _MEIPASS，直接跳过。
-
-    假设：单实例启动（桌面应用双击启动一次）。双进程并发的 exists→copyfile 竞态
-    未加文件锁——当前使用场景（桌面单机）不出现，若将来做分布式/服务化需补锁。
-    """
-    import shutil
-    import sys
-
-    if not getattr(sys, "frozen", False):
-        return
-    from app.config import get_settings
-
-    db_path = Path(get_settings().db_path)
-    if db_path.exists():
-        return  # 已有库（老用户升级），不动
-    seed = Path(getattr(sys, "_MEIPASS", "")) / "seed.sqlite"
-    if not seed.exists():
-        logger.warning("打包内未找到 seed.sqlite，首搜将走远程兜底")
-        return
-    db_path.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(seed, db_path)
-    logger.info("首启动：已从种子库初始化 %s（全 A 元数据）", db_path)
-
-
-def init_db() -> None:
-    # 打包态首启动：从包内 seed.sqlite 复制出带全 A 元数据的初始库
-    _seed_from_bundle()
-    # 先做迁移，因为 create_all 不会修改老表的约束
-    _migrate_ai_report_horizon()
-    _migrate_ai_report_unique_created_at()
-
-    from app.models import (  # noqa: F401
-        ai_report,
-        ai_report_review,
-        capital_flow,
-        kline,
-        position,
-        setting,
-        stock,
-        stock_dividend,
-        stock_group,
-        stock_score,
-        stock_score_combined,
-        sync_log,
-    )
-
-    SQLModel.metadata.create_all(engine)
-
-    # 迁移：删除 stock_score 残留的 lift_score 列（模型已移除；NOT NULL 导致首次新建快照失败）
-    _migrate_drop_column("stock_score", "lift_score")
-
-    # 迁移：stock_score.scan_scope——记录每次扫描范围，避免不同 scope 扫描混在同一天
-    # 导致列表按全局最新 scan_date 显示时串范围（切全 A 却显示上次分组扫描的批次）
-    _migrate_add_column("stock_score", "scan_scope", "TEXT")
-    with engine.begin() as conn:
-        conn.execute(
-            text(
-                """
-                UPDATE stock_score SET scan_scope = 'all'
-                WHERE scan_scope IS NULL AND scan_date IN (
-                    SELECT scan_date FROM stock_score WHERE scan_scope IS NULL
-                    GROUP BY scan_date HAVING COUNT(*) > 500
-                )
-                """
-            )
-        )
-        conn.execute(
-            text("UPDATE stock_score SET scan_scope = 'watchlist' WHERE scan_scope IS NULL")
-        )
-
-    # 增量迁移：stock_score.scan_timeframe——打分基于的周期（daily/weekly）；旧数据按 daily 回填
-    _migrate_add_column("stock_score", "scan_timeframe", "TEXT NOT NULL DEFAULT 'daily'")
-    with engine.begin() as conn:
-        conn.execute(
-            text("UPDATE stock_score SET scan_timeframe = 'daily' WHERE scan_timeframe IS NULL")
-        )
-
-    # 增量迁移：stock_score 复合主键 (code, scan_timeframe)——daily/weekly 各留一份缓存，互不覆盖
-    _migrate_stock_score_composite_pk()
-
-    # 增量迁移：ai_report.extras_json（老 DB 无此列）
-    _migrate_add_column("ai_report", "extras_json", "TEXT")
-
-    # 增量迁移：stock_score_combined.demote_reason + space_pct（右侧详情可解释字段）
-    _migrate_add_column("stock_score_combined", "demote_reason", "TEXT")
-    _migrate_add_column("stock_score_combined", "space_pct", "FLOAT")
-
-    # 增量迁移：stock_score_combined 历史金叉 peak 统计（该股气质）
-    _migrate_add_column("stock_score_combined", "hist_golden_peak_pct", "FLOAT")
-    _migrate_add_column("stock_score_combined", "hist_golden_peak_median", "FLOAT")
-    _migrate_add_column("stock_score_combined", "weekly_signal_gain_pct", "FLOAT")
-
-    # 增量迁移：stock.pinned
-    _migrate_add_column("stock", "pinned", "BOOLEAN DEFAULT 0")
-
-    # 增量迁移：stock.group_id + stock.note + stock.group_ids
-    _migrate_add_column("stock", "group_id", "INTEGER")
-    _migrate_add_column("stock", "note", "TEXT")
-    _migrate_add_column("stock", "group_ids", "TEXT")
 
 
 def _migrate_ai_report_horizon() -> None:
@@ -218,11 +71,6 @@ def _migrate_ai_report_horizon() -> None:
         conn.execute(text("ALTER TABLE ai_report_new RENAME TO ai_report"))
         conn.execute(text("CREATE INDEX ix_ai_report_code ON ai_report(code)"))
         conn.execute(text("CREATE INDEX ix_ai_report_as_of_date ON ai_report(as_of_date)"))
-
-
-def get_session() -> Generator[Session, None, None]:
-    with Session(engine) as session:
-        yield session
 
 
 def _migrate_ai_report_unique_created_at() -> None:
@@ -286,11 +134,10 @@ def _migrate_stock_score_composite_pk() -> None:
     """把 stock_score 主键从 (code) 重建为 (code, scan_timeframe) 复合。
 
     背景：daily/weekly 各自扫描结果如果共用 (code) 单主键，weekly 扫描会覆盖同 code
-    的 daily 行（数据真的丢）。改成 (code, scan_timeframe) 复合主键后两条腿互不覆盖，
-    列表按当前查看周期过滤。
+    的 daily 行（数据真的丢）。改成 (code, scan_timeframe) 复合主键后两条腿互不覆盖。
 
     SQLite 不支持 ALTER PK，需要 create_new + copy + drop + rename。
-    检测方式：当前主键若只含 code 一列就重建；若已是复合则跳过（幂等）。
+    检测：当前主键若只含 code 一列就重建；若已是复合则跳过（幂等）。
     """
     with engine.begin() as conn:
         cols = conn.execute(text("PRAGMA table_info(stock_score)")).all()
@@ -300,11 +147,8 @@ def _migrate_stock_score_composite_pk() -> None:
         pk_cols.sort(key=lambda c: next(r[5] for r in cols if r[1] == c))
         if pk_cols == ["code", "scan_timeframe"]:
             return  # 已是复合 PK
-        # 旧 (code) 单主键或其他形态 → 重建
         logger.info("迁移：重建 stock_score 为复合主键 (code, scan_timeframe)，旧 PK=%s", pk_cols)
-        # 先把可能为 NULL 的 scan_timeframe 兜底到 daily，避免 INSERT ... SELECT 主键冲突
         conn.execute(text("UPDATE stock_score SET scan_timeframe='daily' WHERE scan_timeframe IS NULL"))
-        # 如果同一 (code, scan_timeframe) 有多行（理论上不应该），保留最新 scan_date 的一行
         conn.execute(
             text(
                 """
