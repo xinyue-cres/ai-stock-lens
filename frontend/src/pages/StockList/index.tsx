@@ -1,12 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { useIsMutating, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useIsMutating, useMutation, useQueryClient } from '@tanstack/react-query'
 import { message, Modal } from 'antd'
-import { getGroups, patchStock, StockGroup } from '@/api/groups'
-import { getMarketSummary } from '@/api/market'
+import { patchStock } from '@/api/groups'
 import { addWatchlist, removeWatchlist } from '@/api/watchlist'
 import { syncSingleStock, runSync } from '@/api/sync'
-import { batchRun, BatchItemStatus, BatchState, BatchTaskType } from '@/api/batchTask'
 import { useSignalsQuery } from '@/hooks/useSignalsQuery'
 import { SYNC_ALL_KEY, useInvalidation } from '@/hooks/useInvalidation'
 import { SortKey, SortDir } from './constants'
@@ -16,6 +14,8 @@ import StockRow from './components/StockRow'
 import GroupNav from './components/GroupNav'
 import GroupManagerModal from './components/GroupManagerModal'
 import BatchActionBar from './components/BatchActionBar'
+import { useStockListData } from './hooks/useStockListData'
+import { useBatchTask } from './hooks/useBatchTask'
 
 export default function StockListPage() {
   const navigate = useNavigate()
@@ -23,17 +23,18 @@ export default function StockListPage() {
   const qc = useQueryClient()
   const globalInv = useInvalidation()
   const syncingElsewhere = useIsMutating({ mutationKey: SYNC_ALL_KEY }) > 0
-  const inv = {
+  // useMemo 稳定引用：作为 useCallback 依赖时不让每次 render 重建把回调失效（L3-3）
+  const inv = useMemo(() => ({
     signals: () => qc.invalidateQueries({ queryKey: ['signals-today'] }),
     groups: () => qc.invalidateQueries({ queryKey: ['groups'] }),
     both: () => {
       qc.invalidateQueries({ queryKey: ['signals-today'] })
       qc.invalidateQueries({ queryKey: ['groups'] })
     },
-  }
+  }), [qc])
+
   const initGroup = searchParams.get('group')
   const [groupFilter, setGroupFilterState] = useState<number | 'all'>(initGroup ? Number(initGroup) : 'all')
-
   const setGroupFilter = useCallback((g: number | 'all') => {
     setGroupFilterState(g)
     if (g === 'all') {
@@ -52,20 +53,9 @@ export default function StockListPage() {
   const [selectMode, setSelectMode] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
 
-  // 批量任务状态
-  const [batchState, setBatchState] = useState<BatchState | null>(null)
-  const batchDoneRef = useRef(false)
-
-  const groupsQ = useQuery({ queryKey: ['groups'], queryFn: getGroups })
-  const marketQ = useQuery({ queryKey: ['market-summary'], queryFn: () => getMarketSummary(), staleTime: 5 * 60_000 })
-  const { items } = useSignalsQuery()
-
-  useEffect(() => {
-    if (batchDoneRef.current && batchState && !batchState.running) {
-      setBatchState(null)
-      batchDoneRef.current = false
-    }
-  }, [items])
+  const { items, groups, market, filtered } = useStockListData({
+    groupFilter, search, dirFilter, sortKey, sortDir,
+  })
 
   const syncMut = useMutation({
     mutationKey: SYNC_ALL_KEY,
@@ -86,89 +76,11 @@ export default function StockListPage() {
     },
   })
 
-  const groups: StockGroup[] = groupsQ.data ?? []
-
-  const filtered = useMemo(() => {
-    let arr = items
-    if (groupFilter !== 'all') {
-      arr = arr.filter(i => (i.group_ids || []).includes(groupFilter as number))
-    }
-    if (search) {
-      const k = search.toLowerCase()
-      arr = arr.filter(i => i.code.includes(k) || (i.name || '').toLowerCase().includes(k))
-    }
-    if (dirFilter) {
-      arr = arr.filter(i => {
-        const v = i.ai_verdict
-        if (!v) return dirFilter === 'neutral'
-        if (v === 'caution') return dirFilter === 'neutral'
-        return v === dirFilter
-      })
-    }
-    const sorted = [...arr]
-    const dir = sortDir === 'asc' ? 1 : -1
-    if (sortKey === 'pct_chg') {
-      sorted.sort((a, b) => ((a.pct_chg ?? 0) - (b.pct_chg ?? 0)) * dir)
-    } else if (sortKey === 'position') {
-      sorted.sort((a, b) => {
-        const pa = a.position?.unrealized_pnl_pct ?? -999
-        const pb = b.position?.unrealized_pnl_pct ?? -999
-        return (pa - pb) * dir
-      })
-    } else if (sortKey === 'verdict') {
-      const verdictRank: Record<string, number> = { bullish: 2, neutral: 1, caution: 1, bearish: 0 }
-      sorted.sort((a, b) => {
-        const va = verdictRank[a.ai_verdict || ''] ?? 1
-        const vb = verdictRank[b.ai_verdict || ''] ?? 1
-        return (va - vb) * dir
-      })
-    } else if (sortKey === 'name') {
-      sorted.sort((a, b) => (a.name || '').localeCompare(b.name || '') * dir)
-    } else {
-      sorted.sort((a, b) => Number(!!b.pinned) - Number(!!a.pinned))
-    }
-    return sorted
-  }, [items, groupFilter, search, dirFilter, sortKey, sortDir])
-
-  const handleBatchStart = useCallback((type: BatchTaskType) => {
-    const codes = [...selected]
-    if (codes.length === 0) return
-    // 并发按类型分离：sync 只发 K 线请求拉到 8（实测 8-19 并发 50 只自选耗时 242s/21s/19s/33s/32s，
-    // 超过 16 反而触发东财 rate limit 强制 fallback baostock 全局锁）；
-    // ai/action_plan 每只内还各并行 4 个 horizon 调 DeepSeek，拼太高会触发 rate limit，保持 3
-    const concurrency = type === 'sync' ? 8 : 3
-    batchRun(type, codes, concurrency, (state) => {
-      setBatchState(state)
-      if (!state.running) {
-        const errors = [...state.items.values()].filter(s => s.status === 'error').length
-        const label = type === 'ai' ? ' AI 分析' : type === 'sync' ? '同步' : '操作指示'
-        if (errors === 0) {
-          message.success(`${state.total} 只${label}全部完成`)
-        } else {
-          message.warning(`${label}完成 ${state.completed}/${state.total}，${errors} 只失败`)
-        }
-        if (type === 'sync') {
-          globalInv.afterSync()
-        } else if (type === 'ai') {
-          globalInv.afterAiReport(codes[0])
-          qc.invalidateQueries({ queryKey: ['ai-report-cached'] })
-          inv.signals()
-        } else {
-          qc.invalidateQueries({ queryKey: ['action-plan'] })
-          inv.signals()
-        }
-        setTimeout(() => { batchDoneRef.current = true }, 2000)
-      }
-    })
-    setSelectMode(false)
-    setSelected(new Set())
-  }, [selected, qc, globalInv, inv])
-
-  const getBatchStatus = useCallback((code: string): BatchItemStatus | null => {
-    if (!batchState) return null
-    const item = batchState.items.get(code)
-    return item?.status ?? null
-  }, [batchState])
+  const batch = useBatchTask(
+    () => { setSelectMode(false); setSelected(new Set()) },
+    inv.signals,
+    items,
+  )
 
   return (
     <div style={{ position: 'relative' }}>
@@ -181,7 +93,7 @@ export default function StockListPage() {
       />
 
       <div style={{ maxWidth: 900, margin: '0 auto' }}>
-        <SummaryBar items={items} market={marketQ.data} />
+        <SummaryBar items={items} market={market} />
 
         <Toolbar
           search={search}
@@ -221,7 +133,7 @@ export default function StockListPage() {
               groups={groups}
               selectMode={selectMode}
               checked={selected.has(item.code)}
-              batchStatus={getBatchStatus(item.code)}
+              batchStatus={batch.getStatus(item.code)}
               onToggle={(code) => setSelected(prev => {
                 const next = new Set(prev)
                 if (next.has(code)) next.delete(code); else next.add(code)
@@ -280,11 +192,11 @@ export default function StockListPage() {
         groups={groups}
         allItems={items}
         onClear={() => { setSelected(new Set()); setSelectMode(false) }}
-        batchRunning={batchState?.running ?? false}
-        batchType={batchState?.type ?? null}
-        batchCompleted={batchState?.completed ?? 0}
-        batchTotal={batchState?.total ?? 0}
-        onBatchStart={handleBatchStart}
+        batchRunning={batch.running}
+        batchType={batch.type}
+        batchCompleted={batch.completed}
+        batchTotal={batch.total}
+        onBatchStart={(type) => batch.start(type, selected)}
       />
     </div>
   )
