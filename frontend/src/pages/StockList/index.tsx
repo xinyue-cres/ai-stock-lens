@@ -5,6 +5,7 @@ import { message, Modal } from 'antd'
 import { patchStock } from '@/api/groups'
 import { addWatchlist, removeWatchlist } from '@/api/watchlist'
 import { syncSingleStock, runSync } from '@/api/sync'
+import { runScan } from '@/api/score'
 import { useSignalsQuery } from '@/hooks/useSignalsQuery'
 import { SYNC_ALL_KEY, useInvalidation } from '@/hooks/useInvalidation'
 import { SortKey, SortDir } from './constants'
@@ -167,6 +168,9 @@ export default function StockListPage() {
                 syncSingleStock(item.code).then(() => {
                   message.success(`${item.name} 同步完成`)
                   globalInv.afterSyncSingle(item.code)
+                  // 单只 K 线入库后静默补扫该票（当日去重+自愈只挑脏票；与
+                  // 全局/批量同步的自动补扫同口径，快照不滞后于 K 线库）
+                  runScan({ scope: 'watchlist', codes: [item.code] }).catch(() => {})
                 }).catch(() => message.error(`${item.name} 同步失败`))
               }}
               onOpenScore={(code) => navigate(`/scoreboard?code=${code}`)}
