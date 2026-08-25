@@ -16,6 +16,12 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+# CI（GitHub Windows runner）stdout 默认 cp1252 编码，print 中文直接 UnicodeEncodeError。
+# 强制 UTF-8 + replace 兜底：任何环境（本地 GBK 控制台 / CI cp1252）都不会因日志炸掉。
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from sqlmodel import Session, SQLModel, create_engine

@@ -41,6 +41,8 @@ jobs:
 
       - name: Build seed DB (stock metadata)
         shell: bash
+        env:
+          PYTHONIOENCODING: utf-8
         run: |
           cd backend
           python scripts/build_seed_db.py
