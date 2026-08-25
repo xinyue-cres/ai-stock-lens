@@ -19,6 +19,9 @@ class StockScoreCombined(SQLModel, table=True):
     weekly_stage: str | None = Field(default=None)
     weekly_peak_signal: str | None = Field(default=None)
     weekly_peak_conf: int | None = Field(default=None)
+    # 反弹未确认：深跌中刚金叉但历史延续差 → 判 downtrend 回避，但市场状态是
+    # 底部反弹初期非下跌——前端加"⚠反弹不可信"角标与真下跌区分（603833 实录）
+    weekly_untrusted_rebound: bool | None = Field(default=False)
 
     # daily（时机层）
     daily_total: float | None = Field(default=None)
@@ -26,6 +29,7 @@ class StockScoreCombined(SQLModel, table=True):
     daily_stage: str | None = Field(default=None)
     daily_peak_signal: str | None = Field(default=None)
     daily_peak_conf: int | None = Field(default=None)
+    daily_untrusted_rebound: bool | None = Field(default=False)
 
     # 综合
     combined_score: float = Field(default=0.0)

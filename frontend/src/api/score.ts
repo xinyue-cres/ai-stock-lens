@@ -234,6 +234,7 @@ export interface CombinedLeg {
   trend_stage: TrendStage | null
   peak_signal: PeakSignal | null
   peak_conf: number | null
+  untrusted_rebound?: boolean  // downtrend 实为"深跌中刚金叉"反弹未确认，与真下跌区分
 }
 
 export interface CombinedItem {

@@ -139,6 +139,8 @@ def init_db() -> None:
     _migrate_add_column("stock_score_combined", "weekly_signal_gain_pct", "FLOAT")
     _migrate_add_column("stock_score_combined", "daily_close", "FLOAT")
     _migrate_add_column("stock_score_combined", "daily_pct_chg", "FLOAT")
+    _migrate_add_column("stock_score_combined", "weekly_untrusted_rebound", "BOOLEAN DEFAULT 0")
+    _migrate_add_column("stock_score_combined", "daily_untrusted_rebound", "BOOLEAN DEFAULT 0")
 
     # stock 扩展字段
     _migrate_add_column("stock", "pinned", "BOOLEAN DEFAULT 0")

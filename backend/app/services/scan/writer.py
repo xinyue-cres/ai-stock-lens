@@ -123,6 +123,17 @@ def _combined_upsert(session: Session, code: str, name: str,
     row.daily_stage = d_stage
     row.daily_peak_signal = d_peak
     row.daily_peak_conf = d_conf
+    # 反弹未确认标记（腿级）：downtrend 但实为"深跌中刚金叉"——市场状态是底部反弹
+    # 初期非下跌，前端用 ⚠角标区分（判定源是腿的 entry_reason 文案，单点在 writer）
+    _UNTRUSTED_MARK = "深跌中刚金叉"
+    row.weekly_untrusted_rebound = bool(
+        weekly_row and weekly_row.trend_stage == "downtrend"
+        and _UNTRUSTED_MARK in (weekly_row.entry_reason or "")
+    )
+    row.daily_untrusted_rebound = bool(
+        daily_row and daily_row.trend_stage == "downtrend"
+        and _UNTRUSTED_MARK in (daily_row.entry_reason or "")
+    )
     row.combined_score = total
     row.combined_stage = stage
     row.can_entry = can_entry

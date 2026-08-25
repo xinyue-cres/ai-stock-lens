@@ -63,11 +63,17 @@ function CombinedRow({ item, active, onClick, onAddWatchlist }: CombinedRowProps
           <span style={{ color: 'rgba(0,0,0,0.45)' }}>周</span>
           <span style={{ fontWeight: 600 }}>{item.weekly.total_score?.toFixed(0) ?? '-'}</span>
           {wStage && <span style={{ color: wStage.color }}>{wStage.label}</span>}
+          {item.weekly.trend_stage === 'downtrend' && item.weekly.untrusted_rebound && (
+            <span style={{ color: '#d97706' }} title="深跌中刚金叉但历史延续差，反弹不可信，回避等右侧确认">⚠反弹不可信</span>
+          )}
         </span>
         <span style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
           <span style={{ color: 'rgba(0,0,0,0.45)' }}>日</span>
           <span style={{ fontWeight: 600 }}>{item.daily.total_score?.toFixed(0) ?? '-'}</span>
           {dStage && <span style={{ color: dStage.color }}>{dStage.label}</span>}
+          {item.daily.trend_stage === 'downtrend' && item.daily.untrusted_rebound && (
+            <span style={{ color: '#d97706' }} title="深跌中刚金叉但历史延续差，反弹不可信，回避等右侧确认">⚠反弹不可信</span>
+          )}
         </span>
         {/* signal_score 双腿 + 剩余中位预期 */}
         <span style={{ display: 'flex', alignItems: 'center', gap: 2 }}>

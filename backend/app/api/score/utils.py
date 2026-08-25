@@ -58,6 +58,7 @@ def _serialize_combined(r) -> dict:
             "trend_stage": r.weekly_stage,
             "peak_signal": r.weekly_peak_signal,
             "peak_conf": r.weekly_peak_conf,
+            "untrusted_rebound": bool(getattr(r, "weekly_untrusted_rebound", False)),
         },
         "daily": {
             "total_score": r.daily_total,
@@ -65,6 +66,7 @@ def _serialize_combined(r) -> dict:
             "trend_stage": r.daily_stage,
             "peak_signal": r.daily_peak_signal,
             "peak_conf": r.daily_peak_conf,
+            "untrusted_rebound": bool(getattr(r, "daily_untrusted_rebound", False)),
         },
         "combined_score": r.combined_score,
         "combined_stage": r.combined_stage,

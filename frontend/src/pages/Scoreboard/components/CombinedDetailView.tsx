@@ -21,6 +21,12 @@ function LegBlock({ title, leg }: { title: '周线' | '日线'; leg: CombinedIte
             {stage.label}
           </Tag>
         )}
+        {/* 反弹未确认：downtrend 实为"深跌中刚金叉"，市场状态是底部反弹初期非下跌 */}
+        {leg.trend_stage === 'downtrend' && leg.untrusted_rebound && (
+          <Tag style={{ fontSize: 11, color: '#d97706', background: '#fffbeb', borderColor: '#fde68a' }}>
+            ⚠反弹不可信
+          </Tag>
+        )}
         {leg.peak_signal && (
           <Text type="secondary" style={{ fontSize: 11 }}>
             {leg.peak_signal}{leg.peak_conf ? `（置信度${leg.peak_conf}）` : ''}

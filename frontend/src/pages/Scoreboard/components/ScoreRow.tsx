@@ -162,6 +162,13 @@ function ScoreRow({ item, active, onClick, onAddWatchlist, onOpenDetail, onOpenW
           <span style={{ fontSize: 10, marginLeft: 6, color: '#7c3aed', flexShrink: 0 }}>⚠逆势</span>
         </Tooltip>
       )}
+      {/* 下跌趋势但文案含"深跌中刚金叉"= 反弹未确认：金叉存在但历史延续差不可信，
+          决策仍取回避。与真下跌区分（文案树已对齐，见 trend_judge）。 */}
+      {item.trend_stage === 'downtrend' && item.entry_reason?.includes('深跌中刚金叉') && (
+        <Tooltip title={item.entry_reason}>
+          <span style={{ fontSize: 10, marginLeft: 6, color: '#d97706', flexShrink: 0 }}>⚠反弹不可信</span>
+        </Tooltip>
+      )}
 
       {/* 弹性空隙：把 hover 操作推到最右，状态/斜率/徽章保持靠左 */}
       <div style={{ flex: 1, minWidth: 8 }} />
