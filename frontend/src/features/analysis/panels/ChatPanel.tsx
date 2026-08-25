@@ -67,6 +67,8 @@ export function ChatPanel() {
       abortRef.current = controller
 
       try {
+        // SSE 流式必须用原生 fetch（axios 不支持 ReadableStream）；
+        // baseURL 与 api/client.ts 一致（/api），不走 axios 拦截器
         const resp = await fetch(`/api/stocks/${code}/chat`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
