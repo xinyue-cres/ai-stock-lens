@@ -261,12 +261,19 @@ export interface CombinedItem {
 
 export async function getCombinedList(params: {
   combined_stage?: CombinedStage
+  combined_stages?: CombinedStage[]  // 多档聚合过滤（买侧/卖侧等），序列化为逗号分隔
   can_entry?: boolean
   scope?: string
   group_ids?: string  // 逗号分隔的分组 id（scope=group 时才生效）
   limit?: number
 } = {}): Promise<CombinedItem[]> {
-  const { data } = await api.get('/score/combined/list', { params })
+  const { combined_stages, ...rest } = params
+  const { data } = await api.get('/score/combined/list', {
+    params: {
+      ...rest,
+      combined_stages: combined_stages?.length ? combined_stages.join(',') : undefined,
+    },
+  })
   return data
 }
 

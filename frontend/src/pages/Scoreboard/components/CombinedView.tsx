@@ -132,21 +132,27 @@ export function CombinedList({
   const [fine, setFine] = useState<CombinedStage | null>(null)
   const groupIdsKey = groupIds.length ? groupIds.join(',') : undefined
 
-  // 基准拉全量，前端按粗过滤 + 细分档位两级过滤
+  // 过滤投后端：coarse/fine 进 queryKey + combined_stages 参数（SQL 过滤）。
+  // 原先前端 limit=500 全拉再客户端 filter——超 500 静默丢数据，且每次切档全量重算。
+  const stageParam = useMemo(() => {
+    if (fine) return [fine]
+    if (coarse === 'buy_side') return BUY_SIDE_STAGES
+    if (coarse === 'sell_side') return SELL_SIDE_STAGES
+    if (coarse === 'hold') return ['hold' as CombinedStage]
+    if (coarse === 'avoid') return ['avoid' as CombinedStage]
+    return undefined
+  }, [coarse, fine])
+
   const listQ = useQuery({
-    queryKey: ['combined-list', scope, groupIdsKey],
-    queryFn: () => getCombinedList({ scope, limit: 500, group_ids: groupIdsKey }),
+    queryKey: ['combined-list', scope, groupIdsKey, stageParam],
+    queryFn: () => getCombinedList({
+      scope,
+      limit: 500,
+      group_ids: groupIdsKey,
+      combined_stages: stageParam,
+    }),
   })
-  const items = useMemo(() => {
-    const all = listQ.data ?? []
-    let arr = all
-    if (coarse === 'buy_side') arr = arr.filter((i) => BUY_SIDE_STAGES.includes(i.combined_stage))
-    else if (coarse === 'sell_side') arr = arr.filter((i) => SELL_SIDE_STAGES.includes(i.combined_stage))
-    else if (coarse === 'hold') arr = arr.filter((i) => i.combined_stage === 'hold')
-    else if (coarse === 'avoid') arr = arr.filter((i) => i.combined_stage === 'avoid')
-    if (fine) arr = arr.filter((i) => i.combined_stage === fine)
-    return arr
-  }, [listQ.data, coarse, fine])
+  const items = listQ.data ?? []
 
   // 细分档位点击 → 联动粗排跳到对应侧
   const pickFine = (stage: CombinedStage, checked: boolean) => {

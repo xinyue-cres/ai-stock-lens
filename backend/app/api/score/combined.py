@@ -22,12 +22,16 @@ router = APIRouter()
 def combined_list(
     session: Session = Depends(get_session),
     combined_stage: str | None = None,     # 只保留这 1 档（12 档枚举见 combined_judge）
+    combined_stages: str | None = None,    # 逗号分隔多档（买侧/卖侧聚合过滤用，如 "strong_buy,buy"）
     can_entry: bool | None = None,         # 只看可入手（strong_buy/buy/deep_pullback_entry）
     scope: str | None = None,              # 对齐最近批次；不传退化为全局最新 scan_date
     group_ids: str | None = None,          # 传入「只保留这些组内的票」
     limit: int = 200,
 ):
-    """综合评判列表。返回 (weekly + daily) 双腿核心字段 + 综合分 + 操作建议。"""
+    """综合评判列表。返回 (weekly + daily) 双腿核心字段 + 综合分 + 操作建议。
+
+    combined_stage 单档 / combined_stages 多档二选一，都传时取交集。
+    """
     from sqlalchemy import func
 
     # 取本 scope 最近一次批次（避免陈旧）
@@ -41,6 +45,10 @@ def combined_list(
         stmt = stmt.where(StockScoreCombined.scan_date == latest)
     if combined_stage:
         stmt = stmt.where(StockScoreCombined.combined_stage == combined_stage)
+    if combined_stages:
+        stages = [s.strip() for s in combined_stages.split(",") if s.strip()]
+        if stages:
+            stmt = stmt.where(StockScoreCombined.combined_stage.in_(stages))  # type: ignore[attr-defined]
     if can_entry is not None:
         stmt = stmt.where(StockScoreCombined.can_entry == can_entry)
     # 用户传入 group_ids 只保留这些组内的票
