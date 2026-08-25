@@ -15,6 +15,11 @@ from app.db import engine
 from app.models.kline import KlineDaily
 from app.models.stock import Stock
 from app.models.sync_log import SyncLog
+from app.services.snapshot_service import (
+    _safe_float,
+    fill_missing_turnover,
+    refresh_score_snapshot,
+)
 
 # 并发同步 worker 数（瓶颈是网络拉取；SQLite 已配 WAL + busy_timeout=30s 容忍并发写）
 # 实测（8-18 自选 50 只）：16 是甜点（19s / 380ms/只）、12 紧随其后（21s / 422ms/只），
@@ -99,17 +104,6 @@ def _validate_row(row: dict, code: str) -> bool:
     return True
 
 
-def _safe_float(v) -> float | None:
-    if v is None:
-        return None
-    try:
-        f = float(v)
-        if math.isnan(f) or math.isinf(f):
-            return None
-        return f
-    except (TypeError, ValueError):
-        return None
-
 
 def _latest_date_in_db(session: Session, code: str) -> date | None:
     stmt = (
@@ -147,7 +141,7 @@ def sync_one_stock(session: Session, code: str, full: bool = False) -> int:
 
     if start > end:
         # K 线已最新（无新数据可拉）：快照仍可能落后，用库最新行刷新
-        _refresh_score_snapshot(session, code)
+        refresh_score_snapshot(session, code)
         return 0
 
     df = router.fetch_stock_daily(code, start, end)
@@ -159,7 +153,7 @@ def sync_one_stock(session: Session, code: str, full: bool = False) -> int:
         df = router.fetch_stock_daily(code, start, end)
     if df is None or df.empty:
         logger.warning("[%s] 同步无 K 线：数据源全部不可用或无该代码行情（%s~%s）", code, start, end)
-        _refresh_score_snapshot(session, code)
+        refresh_score_snapshot(session, code)
         return 0
 
     inserted = 0
@@ -203,92 +197,13 @@ def sync_one_stock(session: Session, code: str, full: bool = False) -> int:
         logger.warning("[%s] 同步中丢弃 %d 行异常数据", code, rejected)
     session.commit()
     # 用 K 线库最新行（此时已含本次新拉数据）刷新打分快照行情字段
-    _refresh_score_snapshot(session, code)
+    refresh_score_snapshot(session, code)
     # 注意：analysis_service 缓存指纹是最近 5 行内容 hash，K 线一改自动失效，无需手动 invalidate
 
     # 补算缺失的 turnover：从历史记录反推流通股本
-    _fill_missing_turnover(session, code)
+    fill_missing_turnover(session, code)
     return inserted
 
-
-def _refresh_score_snapshot(session: Session, code: str) -> None:
-    """用 K 线库最新行刷新打分快照行情字段（当日波动/收盘/换手）。
-
-    排行页 pct_chg 来自 StockScore 快照，而扫描时 as_of 常停在前一天（扫描在同步前）。
-    同步后即使 K 线已最新（start>end 无新数据可拉），快照也须追上 K 线库，故这里
-    查 K 线库最新行刷新。评分字段（total_score/各维度分）不动，那需要重扫。
-
-    注意：as_of_date 不在此刷新——它的语义是"打分所用 K 线的截止日"，必须与
-    components_json 同生同死。之前把它一起刷成最新，会掩盖"评分还停在旧数据"的事实，
-    更致命的是扫描计划的自愈判断（runner: db_latest > snap_asof 则重算）读的就是它，
-    被刷平后重算永远不触发，盘中旧打分从此无法被收盘新数据覆盖（2026-08-24 实录）。
-    """
-    from app.models.stock_score import StockScore
-
-    latest_row = session.exec(
-        select(KlineDaily).where(KlineDaily.code == code)
-        .order_by(KlineDaily.trade_date.desc()).limit(1)
-    ).first()
-    if latest_row is None:
-        return
-    # 复合主键 (code, scan_timeframe)：刷新所有周期的快照（daily/weekly 都更新最新行情）
-    scores = list(session.exec(
-        select(StockScore).where(StockScore.code == code)
-    ).all())
-    if not scores:
-        return
-    new_close = float(latest_row.close) if latest_row.close is not None else None
-
-    # 若 pct_chg 为 None 或异常 0（常见：sina/etf/指数 增量拉只含 1 根，pct_change NaN 被 fillna(0)），
-    # 用 K 线库前一天 close 反算真实涨跌幅——不覆盖合法 0%（两端 close 真相同则 pct_chg 也保持 0）。
-    pct_chg = _safe_float(latest_row.pct_chg)
-    if pct_chg is None or pct_chg == 0:
-        prev_close = session.exec(
-            select(KlineDaily.close)
-            .where(KlineDaily.code == code, KlineDaily.trade_date < latest_row.trade_date)
-            .order_by(KlineDaily.trade_date.desc()).limit(1)
-        ).first()
-        if prev_close and prev_close > 0 and latest_row.close:
-            true_pct = (float(latest_row.close) / float(prev_close) - 1) * 100
-            if abs(true_pct) > 0.0001:  # 真涨/真跌才覆盖
-                pct_chg = true_pct
-
-    new_pct_chg = round(pct_chg, 2) if pct_chg is not None else None
-    new_turnover = _safe_float(latest_row.turnover)
-    for score in scores:
-        score.close = new_close
-        score.pct_chg = new_pct_chg
-        score.turnover = new_turnover
-        session.add(score)
-    session.commit()
-
-
-def _fill_missing_turnover(session: Session, code: str) -> None:
-    """从同只票最近有 turnover 的记录反推流通股本，补填 turnover=NULL 的行。"""
-    ref = session.exec(
-        select(KlineDaily)
-        .where(KlineDaily.code == code, KlineDaily.turnover.isnot(None), KlineDaily.turnover > 0, KlineDaily.volume > 0)
-        .order_by(KlineDaily.trade_date.desc())
-        .limit(1)
-    ).first()
-    if not ref:
-        return
-    float_shares = ref.volume / (ref.turnover / 100)
-    if float_shares <= 0:
-        return
-
-    missing = session.exec(
-        select(KlineDaily)
-        .where(KlineDaily.code == code, KlineDaily.turnover.is_(None), KlineDaily.volume > 0)
-    ).all()
-    if not missing:
-        return
-
-    for row in missing:
-        row.turnover = round(row.volume / float_shares * 100, 4)
-        session.add(row)
-    session.commit()
-    logger.info("[%s] 补算 %d 行缺失 turnover（流通股本推算 %.0f）", code, len(missing), float_shares)
 
 
 def _sync_indices_if_due(session: Session) -> None:
