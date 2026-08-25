@@ -48,4 +48,5 @@ Thumbs.db
 data/
 .backend.pid
 .frontend.pid
-backend/seed.sqlite
+# 种子库已随版本提交（CI runner 访问不了东财/新浪等国内源，无法现场重建；
+# 更新时在本地网络畅通环境后端跑 scripts/build_seed_db.py 重建后提交）。

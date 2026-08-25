@@ -39,13 +39,13 @@ jobs:
           pnpm install --frozen-lockfile
           pnpm build
 
-      - name: Build seed DB (stock metadata)
+      # 种子库 seed.sqlite 已随版本提交进仓库（CI runner 访问不了东财/新浪等国内源，
+      # 现场重建必失败）；此处只校验文件在，不在则提示本地重建后提交。
+      - name: Verify seed DB present
         shell: bash
-        env:
-          PYTHONIOENCODING: utf-8
         run: |
-          cd backend
-          python scripts/build_seed_db.py
+          test -f backend/seed.sqlite && echo "seed.sqlite present ($(wc -c < backend/seed.sqlite) bytes)"
+          test -f backend/seed.sqlite || { echo "::error::backend/seed.sqlite 缺失——请在本地网络畅通时运行 backend/scripts/build_seed_db.py 并提交"; exit 1; }
 
       - name: PyInstaller package
         run: pyinstaller packaging/AI-Stock-Lens.spec
