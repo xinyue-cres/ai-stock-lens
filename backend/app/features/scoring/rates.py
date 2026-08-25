@@ -29,3 +29,7 @@ _PEAK_CONF_STRONG_BY_TF: dict[str, int] = {
 
 # 兼容老代码（默认 daily 语义）
 _PEAK_CONF_STRONG = _PEAK_CONF_STRONG_DAILY
+
+# 过峰"提示"档阈值：综合建议文案里附注日线过峰信号的最低置信度。
+# 低于强档 51（不拦金叉），仅作详情补充说明——文案提示门槛应低于决策门槛。
+_PEAK_CONF_HINT = 40

@@ -17,6 +17,8 @@ from __future__ import annotations
 
 from typing import TypedDict
 
+from app.features.scoring.rates import _PEAK_CONF_HINT
+
 
 # ---------------------------------------------------------------------------
 # 状态矩阵
@@ -295,7 +297,7 @@ def combined_entry_reason(stage: str, weekly: dict, daily: dict) -> str:
             details.append("双周假弱无信号")
         elif weekly.get("trend_stage") in ("downtrend", "overheat"):
             details.append(f"周线 {weekly.get('trend_stage')}")
-    if daily.get("peak_signal") and daily.get("peak_conf", 0) >= 40:
+    if daily.get("peak_signal") and daily.get("peak_conf", 0) >= _PEAK_CONF_HINT:
         details.append(f"日线过峰信号 {daily['peak_signal']}(conf={daily['peak_conf']})")
 
     if details:

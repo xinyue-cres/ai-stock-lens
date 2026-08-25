@@ -17,6 +17,7 @@ from app.indicators.risk import compute_risk
 from .band import _band_score, _dividend_score
 from .golden import _cycle_stats, _golden_continuation, _peak_winrate
 from .peak import _peak_features
+from .rates import _MIN_ROWS, W_BAND, W_DIVIDEND, W_GOLDEN
 
 
 def compute_indicator_cache(df: pd.DataFrame) -> dict:
@@ -58,7 +59,7 @@ def score_stock(df: pd.DataFrame, dividend_yield: float | None = None,
     cache：compute_indicator_cache 预计算指标（扫描复用），None 时自行计算。
     timeframe：打分基于的 K 线周期（daily/weekly），跨入 `_band_score` 做波动率尺度折换。
     """
-    if df is None or df.empty or len(df) < 60:  # _MIN_ROWS
+    if df is None or df.empty or len(df) < _MIN_ROWS:
         return None
     if "trade_date" in df.columns:
         df = df.sort_values("trade_date").reset_index(drop=True)
@@ -68,10 +69,10 @@ def score_stock(df: pd.DataFrame, dividend_yield: float | None = None,
     band = _band_score(df, timeframe=timeframe)
     dividend = _dividend_score(dividend_yield, is_fund)
 
-    # 权重：金叉延续 70% + 波段 20% + 股息 10%
-    total = (0.70 * golden["score"]
-             + 0.20 * band["score"]
-             + 0.10 * dividend["score"])
+    # 权重：金叉延续 70% + 波段 20% + 股息 10%（rates.py 单一定义点）
+    total = (W_GOLDEN * golden["score"]
+             + W_BAND * band["score"]
+             + W_DIVIDEND * dividend["score"])
 
     latest = df.iloc[-1]
     close = float(latest["close"])

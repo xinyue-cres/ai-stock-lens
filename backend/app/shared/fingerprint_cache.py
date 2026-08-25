@@ -40,29 +40,5 @@ class FingerprintedCache:
         else:
             self._data.pop(key, None)
 
-    # dict-compatible alias for legacy test / callsite expectations
-    def clear(self) -> None:
-        """同 invalidate(None)。给老调用方（直接当 dict 用）做渐进兼容。"""
-        self.invalidate()
-
-    def pop(self, key: str, default: Any = None) -> Any:
-        """与 dict.pop 语义同：删除并返回缓存值（木没有则 default）。渐进兼容。"""
-        hit = self._data.pop(key, None)
-        return hit[1] if hit else default
-
-    def keys(self):
-        return self._data.keys()
-
-    # ---- dict 兼容层（让旧 test / 调用方渐进迁移，不必一次性全改）----
-    def __getitem__(self, key: str) -> tuple[str, Any]:
-        return self._data[key]
-
-    def __setitem__(self, key: str, value: tuple[str, Any]) -> None:
-        # 下标赋值等价于 set(key, fingerprint=value[0], value=value[1])
-        self.set(key, value[0], value[1])
-
     def __contains__(self, key: str) -> bool:
         return key in self._data
-
-    def __len__(self) -> int:
-        return len(self._data)

@@ -67,7 +67,7 @@ def test_fingerprint_changes_on_pct_chg_backfill():
 
 def test_invalidate_still_works():
     """保留的 invalidate_analysis_cache 接口仍生效（调试用）"""
-    _ANALYSIS_CACHE.clear()
-    _ANALYSIS_CACHE["600519"] = ("fake_fingerprint", {"cached": True})
+    _ANALYSIS_CACHE.invalidate()
+    _ANALYSIS_CACHE.set("600519", "fake_fingerprint", {"cached": True})
     invalidate_analysis_cache("600519")
     assert "600519" not in _ANALYSIS_CACHE

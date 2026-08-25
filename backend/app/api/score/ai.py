@@ -8,11 +8,9 @@ from sqlmodel import Session
 
 from app.ai.analyzer import AIAnalysisError, analyze_score_summary, analyze_stock_comment
 from app.db import get_session
-from app.features.scoring import _PEAK_CONF_STRONG
-from app.models.stock_score import StockScore
 
 from .models import AnalyzeBatchRequest, SummarizeRequest
-from .utils import _query_scores, _scope_desc, _serialize, _sig
+from .utils import _query_scores, _scope_desc, _serialize
 
 router = APIRouter()
 
@@ -27,7 +25,6 @@ def summarize_scores(payload: SummarizeRequest, session: Session = Depends(get_s
 
     # 给 AI 的输入做精简，只保留打分核心指标
     for item in items:
-        sig = _sig(StockScore(**{k: v for k, v in item.items() if k in StockScore.__fields__}))
         item["signal_summary"] = analyze_stock_comment(item)
 
     try:
