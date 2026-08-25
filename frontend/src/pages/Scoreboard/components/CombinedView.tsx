@@ -4,7 +4,7 @@ import { Card, Empty, Popover, Segmented, Spin, Tag, Typography, message } from 
 import { PlusOutlined, QuestionCircleOutlined } from '@ant-design/icons'
 import { Button } from 'antd'
 import { getCombinedList, type CombinedItem, type CombinedStage } from '@/api/score'
-import { BUY_SIDE_STAGES, COMBINED_PALETTE, SELL_SIDE_STAGES, STAGE_PALETTE } from '../constants'
+import { BUY_SIDE_STAGES, COMBINED_PALETTE, SELL_MIRROR_ORDER, SELL_SIDE_STAGES, STAGE_MEANING, STAGE_PALETTE } from '../constants'
 
 const { Text } = Typography
 
@@ -158,26 +158,6 @@ export function CombinedList({
     setFine(stage)
   }
 
-  // 细分 tag：只保留 10 个买卖档，买侧/卖侧对称两行（持有/回避由粗排承担）
-  // 卖侧显式镜像顺序，与买侧逐档对应（强卖↔强买、卖出↔买入、观察卖↔观察买…）
-  const SELL_MIRROR_ORDER: CombinedStage[] = [
-    'strong_sell', 'sell', 'watch_sell', 'deep_rally_exit', 'light_sell',
-  ]
-  // 各档信号含义（问号提示用）
-  const STAGE_MEANING: Record<CombinedStage, string> = {
-    strong_buy: '日周线同向看多共振，重仓买入',
-    buy: '周线看好 + 日线已反弹，可买入',
-    watch_buy: '周看多但日线整理，等升级',
-    deep_pullback_entry: '周趋势内日超跌，轻仓分批',
-    light_buy: '周中性 + 日线有起涨信号，轻仓试',
-    hold: '可交易但无明确方向，不动',
-    watch_sell: '周定调偏坏，日线未确认走坏，先盯',
-    light_sell: '周走弱但日线未确认，先减仓',
-    deep_rally_exit: '周已走坏，日线反弹是离场窗口',
-    sell: '日周均走坏，尽快出清',
-    strong_sell: '双周共振走弱，清仓',
-    avoid: '系统不评估（数据不足/双周假弱），不介入',
-  }
   const stageHelp = (
     <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '5px 12px', maxWidth: 360 }}>
       {[...BUY_SIDE_STAGES, ...SELL_MIRROR_ORDER].map((stage) => {

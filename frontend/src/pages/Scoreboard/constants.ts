@@ -77,3 +77,25 @@ export const BUY_SIDE_STAGES: CombinedStage[] = [
 export const SELL_SIDE_STAGES: CombinedStage[] = [
   'watch_sell', 'light_sell', 'deep_rally_exit', 'sell', 'strong_sell',
 ]
+
+// 卖侧镜像顺序：从强到轻排，与买侧 BUY_SIDE_STAGES 逐档对应
+// （强卖↔强买、卖出↔买入、观察卖↔观察买、反弹离场↔深度回踩、轻仓减↔轻仓试）
+export const SELL_MIRROR_ORDER: CombinedStage[] = [
+  'strong_sell', 'sell', 'watch_sell', 'deep_rally_exit', 'light_sell',
+]
+
+// 各档信号含义（综合视图问号提示用；与后端 combined_judge._STAGE_META 的 reason 对齐）
+export const STAGE_MEANING: Record<CombinedStage, string> = {
+  strong_buy: '日周线同向看多共振，重仓买入',
+  buy: '周线看好 + 日线已反弹，可买入',
+  watch_buy: '周看多但日线整理，等升级',
+  deep_pullback_entry: '周趋势内日超跌，轻仓分批',
+  light_buy: '周中性 + 日线有起涨信号，轻仓试',
+  hold: '可交易但无明确方向，不动',
+  watch_sell: '周定调偏坏，日线未确认走坏，先盯',
+  light_sell: '周走弱但日线未确认，先减仓',
+  deep_rally_exit: '周已走坏，日线反弹是离场窗口',
+  sell: '日周均走坏，尽快出清',
+  strong_sell: '双周共振走弱，清仓',
+  avoid: '系统不评估（数据不足/双周假弱），不介入',
+}

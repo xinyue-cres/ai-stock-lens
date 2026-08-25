@@ -10,6 +10,9 @@ export type TrendStage =
   | 'range'
   | 'insufficient'
 
+/** 过峰信号四象限 + 无触发延续态（与后端 peak.py 输出枚举一一对应） */
+export type PeakSignal = '上涨过峰' | '下跌过峰' | '涨势延续' | '跌势延续' | '底部反转' | '顶部回落'
+
 export interface ScoreItem {
   code: string
   name: string
@@ -35,7 +38,7 @@ export interface ScoreItem {
   dif_slope_dir: 'up' | 'down' | 'flat' | null
   current_state: string | null
   // 过峰信号（bar|acc_z 触发 + 置信度评级，列表行标记用）
-  peak_signal?: '上涨过峰' | '下跌过峰' | '涨势延续' | '跌势延续' | '底部反转' | '顶部回落' | null
+  peak_signal?: PeakSignal | null
   peak_conf?: number | null
   // 是否在自选 + 所属分组（选股页跳工作台分组视图用，由 list 接口批量注入）
   in_watchlist?: boolean
@@ -52,7 +55,7 @@ export interface SignalComponent {
   current_state?: string | null
   dif_slope?: number | null
   dif_slope_dir?: 'up' | 'down' | 'flat' | null
-  peak_signal?: '上涨过峰' | '下跌过峰' | '涨势延续' | '跌势延续' | '底部反转' | '顶部回落' | null
+  peak_signal?: PeakSignal | null
   // 过峰置信度 0-100（触发类型 × 量能）与量比 vr20
   peak_conf?: number | null
   vr20?: number | null
@@ -229,7 +232,7 @@ export interface CombinedLeg {
   total_score: number | null
   signal_score: number | null
   trend_stage: TrendStage | null
-  peak_signal: '上涨过峰' | '下跌过峰' | '涨势延续' | '跌势延续' | '底部反转' | '顶部回落' | null
+  peak_signal: PeakSignal | null
   peak_conf: number | null
 }
 
