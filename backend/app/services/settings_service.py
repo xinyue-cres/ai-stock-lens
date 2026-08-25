@@ -117,3 +117,30 @@ def save_total_capital(session: Session, amount: float) -> float:
         session.add(AppSetting(key=KEY_TOTAL_CAPITAL, value=str(amount)))
     session.commit()
     return amount
+
+
+def test_ai_connection(provider: str, base_url: str, model: str, api_key: str) -> dict:
+    """用给定配置打一次极简 chat 验证连通性。返回 {ok, model?, reply?, error?}。
+
+    不落库、不缓存：仅做一次性探活，供设置页"测试连接"按钮调用。
+    """
+    from openai import OpenAI  # 延迟导入：仅设置页用到，避免主流程加载成本
+
+    if not api_key or not base_url or not model:
+        return {"ok": False, "error": "base_url / model / api_key 必填"}
+    try:
+        client = OpenAI(api_key=api_key, base_url=base_url)
+        resp = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": "你是一个测试机器人，简短回应"},
+                {"role": "user", "content": "回一句 pong"},
+            ],
+            max_tokens=16,
+            temperature=0,
+        )
+        content = resp.choices[0].message.content or ""
+        return {"ok": True, "model": resp.model, "reply": content.strip()[:120]}
+    except Exception as e:  # noqa: BLE001
+        logger.warning("AI 连通性测试失败: %s", e)
+        return {"ok": False, "error": str(e)[:200]}

@@ -11,6 +11,7 @@ from sqlmodel import Session, select
 from app.datasource.base_provider import infer_market
 from app.datasource.router import get_data_router
 from app.models.stock import Stock
+from app.models.stock_group import StockGroup
 
 logger = logging.getLogger(__name__)
 
@@ -198,6 +199,64 @@ def set_group_ids(session: Session, code: str, group_ids: list[int]) -> Stock | 
         return None
     stock.group_ids = json.dumps(group_ids) if group_ids else None
     stock.group_id = group_ids[0] if group_ids else None  # 兼容旧字段
+    session.add(stock)
+    session.commit()
+    session.refresh(stock)
+    return stock
+
+
+_DEFAULT_GROUP_NAME = "新增"
+
+
+def ensure_default_group(session: Session) -> int:
+    """查或建"新增"默认分组：未显式指定分组的自选自动归入，避免新增股票无处可去。"""
+    from sqlalchemy import func
+
+    group = session.exec(select(StockGroup).where(StockGroup.name == _DEFAULT_GROUP_NAME)).first()
+    if group:
+        return group.id
+    # "新增"分组初始排在列表最前（紧跟"全部"），之后可在管理窗口拖动调整
+    min_order = session.exec(select(func.min(StockGroup.sort_order))).first()
+    new_sort = (min_order - 1) if min_order is not None else 0
+    g = StockGroup(name=_DEFAULT_GROUP_NAME, sort_order=new_sort)
+    session.add(g)
+    session.commit()
+    session.refresh(g)
+    return g.id
+
+
+def group_name_map(session: Session) -> dict[int, str]:
+    """全分组 id→name 映射（列表页补 group_names 用）。"""
+    return {g.id: g.name for g in session.exec(select(StockGroup)).all()}
+
+
+def add_to_watchlist_with_groups(
+    session: Session, code: str, *, group_ids: list[int] | None = None, note: str | None = None,
+) -> Stock:
+    """加入自选 + 一次性写分组与备注（合并为一次事务，替代 add_to_watchlist + set_group_ids + note 三次 commit）。
+
+    - group_ids 为空时自动归入"新增"默认分组，避免新增股票无处可去
+    - note 可选；None 表示不改备注
+    """
+    stock = ensure_stock(session, code)
+    stock.is_watchlist = True
+    gids = group_ids if group_ids else [ensure_default_group(session)]
+    stock.group_ids = json.dumps(gids) if gids else None
+    stock.group_id = gids[0] if gids else None  # 兼容旧字段
+    if note is not None:
+        stock.note = note or None
+    session.add(stock)
+    session.commit()
+    session.refresh(stock)
+    return stock
+
+
+def update_note(session: Session, code: str, note: str | None) -> Stock | None:
+    """更新自选股备注；note 空串视为清空（None）。"""
+    stock = session.get(Stock, code)
+    if not stock:
+        return None
+    stock.note = note or None
     session.add(stock)
     session.commit()
     session.refresh(stock)

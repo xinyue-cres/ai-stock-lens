@@ -1,16 +1,11 @@
 from __future__ import annotations
 
-import logging
-
 from fastapi import APIRouter, Depends, HTTPException
-from openai import OpenAI
 from pydantic import BaseModel
 from sqlmodel import Session
 
 from app.db import get_session
 from app.services import settings_service
-
-logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 
@@ -88,29 +83,12 @@ def put_ai(payload: AiConfigPayload):
 @router.post("/ai/test")
 def test_ai(payload: AiTestPayload):
     """用给定的 key/url/model 打一次极简 chat，验证连通性。"""
-    if not payload.api_key or not payload.base_url or not payload.model:
-        raise HTTPException(status_code=400, detail="base_url / model / api_key 必填")
-
-    try:
-        client = OpenAI(api_key=payload.api_key, base_url=payload.base_url)
-        resp = client.chat.completions.create(
-            model=payload.model,
-            messages=[
-                {"role": "system", "content": "你是一个测试机器人，简短回应"},
-                {"role": "user", "content": "回一句 pong"},
-            ],
-            max_tokens=16,
-            temperature=0,
-        )
-        content = resp.choices[0].message.content or ""
-        return {
-            "ok": True,
-            "model": resp.model,
-            "reply": content.strip()[:120],
-        }
-    except Exception as e:  # noqa: BLE001
-        logger.warning("AI 连通性测试失败: %s", e)
-        return {"ok": False, "error": str(e)[:200]}
+    return settings_service.test_ai_connection(
+        provider=payload.provider or "",
+        base_url=payload.base_url,
+        model=payload.model,
+        api_key=payload.api_key,
+    )
 
 
 # -------------------- 总资金 --------------------
