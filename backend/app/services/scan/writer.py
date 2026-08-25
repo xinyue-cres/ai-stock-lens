@@ -11,6 +11,12 @@ from sqlmodel import Session
 
 from app.datasource.base_provider import is_fund_code
 from app.models.stock_score import StockScore
+from app.schemas.score_components import (
+    dist_high_of,
+    hist_golden_of,
+    peak_of,
+    pct_b_of,
+)
 
 
 def _upsert(session: Session, code: str, name: str, scored: dict, trend: dict,
@@ -72,57 +78,10 @@ def _combined_upsert(session: Session, code: str, name: str,
     w_stage = weekly_row.trend_stage if weekly_row else "insufficient"
     d_stage = daily_row.trend_stage if daily_row else "insufficient"
 
-    def _load_comp(r) -> dict:
-        """解析 components_json，出错返回空 dict。单一解析点（P2-2）。"""
-        if not r or not r.components_json:
-            return {}
-        try:
-            return json.loads(r.components_json) or {}
-        except (json.JSONDecodeError, TypeError):
-            return {}
-
-    def _peak_of(r) -> tuple[str | None, int]:
-        sig = (_load_comp(r).get("signal") or {})
-        ps = sig.get("peak_signal")
-        conf = sig.get("peak_conf")
-        return ps, int(conf) if isinstance(conf, (int, float)) else 0
-
-    def _pct_b_of(r) -> float | None:
-        """从 components_json 提取 BOLL pct_b（trend.indicators.pct_b）。"""
-        ind = (_load_comp(r).get("trend") or {}).get("indicators") or {}
-        v = ind.get("pct_b")
-        return float(v) if isinstance(v, (int, float)) else None
-
-    def _hist_from(weekly_r) -> tuple[float | None, float | None, float | None]:
-        """weekly signal_summary 里的 hist 三件套（golden peak mean/median + signal_gain）。
-
-        用 weekly 而非 daily：weekly 的"金叉周期气质"更稳定，daily bar 太敏感。
-        """
-        sig = (_load_comp(weekly_r).get("signal") or {})
-        hp = sig.get("hist_golden_peak_pct")
-        hm = sig.get("hist_golden_peak_median")
-        sg = sig.get("signal_gain_pct")
-        return (
-            hp if isinstance(hp, (int, float)) else None,
-            hm if isinstance(hm, (int, float)) else None,
-            round(sg, 2) if isinstance(sg, (int, float)) else None,
-        )
-
-    def _dist_high_of(daily_r) -> float | None:
-        """距 60 日高的上行空间 %（副参考；主力指标是 hist_golden_*）。"""
-        kp = (_load_comp(daily_r).get("trend") or {}).get("key_prices") or {}
-        high60 = kp.get("resistance_60d")
-        close = kp.get("close")
-        if not (isinstance(high60, (int, float)) and high60 and high60 > 0):
-            return None
-        if not (isinstance(close, (int, float)) and close and close > 0):
-            return None
-        return round((high60 / close - 1) * 100, 2)
-
-    w_peak, w_conf = _peak_of(weekly_row)
-    d_peak, d_conf = _peak_of(daily_row)
-    w_pct_b = _pct_b_of(weekly_row)
-    d_pct_b = _pct_b_of(daily_row)
+    w_peak, w_conf = peak_of(weekly_row)
+    d_peak, d_conf = peak_of(daily_row)
+    w_pct_b = pct_b_of(weekly_row)
+    d_pct_b = pct_b_of(daily_row)
 
     stage = combined_stage(w_stage, d_stage)
 
@@ -172,8 +131,8 @@ def _combined_upsert(session: Session, code: str, name: str,
     row.demote_reason = demote_reason
     # 空间（保留 dist_high 兼容）：距 60 日高 = 旧逻辑。
     # 主力指标改该股历史金叉 peak（mean + median）—— 比 60 日高更能代表"这次能涨多少"。
-    hist_golden_peak_pct, hist_golden_peak_median, weekly_signal_gain_pct = _hist_from(weekly_row)
-    space_pct = _dist_high_of(daily_row)
+    hist_golden_peak_pct, hist_golden_peak_median, weekly_signal_gain_pct = hist_golden_of(weekly_row)
+    space_pct = dist_high_of(daily_row)
     row.space_pct = space_pct
     row.hist_golden_peak_pct = hist_golden_peak_pct
     row.hist_golden_peak_median = hist_golden_peak_median

@@ -1,7 +1,6 @@
 """评分序列化/查询助手：把 ORM 行转成 API 字段，列表/详情/query 共用。"""
 from __future__ import annotations
 
-import json
 from datetime import date, timedelta
 
 from sqlmodel import Session, select
@@ -10,18 +9,12 @@ from app.features.scoring import _PEAK_CONF_STRONG
 from app.models.stock import Stock
 from app.models.stock_group import StockGroup
 from app.models.stock_score import StockScore
+from app.schemas.score_components import signal_fields_for_list
 from app.services.stock_service import get_group_ids, watchlist_codes_in_groups
 
 
 def _serialize(r: StockScore) -> dict:
     """把 stock_score ORM 行转成 API 返回字典（前端 ScoreItem 结构）。"""
-    sig = {}
-    if r.components_json:
-        try:
-            comp = json.loads(r.components_json)
-            sig = comp.get("signal") or {}
-        except (json.JSONDecodeError, TypeError):
-            pass
     return {
         "code": r.code,
         "name": r.name,
@@ -42,24 +35,9 @@ def _serialize(r: StockScore) -> dict:
         "can_entry": r.can_entry,
         "entry_reason": r.entry_reason,
         # 列表行展示用：DIF 斜率 + 当前状态 + 过峰信号（从 components 解析）
-        "dif_slope": sig.get("dif_slope"),
-        "dif_slope_dir": sig.get("dif_slope_dir"),
-        "current_state": sig.get("current_state"),
-        "peak_signal": sig.get("peak_signal"),
-        "peak_conf": sig.get("peak_conf"),
+        **signal_fields_for_list(r),
         "scan_timeframe": r.scan_timeframe,
     }
-
-
-def _sig(r: StockScore) -> dict:
-    """从 components_json 里提取 signal 段（解析时用，出错返回空 dict）。"""
-    if not r.components_json:
-        return {}
-    try:
-        comp = json.loads(r.components_json)
-        return comp.get("signal") or {}
-    except (json.JSONDecodeError, TypeError):
-        return {}
 
 
 def _serialize_combined(r) -> dict:
