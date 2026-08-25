@@ -39,7 +39,6 @@ def test_momentum_computes_correct_returns():
     closes = list(np.linspace(10, 30, 130))
     result = compute_quant_features(_mk_df(closes))
     m = result["momentum"]
-    # return_20d = (close[-1] - close[-21]) / close[-21]
     expected = (closes[-1] - closes[-21]) / closes[-21]
     assert abs(m["return_20d"] - expected) < 1e-4
     assert m["return_60d"] is not None

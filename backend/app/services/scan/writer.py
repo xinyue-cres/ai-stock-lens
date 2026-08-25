@@ -1,6 +1,6 @@
 """打分结果写入：StockScore upsert + Combined 合成 upsert。
 
-每条腿（daily/weekly）写完后立刻尝试 combined 合成——双腿齐全时生成 7 档综合结论。
+每条腿（daily/weekly）写完后立刻尝试 combined 合成——双腿齐全时生成 12 档综合结论。
 """
 from __future__ import annotations
 

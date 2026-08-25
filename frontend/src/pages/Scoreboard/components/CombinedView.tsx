@@ -283,5 +283,5 @@ export function CombinedList({
   )
 }
 
-/** 兼容老 API：不再使用卡片网格。导出别名保留向后兼容。 */
+/** 默认导出列表视图（Scoreboard/index.tsx 的综合模式左侧列表）。 */
 export default CombinedList

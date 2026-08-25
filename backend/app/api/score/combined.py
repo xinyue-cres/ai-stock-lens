@@ -1,6 +1,6 @@
 """综合评判路由：/combined/list + /combined/{code}。
 
-综合的 daily+weekly 丢弃操作（Stage 为等）——都在 StockScoreCombined 表里按 composite_order 排序。
+读 StockScoreCombined 表（daily+weekly 双腿由扫描 writer 合成），按 combined_score 降序返回。
 """
 from __future__ import annotations
 
@@ -21,10 +21,10 @@ router = APIRouter()
 @router.get("/combined/list")
 def combined_list(
     session: Session = Depends(get_session),
-    combined_stage: str | None = None,     # 只保留这 7 档顿范
-    can_entry: bool | None = None,         # 只看可入手（strong_buy/buy/light_buy_entry）
+    combined_stage: str | None = None,     # 只保留这 1 档（12 档枚举见 combined_judge）
+    can_entry: bool | None = None,         # 只看可入手（strong_buy/buy/deep_pullback_entry）
     scope: str | None = None,              # 对齐最近批次；不传退化为全局最新 scan_date
-    group_ids: str | None = None,          # 传唤「只保留这些组内的票」
+    group_ids: str | None = None,          # 传入「只保留这些组内的票」
     limit: int = 200,
 ):
     """综合评判列表。返回 (weekly + daily) 双腿核心字段 + 综合分 + 操作建议。"""
