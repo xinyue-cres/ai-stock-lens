@@ -19,16 +19,22 @@ from app.indicators.macd import dif_slope as compute_dif_slope
 from app.indicators.macd import is_golden, macd_series
 from app.indicators.oscillators import compute_boll
 
+from . import demarket
 from .base import _norm, _tri
 from .peak import _peak_features
 
 
-def _post_golden_gain(close: pd.Series, signals: list[tuple[int, str]]) -> float:
+def _post_golden_gain(close: pd.Series, signals: list[tuple[int, str]],
+                      dates: list | None = None) -> float:
     """历史金叉后涨幅分：每次金叉→死叉周期内到峰值（区间最高收盘）的最大涨幅 + 胜率合成。
 
     用"周期内峰值涨幅"而非固定 20 日窗口——金叉长度不一（5~40 天），固定窗口
     测不准"这次金叉能涨到多高"；峰值涨幅衡量上涨潜力。
     锚点 24%（含金叉确认日跳涨后重新采样：周期级 p90 ≈24.5%、股票级 robust_avg p90 ≈12%）。
+
+    dates：trade_date 序列（与 signals 索引对齐）。传入时对每个周期的涨幅做
+    "去上证指数"超额调整（见 demarket 模块）——剥离普涨普跌，避免牛顶追高票因
+    历史绝对涨幅大而虚高。dates=None 时保持纯绝对涨幅（旧行为）。
     """
     arr = close.to_numpy(dtype=float)
     n = len(arr)
@@ -45,7 +51,13 @@ def _post_golden_gain(close: pd.Series, signals: list[tuple[int, str]]) -> float
         base = arr[gidx - 1] if gidx > 0 else arr[gidx]
         if base <= 0:
             continue
-        peak_gains.append(arr[gidx:end_idx + 1].max() / base - 1)
+        seg = arr[gidx:end_idx + 1]
+        peak_abs = gidx + int(seg.argmax())          # 周期内最高收盘日（市场对齐用）
+        gain = seg.max() / base - 1
+        if dates is not None:
+            # 去市场步骤：绝对涨幅 → 超额涨幅（减去同期上证涨幅）
+            gain = demarket.excess_gain(gain, dates, gidx, peak_abs)
+        peak_gains.append(gain)
 
     if len(peak_gains) >= 5:
         # 均值易被极端暴涨拉偏（少数 +50% 周期抬高整体，如 000066 均值22.9% vs 中位1.8%），
@@ -249,7 +261,9 @@ def _golden_continuation(df: pd.DataFrame, cache: dict | None = None) -> dict:
         vr20 = peak["vr20"]
         cycles = None
 
-    post_gain = _post_golden_gain(close, signals)
+    # 去市场：传入 trade_date，让金叉延续分剥离上证普涨普跌（见 demarket 模块）
+    dates = df["trade_date"].tolist() if "trade_date" in df.columns else None
+    post_gain = _post_golden_gain(close, signals, dates=dates)
     life = _golden_life_score(signals)
 
     # 涨幅分 0-100 开方×10（√100×10=100 保持量纲）：压缩高分、放大低分区间的区分度。
