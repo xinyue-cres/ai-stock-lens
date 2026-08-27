@@ -22,10 +22,12 @@ from app.indicators.oscillators import compute_boll
 from . import demarket
 from .base import _norm, _tri
 from .peak import _peak_features
+from .rates import _EFF_BLEND, _EFF_K, _EFF_MIN_TURNS, _EFF_NORM_HI
 
 
 def _post_golden_gain(close: pd.Series, signals: list[tuple[int, str]],
-                      dates: list | None = None) -> float:
+                      dates: list | None = None,
+                      turnover: pd.Series | None = None) -> float:
     """历史金叉后涨幅分：每次金叉→死叉周期内到峰值（区间最高收盘）的最大涨幅 + 胜率合成。
 
     用"周期内峰值涨幅"而非固定 20 日窗口——金叉长度不一（5~40 天），固定窗口
@@ -35,10 +37,18 @@ def _post_golden_gain(close: pd.Series, signals: list[tuple[int, str]],
     dates：trade_date 序列（与 signals 索引对齐）。传入时对每个周期的涨幅做
     "去上证指数"超额调整（见 demarket 模块）——剥离普涨普跌，避免牛顶追高票因
     历史绝对涨幅大而虚高。dates=None 时保持纯绝对涨幅（旧行为）。
+
+    turnover：与 close 对齐的日换手率序列（%）。传入时额外计算量价效率分
+    （近 K 个周期 eff 均值，见 rates._EFF_K）并与本口径 50/50 混合——
+    eff4 在可实现持有收益口径下双周期（日/周线）三时段（全期/牛市/2026）
+    全正，而纯涨幅口径在周线腿为系统性负贡献（详见 rates.py 注释）。
+    周线调用方需自行传入由日线反推的周换手率（to_bars 不含 turnover 列）。
     """
     arr = close.to_numpy(dtype=float)
     n = len(arr)
+    turn = turnover.to_numpy(dtype=float) if turnover is not None else None
     peak_gains: list[float] = []
+    effs: list[float] = []       # (峰值涨幅+1)/周期累计换手率——量价效率
     for i in range(len(signals)):
         if signals[i][1] != "golden":
             continue
@@ -58,6 +68,14 @@ def _post_golden_gain(close: pd.Series, signals: list[tuple[int, str]],
             # 去市场步骤：绝对涨幅 → 超额涨幅（减去同期上证涨幅）
             gain = demarket.excess_gain(gain, dates, gidx, peak_abs)
         peak_gains.append(gain)
+        # 量价效率：每换手一遍流通盘涨多少（% → 倍数）。换手缺失/过少的周期跳过。
+        if turn is not None:
+            t = turn[gidx:end_idx + 1]
+            t = t[~pd.isna(t) & (t > 0.01)]
+            if len(t) >= 3:
+                cum_turn = float(t.sum()) / 100.0
+                if cum_turn >= _EFF_MIN_TURNS:
+                    effs.append((gain + 1.0) / cum_turn)
 
     if len(peak_gains) >= 5:
         # 均值易被极端暴涨拉偏（少数 +50% 周期抬高整体，如 000066 均值22.9% vs 中位1.8%），
@@ -66,7 +84,15 @@ def _post_golden_gain(close: pd.Series, signals: list[tuple[int, str]],
         wr = sum(1 for g in peak_gains if g > 0) / len(peak_gains)
         gain_score = _norm(robust_avg, 0.0, 0.24) * 100
         wr_score = _norm(wr, 0.5, 0.80) * 100
-        return round(0.6 * gain_score + 0.4 * wr_score, 1)
+        base_score = round(0.6 * gain_score + 0.4 * wr_score, 1)
+
+        # eff4 分：近 K 个周期均值（老周期会稀释当前资金行为，只看最近）。
+        # 样本不足（<K 或无换手数据）时回退纯涨幅口径——与 demarket 失败回退同模式。
+        if len(effs) >= _EFF_K:
+            eff4 = statistics.mean(effs[-_EFF_K:])
+            eff_score = min(_norm(eff4, 0.0, _EFF_NORM_HI) * 100, 100.0)
+            return round((1 - _EFF_BLEND) * base_score + _EFF_BLEND * eff_score, 1)
+        return base_score
     return 50.0  # 金叉样本不足，中性
 
 
@@ -263,7 +289,9 @@ def _golden_continuation(df: pd.DataFrame, cache: dict | None = None) -> dict:
 
     # 去市场：传入 trade_date，让金叉延续分剥离上证普涨普跌（见 demarket 模块）
     dates = df["trade_date"].tolist() if "trade_date" in df.columns else None
-    post_gain = _post_golden_gain(close, signals, dates=dates)
+    # 量价效率：传入换手率序列（daily 自带；weekly 由 to_bars 聚合出周换手）
+    turnover = df["turnover"] if "turnover" in df.columns else None
+    post_gain = _post_golden_gain(close, signals, dates=dates, turnover=turnover)
     life = _golden_life_score(signals)
 
     # 涨幅分 0-100 开方×10（√100×10=100 保持量纲）：压缩高分、放大低分区间的区分度。

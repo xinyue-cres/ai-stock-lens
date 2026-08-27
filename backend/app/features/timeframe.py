@@ -28,8 +28,11 @@ def resample_to_weekly(df: pd.DataFrame) -> pd.DataFrame:
     """日线 DataFrame → 周五收盘周线（Wall St 风格 W-FRI 锚点）。
 
     聚合规则：open=首、high=最大、low=最小、close=尾、volume/amount=求和。
-    turnover / pct_chg 由打分/judge 内部从 close 派生，不在此重复聚合（pct_change 关系
+    pct_chg 由打分/judge 内部从 close 派生，不在此重复聚合（pct_change 关系
     会随 resample 漂移，留给下游 compute_indicator_cache 重算）。
+    turnover（周换手率 %）= 周成交量 / 流通股本 × 100——流通股本从日线
+    volume/(turnover/100) 反推中位数（量价效率因子 eff 的分母；缺失时置 NaN，
+    下游回退纯涨幅口径）。
     """
     if df is None or df.empty:
         return df
@@ -47,7 +50,18 @@ def resample_to_weekly(df: pd.DataFrame) -> pd.DataFrame:
         "amount": "sum",
     }).dropna(subset=["close"])
     weekly = weekly.reset_index()
-    return weekly[["trade_date", "open", "high", "low", "close", "volume", "amount"]]
+    # 周换手率：日线反推流通股本（volume/turnover% 的中位，稳健）
+    shares = None
+    if "turnover" in d.columns:
+        t = pd.to_numeric(d["turnover"], errors="coerce")
+        m = (t > 0.01) & (d["volume"].astype(float) > 0)
+        if m.sum() >= 30:
+            shares = float((d.loc[m, "volume"].astype(float) / (t[m] / 100.0)).median())
+    if shares and shares > 0:
+        weekly["turnover"] = weekly["volume"].astype(float) / shares * 100.0
+    else:
+        weekly["turnover"] = float("nan")
+    return weekly[["trade_date", "open", "high", "low", "close", "volume", "amount", "turnover"]]
 
 
 def to_bars(daily_df: pd.DataFrame, timeframe: Timeframe = "daily") -> pd.DataFrame:
