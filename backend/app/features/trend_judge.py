@@ -23,10 +23,17 @@ from app.indicators.ma import compute_ma
 
 _MIN_ROWS = 60  # MACD EMA26 预热需要 ~60 根
 
-# 金叉延续分阈值：>= 此值视为历史金叉可靠
-# eff4 上线后分布重标定（金叉态 p50≈70）：67 过线率 81% 过松无区分度，
-# 回到 70（约 p55~p60，"中上才可靠"），与旧算法 72 的准入语义对齐。
-_SIGNAL_RELIABLE = 70
+# 金叉延续分阈值：>= 此值视为历史金叉可靠（按周期分档，理由同 peak_conf 校准）
+# 目标：两条线都 ~25% 被拦（下限校准到同水位）——日线 66 => 25% 被拦（实测）；
+# 周线迭代到 62 => p25（65/262 只 = 24.8%，最接近 25%）。
+_SIGNAL_RELIABLE_DAILY = 66
+_SIGNAL_RELIABLE_WEEKLY = 62
+_SIGNAL_RELIABLE_BY_TF: dict[str, int] = {
+    "daily": _SIGNAL_RELIABLE_DAILY,
+    "weekly": _SIGNAL_RELIABLE_WEEKLY,
+}
+# 兼容老调用方（默认 daily 语义）
+_SIGNAL_RELIABLE = _SIGNAL_RELIABLE_DAILY
 
 # 左侧机会（死叉态博反弹）的历史可靠门槛：低于金叉态可入手线——
 # 死叉态 signal 分布天然偏低（weekly 死叉态 p50≈62），拿金叉标准卡死叉态
@@ -77,6 +84,8 @@ def _decide_stage(golden: bool, pct_b: float | None, dist_high: float,
     # 顶/底判定：优先按 peak_signal 位置标签（含 dif 位置语义），slope_up 仅作方向
     # 强档阈值按 timeframe 校准：weekly 的 acc_z 分布系统性偏低，沿用 daily=51 会无人触发
     conf_strong = _PEAK_CONF_STRONG_BY_TF.get(timeframe, _PEAK_CONF_STRONG)
+    # "历史可靠"阈值同样按 timeframe 校准（weekly 分布偏低，见 _SIGNAL_RELIABLE_BY_TF）
+    sig_reliable = _SIGNAL_RELIABLE_BY_TF.get(timeframe, _SIGNAL_RELIABLE)
     if peak_signal:
         peak_top = peak_conf >= conf_strong and peak_signal in ("上涨过峰", "顶部回落")
         peak_bot = peak_conf >= conf_strong and peak_signal in ("下跌过峰", "底部反转")
@@ -98,11 +107,11 @@ def _decide_stage(golden: bool, pct_b: float | None, dist_high: float,
                 and signal_gain_pct is not None and signal_gain_pct > _STRONG_TREND_GAIN
                 and not peak_top):
             return "strong_uptrend"
-        if dist_high < -0.4 and (signal_score is None or signal_score < _SIGNAL_RELIABLE):
+        if dist_high < -0.4 and (signal_score is None or signal_score < sig_reliable):
             return "downtrend"  # 深跌中刚金叉且历史不可靠
         if peak_top or slope_up is False:
             return "weak_golden"  # 金叉但动能掉头（顶部过峰 / 金叉·走弱）→ 弱势金叉，别追
-        if signal_score is not None and signal_score >= _SIGNAL_RELIABLE:
+        if signal_score is not None and signal_score >= sig_reliable:
             if peak_winrate is not None and peak_winrate < 50:
                 return "range"  # 历史分高但胜率不足（过半金叉没冲过 +5%），可靠性打折
             return "pullback_entry"  # 金叉 + 历史可靠 → 可入手
@@ -112,7 +121,7 @@ def _decide_stage(golden: bool, pct_b: float | None, dist_high: float,
     # 死叉态
     if peak_bot and signal_score is not None and signal_score >= _LEFT_ENTRY_SIGNAL:
         return "left_entry"  # 下跌动能急转（底部过峰）+ 历史尚可 → 左侧机会
-    if dist_high > -0.1 or (signal_score is None or signal_score < _SIGNAL_RELIABLE):
+    if dist_high > -0.1 or (signal_score is None or signal_score < sig_reliable):
         return "downtrend"  # 距高点近或历史差 → 回避
     return "range"
 
@@ -131,6 +140,7 @@ def _entry_reason(stage: str, golden: bool, peak_conf: int, slope_up: bool | Non
     # 顶/底判定优先按 peak_signal 位置标签（含 dif 位置语义）；
     # 老调用方未传 peak_signal 时回退到 slope_up 单方向判定
     conf_strong = _PEAK_CONF_STRONG_BY_TF.get(timeframe, _PEAK_CONF_STRONG)
+    sig_reliable = _SIGNAL_RELIABLE_BY_TF.get(timeframe, _SIGNAL_RELIABLE)
     if peak_signal:
         peak_top = peak_conf >= conf_strong and peak_signal in ("上涨过峰", "顶部回落")
         peak_bot = peak_conf >= conf_strong and peak_signal in ("下跌过峰", "底部反转")
@@ -150,11 +160,11 @@ def _entry_reason(stage: str, golden: bool, peak_conf: int, slope_up: bool | Non
     # 深跌中刚金叉且历史不可靠（与决策树分支逐字对齐：dist_high<-0.4 且 signal<72；
     # 之前条件误用 signal_gain_pct 漏判，也漏接 dist_high 参数根本写不准）
     if golden and dist_high is not None and dist_high < -0.4 \
-            and (signal_score is None or signal_score < _SIGNAL_RELIABLE):
+            and (signal_score is None or signal_score < sig_reliable):
         return "金叉态·深跌中刚金叉且历史延续差，反弹不可信，回避等右侧确认"
     if not golden and peak_bot and signal_score is not None and signal_score >= _LEFT_ENTRY_SIGNAL:
         return "死叉态·下跌动能急转（底部过峰）+ 历史尚可，左侧机会·建议轻仓"
-    if golden and signal_score is not None and signal_score >= _SIGNAL_RELIABLE \
+    if golden and signal_score is not None and signal_score >= sig_reliable \
             and peak_winrate is not None and peak_winrate < 50:
         return "金叉态·历史峰值胜率低（<50%），观望"
     return _REASONS.get(stage, "")
