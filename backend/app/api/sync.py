@@ -114,11 +114,22 @@ def refresh_today(background_tasks: BackgroundTasks, session: Session = Depends(
     """强制重拉今日：删今日行后后台全量同步（异步，立即返回）。
 
     用途：盘中一次同步落入了脏快照(pct=0/volume 异常等)，用户点这个按钮清掉今日行强制重拉。
+    数据源探针门：删除前先验数据源是否已更新——未更新则不删、不拉，避免"今日行
+    删了却补不回"造成当天空洞（用户明确：数据源没更新就别删今日行）。
     """
     if _is_sync_running(session):
         return {"started": False, "status": "running", "reason": "已有同步进行中", "rows_deleted": 0}
-    today = date.today()
     stocks = list(session.exec(select(Stock).where(Stock.is_watchlist == True)))  # noqa: E712
+    # 探针门：有自选票才测；未更新 → 取消删除+同步，用户可稍后重试
+    if stocks:
+        from app.services.sync_service import probe_data_fresh
+
+        fresh, probe_msg = probe_data_fresh(session, date.today())
+        if not fresh:
+            logger.warning("刷新今日取消：%s", probe_msg)
+            return {"started": False, "status": "canceled",
+                    "reason": probe_msg, "rows_deleted": 0}
+    today = date.today()
     deleted = 0
     for stock in stocks:
         result = session.exec(

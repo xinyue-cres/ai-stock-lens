@@ -8,6 +8,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
+import pandas as pd
 from sqlmodel import Session, delete, select
 
 from app.datasource.router import get_data_router
@@ -25,6 +26,14 @@ from app.services.snapshot_service import (
 # 实测（8-18 自选 50 只）：16 是甜点（19s / 380ms/只）、12 紧随其后（21s / 422ms/只），
 # 8 被东财频繁 cooldown 反而最慢（242s），20+ 触发 eastmoney rate limit fallback baostock 串行
 _SYNC_WORKERS = 12
+
+# 数据源探针（下载：批量拉取前先验数据源是否已更新，避免整批拉回旧数据）。
+# 必须用 A 股个股（勿用 ETF/指数——指数要走 fetch_index_daily 专用接口，
+# 个股接口拉 sh.000001 会因代码格式报错；ETF 数据源常延迟更易假报警）。
+# 判据以探针结果为准：任一探针拉回的最新 bar 比库中该股已有 max 更近一天
+# → 数据源有货，放行后续；探针全部停在库内已有（拉的还是昨天的旧 bar）
+# → 数据源未更新，取消本批并通知用户。
+_PROBE_CODES = ("000001", "600000", "000034")  # 平安/浦发/神州数码
 
 # 全量同步实时进度（前端弹窗轮询用；进程级单实例，用锁保护）
 _sync_lock = threading.Lock()
@@ -50,6 +59,43 @@ _INDICES_COOLDOWN = timedelta(minutes=5)
 
 def _now_cn() -> datetime:
     return datetime.now(_CN_TZ)
+
+
+def probe_data_fresh(session: Session, end: date) -> tuple[bool, str | None]:
+    """数据源新鲜度探针：先拉 _PROBE_CODES，验证数据源是否已更新到最新交易日。
+
+    判定：探针股返回的最新 bar > 库中该股已有 max → 数据源有货（前进一步），放行。
+    全部探针都拉不回比库里更新的 bar → 数据源未更新（拉回的仍是旧 bar），返回 False。
+    无需交易日历：周末/盘中"无新数据"时探针返回 == 库 max，属于正常不误报；
+    仅当"今天应有新 bar 但数据源没出"（工作日数据源卡住）才判定未更新。
+
+    返回 (fresh, 未更新提示语)。fresh=True 时提示语为 None。
+    """
+    router = get_data_router()
+    not_updated = "数据源尚未更新（探针拉回的最新 bar 未越过库中已有数据），本次同步已取消"
+    any_probe_ok = False
+    for code in _PROBE_CODES:
+        latest, _ = _latest_date_in_db(session, code)
+        if latest is None:
+            continue  # 库里还没有该股（首次拉），无法靠它判断，跳过
+        start = latest - timedelta(days=1)
+        if start > end:
+            continue
+        try:
+            df = router.fetch_stock_daily(code, start, end)
+        except Exception:  # noqa: BLE001
+            continue  # 数据源故障不算"未更新"，让主流程走 fallback
+        if df is None or df.empty:
+            continue
+        try:
+            df_max = max(pd.Timestamp(d) for d in df["trade_date"]).date()
+        except (KeyError, TypeError, ValueError):
+            continue
+        if df_max > latest:
+            any_probe_ok = True
+    if any_probe_ok:
+        return True, None
+    return False, not_updated
 
 
 def _is_intraday(target: date) -> bool:
@@ -275,6 +321,28 @@ def sync_watchlist(session: Session) -> SyncLog:
     codes = [s.code for s in stocks]
     with _sync_lock:
         _sync_progress["total"] = len(codes)
+
+    # 数据源探针门：有票要拉就先验数据源是否已更新；未更新整批取消，
+    # 避免 12 并发把"库里已有的旧 bar"重新拉一遍全白费（同步时 still 未到新交易日
+    # 属正常，探针精确到"前进一步"判定，不误报周末/盘中）。
+    if codes:
+        fresh, probe_msg = probe_data_fresh(session, date.today())
+        if not fresh:
+            with _sync_lock:
+                _sync_progress.update(
+                    running=False, finished_at=datetime.now(), failed=len(codes),
+                    current=None, errors=[probe_msg],
+                )
+            log.finished_at = datetime.now()
+            log.stocks_synced = 0
+            log.status = "failed"
+            log.error_msg = probe_msg
+            session.add(log)
+            session.commit()
+            session.refresh(log)
+            logger.warning("同步取消：%s", probe_msg)
+            return log
+
     total = 0
     errors: list[str] = []
     with ThreadPoolExecutor(max_workers=_SYNC_WORKERS) as pool:

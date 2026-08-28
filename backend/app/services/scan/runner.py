@@ -21,7 +21,7 @@ from app.features.timeframe import Timeframe, to_bars
 from app.features.trend_judge import judge_trend
 from app.models.stock_score import StockScore
 from app.services.dividend_service import load_dividend_map
-from app.services.sync_service import _sync_one_isolated
+from app.services.sync_service import _sync_one_isolated, probe_data_fresh
 
 from .kline_cache import (
     _cache_needs_pull,
@@ -145,6 +145,15 @@ def _run_scan(todo: list[str], name_map: dict[str, str], settings, today: date, 
 
         # 1.5) 并发增量补拉（写回 kline_daily）——统一用工作台 sync_watchlist 那套
         #     _sync_one_isolated（每 worker 独立 Session），避免逐只串行等网络
+        #     数据源探针门：有票要补拉但数据源未更新（最新 bar 没越过库中已有）→
+        #     整批取消补拉，避免 8 worker 把旧 bar 重拉一遍（扫不到新数据白费）。
+        if pull_codes:
+            with Session(engine) as s:
+                fresh, probe_msg = probe_data_fresh(s, end)
+            if not fresh:
+                logger.warning("扫描补拉取消（%d 只待补）：%s", len(pull_codes), probe_msg)
+                pull_codes = []
+                need_net = []
         if pull_codes:
             with ThreadPoolExecutor(max_workers=settings.scan_concurrency) as pool:
                 list(pool.map(_sync_one_isolated, pull_codes))
