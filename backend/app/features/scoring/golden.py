@@ -11,6 +11,7 @@ from __future__ import annotations
 import math
 import statistics
 
+import numpy as np
 import pandas as pd
 
 from app.features.quant_factors import _sigma
@@ -71,7 +72,7 @@ def _post_golden_gain(close: pd.Series, signals: list[tuple[int, str]],
         # 量价效率：每换手一遍流通盘涨多少（% → 倍数）。换手缺失/过少的周期跳过。
         if turn is not None:
             t = turn[gidx:end_idx + 1]
-            t = t[~pd.isna(t) & (t > 0.01)]
+            t = t[~np.isnan(t) & (t > 0.01)]
             if len(t) >= 3:
                 cum_turn = float(t.sum()) / 100.0
                 if cum_turn >= _EFF_MIN_TURNS:

@@ -11,6 +11,7 @@
 """
 from __future__ import annotations
 
+import numpy as np
 import pandas as pd
 
 from app.db import engine
@@ -22,11 +23,14 @@ MARKET_CODE = "sh000001"
 
 # 进程内缓存，避免每次打分都查库（扫描 244 只时省大量 IO）
 _market_df: pd.DataFrame | None = None
+# numpy 预构建（同日 index，避免每周期重复构造 pd.Timestamp(asof 慢）
+_index_np: np.ndarray | None = None
+_closes_np: np.ndarray | None = None
 
 
 def load_market() -> pd.DataFrame:
     """上证指数日线：index=trade_date(Timestamp)，列 market_close。进程内缓存。"""
-    global _market_df
+    global _market_df, _index_np, _closes_np
     if _market_df is not None:
         return _market_df
     with Session(engine) as s:
@@ -40,7 +44,22 @@ def load_market() -> pd.DataFrame:
          "market_close": [float(r[1]) for r in rows]}
     ).set_index("trade_date").sort_index()
     _market_df = df
+    # numpy 预构建：searchsorted 比 Series.asof 快 ~10x（asof 每次做 label 查找）
+    if len(df):
+        _index_np = df.index.to_numpy(dtype="datetime64[ns]")
+        _closes_np = df["market_close"].to_numpy(dtype=float)
     return df
+
+
+def _asof(ts: pd.Timestamp) -> float | None:
+    """最后一个 index <= ts 的 market_close（等语义 asof，用二分替代）。无匹配返回 None。"""
+    if _index_np is None or _closes_np is None:
+        return None
+    idx = int(np.searchsorted(_index_np, ts.to_datetime64(), side="right")) - 1
+    if idx < 0:
+        return None
+    v = float(_closes_np[idx])
+    return v
 
 
 def market_gain(dates, base_idx: int, end_idx: int, market: pd.DataFrame | None = None) -> float | None:
@@ -56,9 +75,9 @@ def market_gain(dates, base_idx: int, end_idx: int, market: pd.DataFrame | None 
     base_date = dates[base_idx - 1] if base_idx > 0 else dates[base_idx]
     end_date = dates[end_idx]
     try:
-        base_m = market["market_close"].asof(pd.Timestamp(base_date))
-        end_m = market["market_close"].asof(pd.Timestamp(end_date))
-    except (KeyError, ValueError):
+        base_m = _asof(pd.Timestamp(base_date))
+        end_m = _asof(pd.Timestamp(end_date))
+    except (KeyError, ValueError, TypeError):
         return None
     if base_m is None or end_m is None or pd.isna(base_m) or pd.isna(end_m) or base_m <= 0:
         return None
