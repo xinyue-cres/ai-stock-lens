@@ -66,13 +66,14 @@ def score_stock(df: pd.DataFrame, dividend_yield: float | None = None,
 
     # 各维度分数
     golden = _golden_continuation(df, cache=cache)
-    band = _band_score(df, timeframe=timeframe)
-    dividend = _dividend_score(dividend_yield, is_fund)
+    # band = _band_score(df, timeframe=timeframe)
+    # dividend = _dividend_score(dividend_yield, is_fund)
 
     # 权重：金叉延续 70% + 波段 20% + 股息 10%（rates.py 单一定义点）
-    total = (W_GOLDEN * golden["score"]
-             + W_BAND * band["score"]
-             + W_DIVIDEND * dividend["score"])
+    total = golden["score"]
+    # total = (W_GOLDEN * golden["score"]
+    #          + W_BAND * band["score"]
+    #          + W_DIVIDEND * dividend["score"])
 
     latest = df.iloc[-1]
     close = float(latest["close"])
